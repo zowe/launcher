@@ -40,7 +40,7 @@ all: $(LAUNCHER_TARGET)
 $(LAUNCHER_TARGET): main.o
 	mkdir -p $(dir $(LAUNCHER_TARGET))
 	$(LD) $(LDFLAGS) -o $(LAUNCHER_TARGET) $^ || { $(RM) $@; exit 1; }
-	cp -X $(LAUNCHER_TARGET) "//'${USER}.DEV.LOADLIB(ZLAUNCH)'"
+	# cp -X $(LAUNCHER_TARGET) "//'${USER}.DEV.LOADLIB(ZWELNCH)'"
 
 %.o: %.c
 	$(CC) $(CFLAGS) -o $@ -c $<

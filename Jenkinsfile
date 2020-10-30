@@ -15,10 +15,10 @@ node("ibm-jenkins-slave-nvm") {
     def lib = library("jenkins-library").org.zowe.jenkins_shared_library
     def pipeline = lib.pipelines.generic.GenericPipeline.new(this)
 
-    pipeline.admins.add("dnikolaev", "sgrady")
+    pipeline.admins.add("dnikolaev", "sgrady", "jackjia")
 
     pipeline.setup(
-        packageName: 'org.zowe.z',
+        packageName: 'org.zowe.launcher',
         extraInit: {
             pipeline.setVersion(sh(script: "cat version.txt", returnStdout: true).trim())
         }

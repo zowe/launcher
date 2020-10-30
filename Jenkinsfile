@@ -12,21 +12,20 @@
 
 node("ibm-jenkins-slave-nvm") {
 
-    def lib = library("jenkins-library").org.zowe.jenkins_shared_library
+    def lib = library("jenkins-library@users/jack/version-text-file").org.zowe.jenkins_shared_library
     def pipeline = lib.pipelines.generic.GenericPipeline.new(this)
 
-    pipeline.admins.add("dnikolaev", "sgrady", "jackjia")
+    // pipeline.admins.add("dnikolaev", "sgrady", "jackjia")
+    pipeline.admins.add("jackjia")
 
     pipeline.setup(
         packageName: 'org.zowe.launcher',
-        extraInit: {
-            pipeline.setVersion(sh(script: "cat version.txt", returnStdout: true).trim())
-        }
+        versionFile: 'version.txt'
     )
 
     pipeline.build(
         operation: {
-            echo "Build will happen in pre-packaging"
+            echo "Build will happen in pre-packaging step on z/OS"
         }
     )
 
@@ -40,6 +39,8 @@ node("ibm-jenkins-slave-nvm") {
             '.pax/zowe-launcher.pax',
         ]
     )
+
+    pipeline.release()
 
     pipeline.end()
 

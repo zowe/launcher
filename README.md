@@ -37,7 +37,7 @@ The launcher binary will be saved into the bin directory.
 
 * Specify the Zowe installation and instance directories in `zowe.conf`
 * Run `patch-zowe.sh` to apply the require Zowe changes
-* Copy the launcher JCL (`samplib/zlaunch`) to your PROCLIB
+* Copy the launcher JCL (`samplib/ZWELNCH`) to your PROCLIB
 * Edit the JCL and specify the launcher directory in the WORKDIR variable
 
 ## Component configuration
@@ -48,23 +48,23 @@ Edit `components.conf` to add and remove components. The configuration consists 
 
 * To start the launcher use the `S` operator command:
 ```
-S ZLAUNCH
+S ZWELNCH
 ```
 * To stop use the `P` operator command:
 ```
-P ZLAUNCH
+P ZWELNCH
 ```
 * To stop a specific component use the following modify command:
 ```
-F ZLAUNCH,APPL=STOP(component_name)
+F ZWELNCH,APPL=STOP(component_name)
 ```
 * To start a specific component use the following modify command:
 ```
-F ZLAUNCH,APPL=START(component_name)
+F ZWELNCH,APPL=START(component_name)
 ```
 * To list the components use the following modify command:
 ```
-F ZLAUNCH,APPL=DISP
+F ZWELNCH,APPL=DISP
 ```
 
 ## The project should fix the following issues

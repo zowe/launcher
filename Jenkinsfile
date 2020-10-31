@@ -12,11 +12,10 @@
 
 node("ibm-jenkins-slave-nvm") {
 
-    def lib = library("jenkins-library@users/jack/version-text-file").org.zowe.jenkins_shared_library
+    def lib = library("jenkins-library").org.zowe.jenkins_shared_library
     def pipeline = lib.pipelines.generic.GenericPipeline.new(this)
 
-    // pipeline.admins.add("dnikolaev", "sgrady", "jackjia")
-    pipeline.admins.add("jackjia")
+    pipeline.admins.add("dnikolaev", "sgrady", "jackjia")
 
     // setup will read package information from manifest
     pipeline.setup()

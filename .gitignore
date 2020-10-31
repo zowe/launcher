@@ -54,3 +54,11 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# workspace content should be updated by program
+.pax/*
+!.pax/.keep
+!.pax/pre-packaging.sh
+!.pax/post-packaging.sh
+!.pax/prepare-workspace.sh
+!.pax/catchall-packaging.sh

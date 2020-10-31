@@ -1,0 +1,12 @@
+{
+  "name": "zowe-launcher",
+  "id": "org.zowe.launcher",
+  "version": "1.2.3",
+  "title": "Zowe Launcher",
+  "description": "Program to launch Zowe component",
+  "license": "EPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zowe/launcher.git"
+  }
+}

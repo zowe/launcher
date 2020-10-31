@@ -18,10 +18,8 @@ node("ibm-jenkins-slave-nvm") {
     // pipeline.admins.add("dnikolaev", "sgrady", "jackjia")
     pipeline.admins.add("jackjia")
 
-    pipeline.setup(
-        packageName: 'org.zowe.launcher',
-        versionFile: 'version.txt'
-    )
+    // setup will read package information from manifest
+    pipeline.setup()
 
     pipeline.build(
         operation: {

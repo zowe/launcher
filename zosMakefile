@@ -24,8 +24,6 @@ CFLAGS = -O -D_OPEN_THREADS -D_XOPEN_SOURCE=600 \
          "-Wc,goff,xref,gonum,roconst,gonum,asm,asmlib('SYS1.MACLIB'),asmlib('CEE.SCEEMAC')" \
          -I .
 
-export _C89_LSYSLIB=CEE.SCEELKEX:CEE.SCEELKED:SYS1.CSSLIB:CSF.SCSFMOD0
-
 all: $(LAUNCHER_TARGET)
 
 $(LAUNCHER_TARGET): main.o

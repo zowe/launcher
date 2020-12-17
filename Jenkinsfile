@@ -33,7 +33,7 @@ node("zowe-jenkins-agent") {
     pipeline.publish(
         allowPublishWithoutTest: true,
         artifacts: [
-            '.pax/zowe-launcher.pax',
+            '.pax/launcher.pax',
         ]
     )
 

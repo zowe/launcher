@@ -27,7 +27,7 @@ node("zowe-jenkins-agent") {
     )
 
     // define we need packaging stage, which processed in .pax folder
-    pipeline.packaging(name: 'zowe-launcher', paxOptions: '-x os390')
+    pipeline.packaging(name: 'launcher', paxOptions: '-x os390')
 
     // define we need publish stage
     pipeline.publish(

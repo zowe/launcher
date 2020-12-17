@@ -1,7 +1,7 @@
 ---
 # ===== Zowe Component Manifest Definition =====
 # Component name
-name: zowe-launcher
+name: launcher
 # Component identifier. This identifier matches artifact path in Zowe Artifactory https://zowe.jfrog.io/.
 id: org.zowe.launcher
 # Component version

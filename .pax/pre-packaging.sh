@@ -16,9 +16,11 @@ set -xe
 SCRIPT_NAME=$(basename "$0")
 SCRIPT_DIR=$(pwd)
 
-# we use njsc++ shipped with node.js to build
-# we hardcoded where njsc is located, so this pipeline may not work well on other platform
-export PATH=$PATH:/ZOWE/node/node-v14.15.1-os390-s390x/bin
+# To solve this error following KC: https://www.ibm.com/support/pages/compiler-invocation-results-error-fsum3067-archive-library-not-found-or-error-fsum3008-incorrect-suffix-used
+# FSUM3008 Specify a file with the correct suffix (.c, .i, .s, .o, .x, .p, .I, or .a), or a corresponding data set name, instead of -L/usr/lpp/cbclib/lib.FSUM3008 Specify a file with the correct suffix (.c, .i, .s, .o, .x, .p, .I, or .a), or a corresponding data set name, instead of -L/usr/lpp/cbclib/lib.
+export _CC_CCMODE=1
+export _CXX_CCMODE=1
+export _C89_CCMODE=1
 
 # build
 echo "$SCRIPT_NAME build zowe launcher ..."

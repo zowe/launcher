@@ -9,8 +9,8 @@
 ################################################################################
 
 # environment
-CC = njsc
-LD = njsc
+CC = xlclang
+LD = xlclang
 
 LAUNCHER_TARGET = bin/zowe_launcher
 

@@ -16,10 +16,6 @@ set -xe
 SCRIPT_NAME=$(basename "$0")
 SCRIPT_DIR=$(pwd)
 
-# we use njsc++ shipped with node.js to build
-# we hardcoded where njsc is located, so this pipeline may not work well on other platform
-export PATH=$PATH:/ZOWE/node/node-v14.15.1-os390-s390x/bin
-
 # build
 echo "$SCRIPT_NAME build zowe launcher ..."
 cd "$SCRIPT_DIR/content"

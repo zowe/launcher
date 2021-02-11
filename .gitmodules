@@ -1,0 +1,3 @@
+[submodule "deps/libyaml"]
+	path = deps/libyaml
+	url = https://github.com/yaml/libyaml

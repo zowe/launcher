@@ -29,7 +29,7 @@ LDFLAGS = -L../deps/libyaml/lib
 export _C89_LSYSLIB=CEE.SCEELKEX:CEE.SCEELKED:SYS1.CSSLIB:CSF.SCSFMOD0
 
 # C source
-SRCS = main.c
+SRCS = main.c manifest.c
 
 OBJS = $(SRCS:%.c=%.o)
 

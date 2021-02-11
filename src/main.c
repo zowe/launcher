@@ -112,7 +112,7 @@ struct {
 
   char workdir[_POSIX_PATH_MAX + 1];
 
-} zl_context = {0};
+} zl_context = {.config = {.debug_mode = true}};
 
 #define INFO(fmt, ...)  printf("%s INFO:  "fmt, gettime().value, ##__VA_ARGS__)
 #define WARN(fmt, ...)  printf("%s WARN:  "fmt, gettime().value, ##__VA_ARGS__)
@@ -611,6 +611,7 @@ static zl_comp_t *find_comp(const char *name) {
 
 static int handle_start(const char *comp_name) {
 
+  printf ("handle start %s\n", comp_name);
   zl_comp_t *comp = find_comp(comp_name);
   if (comp == NULL) {
     WARN("component %s not found\n", comp_name);
@@ -875,9 +876,12 @@ static int send_event(enum zl_event_t event_type, void *event_data) {
   return 0;
 }
 
+int test();
+
 int main(int argc, char **argv) {
 
   INFO("Zowe Launcher starting\n");
+  test();
 
   zl_config_t config = read_config(argc, argv);
 

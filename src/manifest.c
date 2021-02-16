@@ -85,19 +85,19 @@ char *yaml_pair_get_value_string(yaml_document_t *document, yaml_node_pair_t *pa
   return NULL;
 }
 
-#define copy_property(target_key, object, doc, pair)        \
-  {                                                         \
-    char *key = yaml_pair_get_key(doc, pair);               \
-    if (key && compare_with_ascii(#target_key, key) == 0) { \
-      char *value = yaml_pair_get_value_string(doc, pair);  \
-      if (value) {                                          \
-        char *copy = strdup(value);                         \
-        __atoe(copy);                                       \
-        object->target_key = copy;                          \
-      }                                                     \
-      continue;                                             \
-    }                                                       \
+bool copy_string_property(yaml_document_t *doc, yaml_node_pair_t *pair, char *target_key, char **out) {
+  char *key = yaml_pair_get_key(doc, pair);
+  if (key && compare_with_ascii(target_key, key) == 0) {
+    char *value = yaml_pair_get_value_string(doc, pair);
+    if (value) {
+      char *copy = strdup(value);
+      __atoe(copy);
+      *out = copy;
+      return true;
+    }
   }
+  return false;
+}
 
 inline yaml_node_pair_t *start_pair(yaml_node_t *node) {
   return node->data.mapping.pairs.start;
@@ -109,28 +109,52 @@ inline yaml_node_pair_t *end_pair(yaml_node_t *node) {
 
 void copy_commands(zl_manifest_commands_t *commands, yaml_document_t *doc, yaml_node_t *node) {
   for (yaml_node_pair_t *pair = start_pair(node); pair != end_pair(node); pair++) {
-    copy_property(start, commands, doc, pair);
-    copy_property(validate, commands, doc, pair);
+    if (copy_string_property(doc, pair, "start", &commands->start)) {
+      continue;
+    }
+    if (copy_string_property(doc, pair, "validate", &commands->validate)) {
+      continue;
+    }
   }
 }
 
 void copy_build(zl_manifest_build_t *build, yaml_document_t *doc, yaml_node_t *node) {
   for (yaml_node_pair_t *pair = start_pair(node); pair != end_pair(node); pair++) {
-    copy_property(branch, build, doc, pair);
-    copy_property(number, build, doc, pair);
-    copy_property(commitHash, build, doc, pair);
-    copy_property(timestamp, build, doc, pair);
+    if (copy_string_property(doc, pair, "branch", &build->branch)) {
+      continue;
+    }
+    if (copy_string_property(doc, pair, "number", &build->number)) {
+      continue;
+    }
+    if (copy_string_property(doc, pair, "commitHash", &build->commit_hash)) {
+      continue;
+    }
+    if (copy_string_property(doc, pair, "timestamp", &build->timestamp)) {
+      continue;
+    }
   }
 }
 
 void top(zl_manifest_t *manifest, yaml_document_t *doc, yaml_node_t *node) {
   for (yaml_node_pair_t *pair = start_pair(node); pair != end_pair(node); pair++) {
-    copy_property(name, manifest, doc, pair);
-    copy_property(id, manifest, doc, pair);
-    copy_property(version, manifest, doc, pair);
-    copy_property(title, manifest, doc, pair);
-    copy_property(description, manifest, doc, pair);
-    copy_property(license, manifest, doc, pair);
+    if (copy_string_property(doc, pair, "name", &manifest->name)) {
+      continue;
+    }
+    if (copy_string_property(doc, pair, "id", &manifest->id)) {
+      continue;
+    }
+    if (copy_string_property(doc, pair, "version", &manifest->version)) {
+      continue;
+    }
+    if (copy_string_property(doc, pair, "title", &manifest->title)) {
+      continue;
+    }
+    if (copy_string_property(doc, pair, "description", &manifest->description)) {
+      continue;
+    }
+    if (copy_string_property(doc, pair, "license", &manifest->license)) {
+      continue;
+    }
     char *key = yaml_pair_get_key(doc, pair);
     if (key && compare_with_ascii("commands", key) == 0) {
       yaml_node_t *value_node = yaml_pair_get_value_node(doc, pair);
@@ -178,7 +202,7 @@ int test_document_parser() {
            manifest.version, manifest.title, manifest.description, manifest.license);
     printf("start: %s, validate: %s\n", manifest.commands.start, manifest.commands.validate);
     printf("branch: %s, number: %s, commitHash: %s, timestamp %s\n", manifest.build.branch, manifest.build.number,
-           manifest.build.commitHash, manifest.build.timestamp);
+           manifest.build.commit_hash, manifest.build.timestamp);
   }
 
   yaml_document_delete(&document);

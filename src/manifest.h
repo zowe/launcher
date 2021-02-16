@@ -9,7 +9,7 @@ typedef struct zl_manifest_commands_t {
 typedef struct zl_manifest_build_t {
   char *branch;
   char *number;
-  char *commitHash;
+  char *commit_hash;
   char *timestamp;
 } zl_manifest_build_t;
 

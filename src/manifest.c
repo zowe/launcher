@@ -85,69 +85,6 @@ char *yaml_pair_get_value_string(yaml_document_t *document, yaml_node_pair_t *pa
   return NULL;
 }
 
-void print_yaml_node(yaml_document_t *document_p, yaml_node_t *node) {
-  static int x = 0;
-  x++;
-  int node_n = x;
-
-  yaml_node_t *next_node_p;
-
-  switch (node->type) {
-    case YAML_NO_NODE:
-      printf("Empty node(%d):\n", node_n);
-      break;
-    case YAML_SCALAR_NODE:
-      printf("Scalar node(%d):\n", node_n);
-      printl_utf8(node->data.scalar.value, node->data.scalar.length, stdout);
-      puts("");
-      break;
-    case YAML_SEQUENCE_NODE:
-      printf("Sequence node(%d):\n", node_n);
-      yaml_node_item_t *i_node;
-      for (i_node = node->data.sequence.items.start; i_node < node->data.sequence.items.top; i_node++) {
-        next_node_p = yaml_document_get_node(document_p, *i_node);
-        if (next_node_p) print_yaml_node(document_p, next_node_p);
-      }
-      break;
-    case YAML_MAPPING_NODE:
-      printf("Mapping node(%d):\n", node_n);
-
-      yaml_node_pair_t *i_node_p;
-      for (i_node_p = node->data.mapping.pairs.start; i_node_p < node->data.mapping.pairs.top; i_node_p++) {
-        next_node_p = yaml_document_get_node(document_p, i_node_p->key);
-        if (next_node_p) {
-          puts("Key:");
-          if (next_node_p->type == YAML_SCALAR_NODE) {
-            printf("key is always scalar\n");
-          } else {
-            printf("key is not scalar\n");
-            exit(1);
-          }
-          print_yaml_node(document_p, next_node_p);
-        } else {
-          fputs("Couldn't find next node\n", stderr);
-          exit(1);
-        }
-
-        next_node_p = yaml_document_get_node(document_p, i_node_p->value);
-        if (next_node_p) {
-          puts("Value:");
-          print_yaml_node(document_p, next_node_p);
-        } else {
-          fputs("Couldn't find next node\n", stderr);
-          exit(1);
-        }
-      }
-      break;
-    default:
-      fputs("Unknown node type\n", stderr);
-      exit(1);
-      break;
-  }
-
-  printf("END NODE(%d)\n", node_n);
-}
-
 #define copy_property(target_key, object, doc, pair)        \
   {                                                         \
     char *key = yaml_pair_get_key(doc, pair);               \
@@ -243,7 +180,6 @@ int test_document_parser() {
     printf("branch: %s, number: %s, commitHash: %s, timestamp %s\n", manifest.build.branch, manifest.build.number,
            manifest.build.commitHash, manifest.build.timestamp);
   }
-  //  print_yaml_node(&document, root);
 
   yaml_document_delete(&document);
 

@@ -79,11 +79,13 @@ char *yaml_pair_get_value_string(yaml_document_t *document, yaml_node_pair_t *pa
   return NULL;
 }
 
-void copy_string_property_as_ebcdic(yaml_document_t *doc, yaml_node_pair_t *pair, char *out, size_t out_size) {
+void copy_string_property(yaml_document_t *doc, yaml_node_pair_t *pair, char *buf, size_t buf_size) {
   char *value = yaml_pair_get_value_string(doc, pair);
   if (value) {
-    strncpy(out, value, out_size - 1);
-    __atoe(out);
+    strncpy(buf, value, buf_size - 1);
+#ifdef __MVS__
+    __atoe(buf);
+#endif
   }
 }
 
@@ -102,9 +104,9 @@ void copy_manifest_commands(zl_manifest_commands_t *commands, yaml_document_t *d
     strcpy(ebcdic_key, key);
     __atoe(ebcdic_key);
     if (0 == strcmp(ebcdic_key, "start")) {
-      copy_string_property_as_ebcdic(doc, pair, commands->start, sizeof(commands->start));
+      copy_string_property(doc, pair, commands->start, sizeof(commands->start));
     } else if (0 == strcmp(ebcdic_key, "validate")) {
-      copy_string_property_as_ebcdic(doc, pair, commands->validate, sizeof(commands->validate));
+      copy_string_property(doc, pair, commands->validate, sizeof(commands->validate));
     }
   }
 }
@@ -116,13 +118,13 @@ void copy_manifest_build(zl_manifest_build_t *build, yaml_document_t *doc, yaml_
     strcpy(ebcdic_key, key);
     __atoe(ebcdic_key);
     if (0 == strcmp(ebcdic_key, "branch")) {
-      copy_string_property_as_ebcdic(doc, pair, build->branch, sizeof(build->branch));
+      copy_string_property(doc, pair, build->branch, sizeof(build->branch));
     } else if (0 == strcmp(ebcdic_key, "number")) {
-      copy_string_property_as_ebcdic(doc, pair, build->number, sizeof(build->number));
+      copy_string_property(doc, pair, build->number, sizeof(build->number));
     } else if (0 == strcmp(ebcdic_key, "commitHash")) {
-      copy_string_property_as_ebcdic(doc, pair, build->commit_hash, sizeof(build->commit_hash));
+      copy_string_property(doc, pair, build->commit_hash, sizeof(build->commit_hash));
     } else if (0 == strcmp(ebcdic_key, "timestamp")) {
-      copy_string_property_as_ebcdic(doc, pair, build->timestamp, sizeof(build->timestamp));
+      copy_string_property(doc, pair, build->timestamp, sizeof(build->timestamp));
     }
   }
 }
@@ -134,15 +136,15 @@ void fill_manifest(zl_manifest_t *manifest, yaml_document_t *doc, yaml_node_t *n
     strcpy(ebcdic_key, key);
     __atoe(ebcdic_key);
     if (0 == strcmp(ebcdic_key, "name")) {
-      copy_string_property_as_ebcdic(doc, pair, manifest->name, sizeof(manifest->name));
+      copy_string_property(doc, pair, manifest->name, sizeof(manifest->name));
     } else if (0 == strcmp(ebcdic_key, "id")) {
-      copy_string_property_as_ebcdic(doc, pair, manifest->id, sizeof(manifest->id));
+      copy_string_property(doc, pair, manifest->id, sizeof(manifest->id));
     } else if (0 == strcmp(ebcdic_key, "title")) {
-      copy_string_property_as_ebcdic(doc, pair, manifest->title, sizeof(manifest->title));
+      copy_string_property(doc, pair, manifest->title, sizeof(manifest->title));
     } else if (0 == strcmp(ebcdic_key, "description")) {
-      copy_string_property_as_ebcdic(doc, pair, manifest->description, sizeof(manifest->description));
+      copy_string_property(doc, pair, manifest->description, sizeof(manifest->description));
     } else if (0 == strcmp(ebcdic_key, "license")) {
-      copy_string_property_as_ebcdic(doc, pair, manifest->license, sizeof(manifest->license));
+      copy_string_property(doc, pair, manifest->license, sizeof(manifest->license));
     } else if (0 == strcmp(ebcdic_key, "commands")) {
       yaml_node_t *value_node = yaml_pair_get_value_node(doc, pair);
       copy_manifest_commands(&manifest->commands, doc, value_node);

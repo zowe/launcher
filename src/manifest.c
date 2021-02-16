@@ -21,33 +21,22 @@
 #include <unistd.h>
 
 #include "yaml.h"
+#include "manifest.h"
 
-void dump_mapping(yaml_node_t *node) {
-  yaml_node_pair_t *start = node->data.mapping.pairs.start;
-  yaml_node_pair_t *end = node->data.mapping.pairs.end;
-  printf("[\n");
-  printf(" mapping start %d %d\n", start->key, start->value);
-  printf(" mapping end %d %d\n", end->key, end->value);
-  printf("]\n");
-}
-
-void indent(int margin, char *format, ...) {
-  for (int i = 0; i < margin; i++) {
-    printf(" ");
-  }
-  va_list ptr;
-  va_start(ptr, format);
-  vprintf(format, ptr);
-  va_end(ptr);
+int compare_with_ascii(const char *ebcdic, const char *ascii) {
+  char dup[strlen(ebcdic) + 1];
+  strcpy(dup, ebcdic);
+  __etoa(dup);
+  return strcmp(dup, ascii);
 }
 
 static int yaml_read_handler(void *data, unsigned char *buffer, size_t size, size_t *size_read) {
-  FILE *fp = data;
-  int rc = 1;
+  FILE * fp = data;
+  int    rc = 1;
   size_t bytes_read = fread(buffer, 1, size, fp);
   if (bytes_read > 0) {
-    if (__etoa_l((char*)buffer, bytes_read) == -1) {
-      printf ("error etoa %s\n", strerror(errno));
+    if (__etoa_l((char *)buffer, bytes_read) == -1) {
+      printf("error etoa %s\n", strerror(errno));
       rc = 0;
     }
   }
@@ -58,102 +47,206 @@ static int yaml_read_handler(void *data, unsigned char *buffer, size_t size, siz
   return rc;
 }
 
-int test() {
-  yaml_parser_t   parser = {0};
-  yaml_emitter_t  emitter = {0};
-  yaml_event_t    event = {0};
-  FILE *          fp = NULL;
-  const char *filename = "/u/ts3105/zowe-installation/components/explorer-jes/manifest.yaml";
+void printl_utf8(unsigned char *str, size_t length, FILE *stream) {
+  __atoe_l((char *)str, length);
+  fwrite(str, 1, length, stream);
+}
 
-  do {
-    if (!yaml_parser_initialize(&parser)) {
-      printf("unable to init yaml parser\n");
+char *yaml_pair_get_key(yaml_document_t *document, yaml_node_pair_t *pair) {
+  yaml_node_t *key_node = yaml_document_get_node(document, pair->key);
+  if (key_node->type == YAML_SCALAR_NODE) {
+    return (char *)key_node->data.scalar.value;
+  }
+  return NULL;
+}
+
+inline bool yaml_is_mapping_node(yaml_node_t *node) {
+  return node->type == YAML_MAPPING_NODE;
+}
+
+inline bool yaml_is_scalar_node(yaml_node_t *node) {
+  return node->type == YAML_SCALAR_NODE;
+}
+
+inline bool yaml_is_sequence_node(yaml_node_t *node) {
+  return node->type == YAML_SEQUENCE_NODE;
+}
+
+yaml_node_t *yaml_pair_get_value_node(yaml_document_t *document, yaml_node_pair_t *pair) {
+  yaml_node_t *node = yaml_document_get_node(document, pair->value);
+  return node;
+}
+
+char *yaml_pair_get_value_string(yaml_document_t *document, yaml_node_pair_t *pair) {
+  yaml_node_t *node = yaml_document_get_node(document, pair->value);
+  if (yaml_is_scalar_node(node)) {
+    return (char *)node->data.scalar.value;
+  }
+  return NULL;
+}
+
+void print_yaml_node(yaml_document_t *document_p, yaml_node_t *node) {
+  static int x = 0;
+  x++;
+  int node_n = x;
+
+  yaml_node_t *next_node_p;
+
+  switch (node->type) {
+    case YAML_NO_NODE:
+      printf("Empty node(%d):\n", node_n);
       break;
-    }
-    if (!yaml_emitter_initialize(&emitter)) {
-      printf("unable to init yaml emitter\n");
+    case YAML_SCALAR_NODE:
+      printf("Scalar node(%d):\n", node_n);
+      printl_utf8(node->data.scalar.value, node->data.scalar.length, stdout);
+      puts("");
       break;
-    }
-    fp = fopen(filename, "r");
-    if (!fp) {
-      printf("unable to open %s: %s\n", filename, strerror(errno));
-      break;
-    }
-    yaml_parser_set_input(&parser, yaml_read_handler, fp);
-    yaml_emitter_set_output_file(&emitter, stdout);
-    yaml_emitter_set_canonical(&emitter, 1);
-    yaml_emitter_set_unicode(&emitter, 0);
-    printf("about to parse yaml\n");
-    int done = 0;
-    int margin = 0;
-    bool isKey = true;
-    bool inMap = false;
-    while (!done) {
-      if (!yaml_parser_parse(&parser, &event)) {
-        printf("error parsing yaml\n");
-        break;
+    case YAML_SEQUENCE_NODE:
+      printf("Sequence node(%d):\n", node_n);
+      yaml_node_item_t *i_node;
+      for (i_node = node->data.sequence.items.start; i_node < node->data.sequence.items.top; i_node++) {
+        next_node_p = yaml_document_get_node(document_p, *i_node);
+        if (next_node_p) print_yaml_node(document_p, next_node_p);
       }
-      switch (event.type) {
-        case YAML_STREAM_START_EVENT:
-          indent(margin+=2, "STREAM_START\n");
-          break;
-        case YAML_STREAM_END_EVENT:
-          indent(margin-=2, "STREAM_END\n");
-          break;
-        case YAML_DOCUMENT_START_EVENT:
-          indent(margin+=2, "DOCUMENT_START\n");
-          break;
-        case YAML_DOCUMENT_END_EVENT:
-          indent(margin-=2, "DOCUMENT_END\n");
-          break;
-        case YAML_MAPPING_START_EVENT:
-          indent(margin+=2, "MAPPING_START\n");
-          inMap = true;
-          isKey = true;
-          break;
-        case YAML_MAPPING_END_EVENT:
-          indent(margin-=2, "MAPPING_END\n");
-          inMap = false;
-          break;
-        case YAML_SEQUENCE_START_EVENT:
-          indent(margin+=2, "SEQUENCE_START\n");
-          break;
-        case YAML_SEQUENCE_END_EVENT:
-          indent(margin-=2, "SEQUENCE_END\n");
-          break;
-        case YAML_SCALAR_EVENT: {
-          char *value = (char*)event.data.scalar.value;
-          __atoe(value);
-          if (inMap) {
-          indent(isKey ? margin : 0, "%s '%s'%c", isKey ? "key" : "value", value,isKey ? ' ' : '\n');
-          isKey = !isKey;
+      break;
+    case YAML_MAPPING_NODE:
+      printf("Mapping node(%d):\n", node_n);
+
+      yaml_node_pair_t *i_node_p;
+      for (i_node_p = node->data.mapping.pairs.start; i_node_p < node->data.mapping.pairs.top; i_node_p++) {
+        next_node_p = yaml_document_get_node(document_p, i_node_p->key);
+        if (next_node_p) {
+          puts("Key:");
+          if (next_node_p->type == YAML_SCALAR_NODE) {
+            printf("key is always scalar\n");
           } else {
-            indent(margin, "not in map '%s'\n", value);
+            printf("key is not scalar\n");
+            exit(1);
           }
-          if (strcmp((const char*)value, "start") == 0) {
-            printf ("start found\n");
-          }
+          print_yaml_node(document_p, next_node_p);
+        } else {
+          fputs("Couldn't find next node\n", stderr);
+          exit(1);
         }
-          break;
-          
-        default:
-          indent(margin, "event type %d\n", event.type);
-          break;
+
+        next_node_p = yaml_document_get_node(document_p, i_node_p->value);
+        if (next_node_p) {
+          puts("Value:");
+          print_yaml_node(document_p, next_node_p);
+        } else {
+          fputs("Couldn't find next node\n", stderr);
+          exit(1);
+        }
       }
-
-      done = (event.type == YAML_STREAM_END_EVENT);
-      yaml_event_delete(&event);
-    }
-
-  } while (0);
-
-  yaml_parser_delete(&parser);
-  yaml_emitter_delete(&emitter);
-  if (fp) {
-    fclose(fp);
+      break;
+    default:
+      fputs("Unknown node type\n", stderr);
+      exit(1);
+      break;
   }
 
-  return 0;
+  printf("END NODE(%d)\n", node_n);
+}
+
+#define copy_property(target_key, object, doc, pair)        \
+  {                                                         \
+    char *key = yaml_pair_get_key(doc, pair);               \
+    if (key && compare_with_ascii(#target_key, key) == 0) { \
+      char *value = yaml_pair_get_value_string(doc, pair);  \
+      if (value) {                                          \
+        char *copy = strdup(value);                         \
+        __atoe(copy);                                       \
+        object->target_key = copy;                          \
+      }                                                     \
+      continue;                                             \
+    }                                                       \
+  }
+
+void copy_commands(zl_manifest_commands_t *commands, yaml_document_t *document_p, yaml_node_t *node_n) {
+  for (yaml_node_pair_t *node_pair = node_n->data.mapping.pairs.start; node_pair < node_n->data.mapping.pairs.top;
+       node_pair++) {
+    copy_property(start, commands, document_p, node_pair);
+    copy_property(validate, commands, document_p, node_pair);
+  }
+}
+
+void copy_build(zl_manifest_build_t *build, yaml_document_t *document_p, yaml_node_t *node_n) {
+  for (yaml_node_pair_t *node_pair = node_n->data.mapping.pairs.start; node_pair < node_n->data.mapping.pairs.top;
+       node_pair++) {
+    copy_property(branch, build, document_p, node_pair);
+    copy_property(number, build, document_p, node_pair);
+    copy_property(commitHash, build, document_p, node_pair);
+    copy_property(timestamp, build, document_p, node_pair);
+  }
+}
+
+void top(zl_manifest_t *manifest, yaml_document_t *document_p, yaml_node_t *node_n) {
+  for (yaml_node_pair_t *node_pair = node_n->data.mapping.pairs.start; node_pair < node_n->data.mapping.pairs.top;
+       node_pair++) {
+    copy_property(name, manifest, document_p, node_pair);
+    copy_property(id, manifest, document_p, node_pair);
+    copy_property(version, manifest, document_p, node_pair);
+    copy_property(title, manifest, document_p, node_pair);
+    copy_property(description, manifest, document_p, node_pair);
+    copy_property(license, manifest, document_p, node_pair);
+    char *key = yaml_pair_get_key(document_p, node_pair);
+    if (key && compare_with_ascii("commands", key) == 0) {
+      yaml_node_t *value_node = yaml_pair_get_value_node(document_p, node_pair);
+      copy_commands(&manifest->commands, document_p, value_node);
+    }
+    if (key && compare_with_ascii("build", key) == 0) {
+      yaml_node_t *value_node = yaml_pair_get_value_node(document_p, node_pair);
+      copy_build(&manifest->build, document_p, value_node);
+    }
+  }
+}
+
+int test_document_parser() {
+  yaml_parser_t   parser;
+  yaml_document_t document;
+  int             error = 0;
+  FILE *          fp = NULL;
+  const char *    filename = "/u/ts3105/zowe-installation/components/explorer-mvs/manifest.yaml";
+
+  fp = fopen(filename, "r");
+  if (!fp) {
+    printf("unable to open %s: %s\n", filename, strerror(errno));
+    return -1;
+  }
+  printf("Loading '%s': \n", filename);
+
+  yaml_parser_initialize(&parser);
+
+  yaml_parser_set_input(&parser, yaml_read_handler, fp);
+
+  int done = 0;
+  if (!yaml_parser_load(&parser, &document)) {
+    fprintf(stderr, "Failed to load document in %s\n", filename);
+    return -1;
+  }
+
+  yaml_node_t *root = yaml_document_get_root_node(&document);
+  done = !root;
+
+  if (!done) {
+    struct zl_manifest_t manifest = {0};
+    top(&manifest, &document, root);
+
+    printf("name: %s, id: %s, version: %s, title: %s, description: %s license: %s\n", manifest.name, manifest.id,
+           manifest.version, manifest.title, manifest.description, manifest.license);
+    printf("start: %s, validate: %s\n", manifest.commands.start, manifest.commands.validate);
+    printf("branch: %s, number: %s, commitHash: %s, timestamp %s\n", manifest.build.branch, manifest.build.number,
+           manifest.build.commitHash, manifest.build.timestamp);
+  }
+  //  print_yaml_node(&document, root);
+
+  yaml_document_delete(&document);
+
+  yaml_parser_delete(&parser);
+
+  fclose(fp);
+
+  return !error;
 }
 
 /*

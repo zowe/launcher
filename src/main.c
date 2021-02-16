@@ -876,12 +876,12 @@ static int send_event(enum zl_event_t event_type, void *event_data) {
   return 0;
 }
 
-int test();
+int test_document_parser();
 
 int main(int argc, char **argv) {
 
   INFO("Zowe Launcher starting\n");
-  test();
+  test_document_parser();
 
   zl_config_t config = read_config(argc, argv);
 

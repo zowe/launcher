@@ -47,17 +47,9 @@ static int yaml_read_handler(void *data, unsigned char *buffer, size_t size, siz
   return rc;
 }
 
-void printl_utf8(unsigned char *str, size_t length, FILE *stream) {
-  __atoe_l((char *)str, length);
-  fwrite(str, 1, length, stream);
-}
-
 char *yaml_pair_get_key(yaml_document_t *document, yaml_node_pair_t *pair) {
   yaml_node_t *key_node = yaml_document_get_node(document, pair->key);
-  if (key_node->type == YAML_SCALAR_NODE) {
-    return (char *)key_node->data.scalar.value;
-  }
-  return NULL;
+  return (char *)key_node->data.scalar.value;
 }
 
 inline bool yaml_is_mapping_node(yaml_node_t *node) {
@@ -85,18 +77,13 @@ char *yaml_pair_get_value_string(yaml_document_t *document, yaml_node_pair_t *pa
   return NULL;
 }
 
-bool copy_string_property(yaml_document_t *doc, yaml_node_pair_t *pair, char *target_key, char **out) {
-  char *key = yaml_pair_get_key(doc, pair);
-  if (key && compare_with_ascii(target_key, key) == 0) {
-    char *value = yaml_pair_get_value_string(doc, pair);
-    if (value) {
-      char *copy = strdup(value);
-      __atoe(copy);
-      *out = copy;
-      return true;
-    }
+void copy_string_property_as_ebcdic(yaml_document_t *doc, yaml_node_pair_t *pair, char **out) {
+  char *value = yaml_pair_get_value_string(doc, pair);
+  if (value) {
+    char *copy = strdup(value);
+    __atoe(copy);
+    *out = copy;
   }
-  return false;
 }
 
 inline yaml_node_pair_t *start_pair(yaml_node_t *node) {
@@ -107,62 +94,62 @@ inline yaml_node_pair_t *end_pair(yaml_node_t *node) {
   return node->data.mapping.pairs.top;
 }
 
-void copy_commands(zl_manifest_commands_t *commands, yaml_document_t *doc, yaml_node_t *node) {
+void copy_manifest_commands(zl_manifest_commands_t *commands, yaml_document_t *doc, yaml_node_t *node) {
   for (yaml_node_pair_t *pair = start_pair(node); pair != end_pair(node); pair++) {
-    if (copy_string_property(doc, pair, "start", &commands->start)) {
-      continue;
-    }
-    if (copy_string_property(doc, pair, "validate", &commands->validate)) {
-      continue;
-    }
-  }
-}
-
-void copy_build(zl_manifest_build_t *build, yaml_document_t *doc, yaml_node_t *node) {
-  for (yaml_node_pair_t *pair = start_pair(node); pair != end_pair(node); pair++) {
-    if (copy_string_property(doc, pair, "branch", &build->branch)) {
-      continue;
-    }
-    if (copy_string_property(doc, pair, "number", &build->number)) {
-      continue;
-    }
-    if (copy_string_property(doc, pair, "commitHash", &build->commit_hash)) {
-      continue;
-    }
-    if (copy_string_property(doc, pair, "timestamp", &build->timestamp)) {
-      continue;
-    }
-  }
-}
-
-void top(zl_manifest_t *manifest, yaml_document_t *doc, yaml_node_t *node) {
-  for (yaml_node_pair_t *pair = start_pair(node); pair != end_pair(node); pair++) {
-    if (copy_string_property(doc, pair, "name", &manifest->name)) {
-      continue;
-    }
-    if (copy_string_property(doc, pair, "id", &manifest->id)) {
-      continue;
-    }
-    if (copy_string_property(doc, pair, "version", &manifest->version)) {
-      continue;
-    }
-    if (copy_string_property(doc, pair, "title", &manifest->title)) {
-      continue;
-    }
-    if (copy_string_property(doc, pair, "description", &manifest->description)) {
-      continue;
-    }
-    if (copy_string_property(doc, pair, "license", &manifest->license)) {
-      continue;
-    }
     char *key = yaml_pair_get_key(doc, pair);
-    if (key && compare_with_ascii("commands", key) == 0) {
-      yaml_node_t *value_node = yaml_pair_get_value_node(doc, pair);
-      copy_commands(&manifest->commands, doc, value_node);
+    char  ebcdic_key[strlen(key) + 1];
+    strcpy(ebcdic_key, key);
+    __atoe(ebcdic_key);
+    if (0 == strcmp(ebcdic_key, "start")) {
+      copy_string_property_as_ebcdic(doc, pair, &commands->start);
+    } else if (0 == strcmp(ebcdic_key, "validate")) {
+      copy_string_property_as_ebcdic(doc, pair, &commands->validate);
     }
-    if (key && compare_with_ascii("build", key) == 0) {
+  }
+}
+
+void copy_manifest_build(zl_manifest_build_t *build, yaml_document_t *doc, yaml_node_t *node) {
+  for (yaml_node_pair_t *pair = start_pair(node); pair != end_pair(node); pair++) {
+    char *key = yaml_pair_get_key(doc, pair);
+    char  ebcdic_key[strlen(key) + 1];
+    strcpy(ebcdic_key, key);
+    __atoe(ebcdic_key);
+    if (0 == strcmp(ebcdic_key, "branch")) {
+      copy_string_property_as_ebcdic(doc, pair, &build->branch);
+    } else if (0 == strcmp(ebcdic_key, "number")) {
+      copy_string_property_as_ebcdic(doc, pair, &build->number);
+    } else if (0 == strcmp(ebcdic_key, "commitHash")) {
+      copy_string_property_as_ebcdic(doc, pair, &build->commit_hash);
+    } else if (0 == strcmp(ebcdic_key, "timestamp")) {
+      copy_string_property_as_ebcdic(doc, pair, &build->timestamp);
+    }
+  }
+}
+
+void fill_manifest(zl_manifest_t *manifest, yaml_document_t *doc, yaml_node_t *node) {
+  for (yaml_node_pair_t *pair = start_pair(node); pair != end_pair(node); pair++) {
+    char *key = yaml_pair_get_key(doc, pair);
+    char  ebcdic_key[strlen(key) + 1];
+    strcpy(ebcdic_key, key);
+    __atoe(ebcdic_key);
+    if (0 == strcmp(ebcdic_key, "name")) {
+      copy_string_property_as_ebcdic(doc, pair, &manifest->name);
+    } else if (0 == strcmp(ebcdic_key, "id")) {
+      copy_string_property_as_ebcdic(doc, pair, &manifest->id);
+    } else if (0 == strcmp(ebcdic_key, "version")) {
+      copy_string_property_as_ebcdic(doc, pair, &manifest->version);
+    } else if (0 == strcmp(ebcdic_key, "title")) {
+      copy_string_property_as_ebcdic(doc, pair, &manifest->title);
+    } else if (0 == strcmp(ebcdic_key, "description")) {
+      copy_string_property_as_ebcdic(doc, pair, &manifest->description);
+    } else if (0 == strcmp(ebcdic_key, "license")) {
+      copy_string_property_as_ebcdic(doc, pair, &manifest->license);
+    } else if (0 == strcmp(ebcdic_key, "commands")) {
       yaml_node_t *value_node = yaml_pair_get_value_node(doc, pair);
-      copy_build(&manifest->build, doc, value_node);
+      copy_manifest_commands(&manifest->commands, doc, value_node);
+    } else if (0 == strcmp(ebcdic_key, "build")) {
+      yaml_node_t *value_node = yaml_pair_get_value_node(doc, pair);
+      copy_manifest_build(&manifest->build, doc, value_node);
     }
   }
 }
@@ -196,9 +183,9 @@ int test_document_parser() {
 
   if (!done) {
     struct zl_manifest_t manifest = {0};
-    top(&manifest, &document, root);
+    fill_manifest(&manifest, &document, root);
 
-    printf("name: %s, id: %s, version: %s, title: %s, description: %s license: %s\n", manifest.name, manifest.id,
+    printf("name: %s, id: %s, version: %s, title: %s, description: %s, license: %s\n", manifest.name, manifest.id,
            manifest.version, manifest.title, manifest.description, manifest.license);
     printf("start: %s, validate: %s\n", manifest.commands.start, manifest.commands.validate);
     printf("branch: %s, number: %s, commitHash: %s, timestamp %s\n", manifest.build.branch, manifest.build.number,

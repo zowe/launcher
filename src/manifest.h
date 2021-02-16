@@ -24,6 +24,4 @@ typedef struct zl_manifest_t {
   zl_manifest_build_t build;
 } zl_manifest_t;
 
-
-
 #endif // MANIFEST_H

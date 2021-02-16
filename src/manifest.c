@@ -162,41 +162,46 @@ void print_yaml_node(yaml_document_t *document_p, yaml_node_t *node) {
     }                                                       \
   }
 
-void copy_commands(zl_manifest_commands_t *commands, yaml_document_t *document_p, yaml_node_t *node_n) {
-  for (yaml_node_pair_t *node_pair = node_n->data.mapping.pairs.start; node_pair < node_n->data.mapping.pairs.top;
-       node_pair++) {
-    copy_property(start, commands, document_p, node_pair);
-    copy_property(validate, commands, document_p, node_pair);
+inline yaml_node_pair_t *start_pair(yaml_node_t *node) {
+  return node->data.mapping.pairs.start;
+}
+
+inline yaml_node_pair_t *end_pair(yaml_node_t *node) {
+  return node->data.mapping.pairs.top;
+}
+
+void copy_commands(zl_manifest_commands_t *commands, yaml_document_t *doc, yaml_node_t *node) {
+  for (yaml_node_pair_t *pair = start_pair(node); pair != end_pair(node); pair++) {
+    copy_property(start, commands, doc, pair);
+    copy_property(validate, commands, doc, pair);
   }
 }
 
-void copy_build(zl_manifest_build_t *build, yaml_document_t *document_p, yaml_node_t *node_n) {
-  for (yaml_node_pair_t *node_pair = node_n->data.mapping.pairs.start; node_pair < node_n->data.mapping.pairs.top;
-       node_pair++) {
-    copy_property(branch, build, document_p, node_pair);
-    copy_property(number, build, document_p, node_pair);
-    copy_property(commitHash, build, document_p, node_pair);
-    copy_property(timestamp, build, document_p, node_pair);
+void copy_build(zl_manifest_build_t *build, yaml_document_t *doc, yaml_node_t *node) {
+  for (yaml_node_pair_t *pair = start_pair(node); pair != end_pair(node); pair++) {
+    copy_property(branch, build, doc, pair);
+    copy_property(number, build, doc, pair);
+    copy_property(commitHash, build, doc, pair);
+    copy_property(timestamp, build, doc, pair);
   }
 }
 
-void top(zl_manifest_t *manifest, yaml_document_t *document_p, yaml_node_t *node_n) {
-  for (yaml_node_pair_t *node_pair = node_n->data.mapping.pairs.start; node_pair < node_n->data.mapping.pairs.top;
-       node_pair++) {
-    copy_property(name, manifest, document_p, node_pair);
-    copy_property(id, manifest, document_p, node_pair);
-    copy_property(version, manifest, document_p, node_pair);
-    copy_property(title, manifest, document_p, node_pair);
-    copy_property(description, manifest, document_p, node_pair);
-    copy_property(license, manifest, document_p, node_pair);
-    char *key = yaml_pair_get_key(document_p, node_pair);
+void top(zl_manifest_t *manifest, yaml_document_t *doc, yaml_node_t *node) {
+  for (yaml_node_pair_t *pair = start_pair(node); pair != end_pair(node); pair++) {
+    copy_property(name, manifest, doc, pair);
+    copy_property(id, manifest, doc, pair);
+    copy_property(version, manifest, doc, pair);
+    copy_property(title, manifest, doc, pair);
+    copy_property(description, manifest, doc, pair);
+    copy_property(license, manifest, doc, pair);
+    char *key = yaml_pair_get_key(doc, pair);
     if (key && compare_with_ascii("commands", key) == 0) {
-      yaml_node_t *value_node = yaml_pair_get_value_node(document_p, node_pair);
-      copy_commands(&manifest->commands, document_p, value_node);
+      yaml_node_t *value_node = yaml_pair_get_value_node(doc, pair);
+      copy_commands(&manifest->commands, doc, value_node);
     }
     if (key && compare_with_ascii("build", key) == 0) {
-      yaml_node_t *value_node = yaml_pair_get_value_node(document_p, node_pair);
-      copy_build(&manifest->build, document_p, value_node);
+      yaml_node_t *value_node = yaml_pair_get_value_node(doc, pair);
+      copy_build(&manifest->build, doc, value_node);
     }
   }
 }

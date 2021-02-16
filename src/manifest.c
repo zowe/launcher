@@ -19,6 +19,8 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
 #include "yaml.h"
 #include "manifest.h"
@@ -136,8 +138,6 @@ void fill_manifest(zl_manifest_t *manifest, yaml_document_t *doc, yaml_node_t *n
       copy_string_property_as_ebcdic(doc, pair, &manifest->name);
     } else if (0 == strcmp(ebcdic_key, "id")) {
       copy_string_property_as_ebcdic(doc, pair, &manifest->id);
-    } else if (0 == strcmp(ebcdic_key, "version")) {
-      copy_string_property_as_ebcdic(doc, pair, &manifest->version);
     } else if (0 == strcmp(ebcdic_key, "title")) {
       copy_string_property_as_ebcdic(doc, pair, &manifest->title);
     } else if (0 == strcmp(ebcdic_key, "description")) {
@@ -154,12 +154,11 @@ void fill_manifest(zl_manifest_t *manifest, yaml_document_t *doc, yaml_node_t *n
   }
 }
 
-int test_document_parser() {
+int test_document_parser(const char *filename) {
   yaml_parser_t   parser;
   yaml_document_t document;
   int             error = 0;
   FILE *          fp = NULL;
-  const char *    filename = "/u/ts3105/zowe-installation/components/explorer-mvs/manifest.yaml";
 
   fp = fopen(filename, "r");
   if (!fp) {
@@ -185,8 +184,8 @@ int test_document_parser() {
     struct zl_manifest_t manifest = {0};
     fill_manifest(&manifest, &document, root);
 
-    printf("name: %s, id: %s, version: %s, title: %s, description: %s, license: %s\n", manifest.name, manifest.id,
-           manifest.version, manifest.title, manifest.description, manifest.license);
+    printf("name: %s, id: %s, title: %s, description: %s, license: %s\n", manifest.name, manifest.id, manifest.title,
+           manifest.description, manifest.license);
     printf("start: %s, validate: %s\n", manifest.commands.start, manifest.commands.validate);
     printf("branch: %s, number: %s, commitHash: %s, timestamp %s\n", manifest.build.branch, manifest.build.number,
            manifest.build.commit_hash, manifest.build.timestamp);
@@ -199,6 +198,39 @@ int test_document_parser() {
   fclose(fp);
 
   return !error;
+}
+
+void read_manifests() {
+  char *workdir = getenv("WORKDIR");
+  if (!workdir) {
+    printf("WORKDIR not found\n");
+    return;
+  }
+  char path[strlen(workdir) + strlen("/components") + 1];
+  strcpy(path, workdir);
+  strcat(path, "/components");
+  DIR *components_dir = opendir(path);
+  if (!components_dir) {
+    printf("unable to open components directory %s\n", path);
+    return;
+  }
+  printf("components dir %s opened\n", path);
+  struct dirent *entry;
+  struct stat    file_stat;
+  char           dir_path[_POSIX_PATH_MAX + 1];
+  char           manifest_path[_POSIX_PATH_MAX + 1];
+  while ((entry = readdir(components_dir)) != NULL) {
+    if (entry->d_name[0] == '.') {
+      continue;
+    }
+    snprintf(dir_path, sizeof(dir_path), "%s/%s", path, entry->d_name);
+    stat(dir_path, &file_stat);
+    if (S_ISDIR(file_stat.st_mode)) {
+      snprintf(manifest_path, sizeof(manifest_path), "%s/manifest.yaml", dir_path);
+      test_document_parser(manifest_path);
+    }
+  }
+  closedir(components_dir);
 }
 
 /*

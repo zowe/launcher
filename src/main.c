@@ -24,6 +24,8 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <spawn.h>
+#include <dirent.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/__messag.h>
 #include <unistd.h>
@@ -243,6 +245,24 @@ static int init_component(const char *cfg_line, zl_comp_t *result) {
   return 0;
 }
 
+static int init_component_from_manifest(zl_manifest_t *manifest, const char *component_dir, zl_comp_t *result) {
+  if (strlen(manifest->commands.start) == 0) {
+    WARN("component %s doesn't have start command\n", manifest->name);
+    return -1;
+  }
+  snprintf(result->bin, sizeof(result->bin), "%s/%s", component_dir, manifest->commands.start);
+  snprintf(result->name, sizeof(result->name), "%s", manifest->name);
+  result->pid = -1;
+  result->share_as = ZL_COMP_AS_SHARE_NO;
+  result->manifest = *manifest;
+  result->restart_cnt = 5;
+  
+  INFO("new component init'd \'%s\', \'%s\', restart_cnt=%d, share_as=%d\n",
+       result->name, result->bin, result->restart_cnt, result->share_as);
+
+  return 0;
+}
+
 static const char *get_shareas_env(const zl_comp_t *comp) {
 
   switch (comp->share_as) {
@@ -271,7 +291,7 @@ static bool is_commented_out(const char *line) {
   return false;
 }
 
-static int load_cfg(void) {
+int load_cfg(void) {
 
   FILE *cfg;
 
@@ -313,6 +333,53 @@ static int load_cfg(void) {
   fclose(cfg);
   cfg = NULL;
 
+  return 0;
+}
+
+static int read_component_manifests() {
+  char *root_dir = zl_context.root_dir;
+  char path[strlen(root_dir) + strlen("/components") + 1];
+  strcpy(path, root_dir);
+  strcat(path, "/components");
+  DIR *components_dir = opendir(path);
+  if (!components_dir) {
+    ERROR("unable to open components directory %s\n", path);
+    return -1;
+  }
+  DEBUG("components dir %s opened\n", path);
+  struct dirent *entry;
+  struct stat    file_stat;
+  char           dir_path[PATH_MAX + 1];
+  char           manifest_path[PATH_MAX + 1];
+  while ((entry = readdir(components_dir)) != NULL) {
+    if (entry->d_name[0] == '.') {
+      continue;
+    }
+    snprintf(dir_path, sizeof(dir_path), "%s/%s", path, entry->d_name);
+    if (stat(dir_path, &file_stat)) {
+      WARN("unable get info about %s\n", dir_path);
+      continue;
+    };
+    if (!S_ISDIR(file_stat.st_mode)) {
+      continue;
+    }
+    snprintf(manifest_path, sizeof(manifest_path), "%s/manifest.yaml", dir_path);
+    zl_manifest_t manifest = {0};
+    if (load_manifest(manifest_path, &manifest)) {
+      WARN("failed to load component manifest file %s\n", manifest_path);
+      continue;
+    }
+    zl_comp_t comp = {0};
+    if (!init_component_from_manifest(&manifest, dir_path, &comp)) {
+      if (zl_context.child_count != MAX_CHILD_COUNT) {
+        zl_context.children[zl_context.child_count++] = comp;
+      } else {
+        ERROR("max component number reached, ignoring the rest\n");
+        break;
+      }
+    }
+  }
+  closedir(components_dir);
   return 0;
 }
 
@@ -393,20 +460,7 @@ static int start_component(zl_comp_t *comp) {
 
   DEBUG("about to start component %s\n", comp->name);
 
-  size_t root_dir_len = strlen(zl_context.root_dir);
-  size_t bin_len = strlen(comp->bin);
-
-  if (root_dir_len + bin_len > _POSIX_PATH_MAX) {
-    ERROR("bin name \'%s\' too long\n", comp->bin);
-    return -1;
-  }
-
-  char full_path[_POSIX_PATH_MAX + 1 + 1] = {0};
-  strcpy(full_path, zl_context.root_dir);
-  strcat(full_path, "/");
-  strcat(full_path, comp->bin);
-
-  DEBUG("about to start component %s at \'%s\'\n", comp->name, full_path);
+  DEBUG("about to start component %s at \'%s\'\n", comp->name, comp->bin);
 
   // ensure the new process has its own process group ID so we can terminate
   // the entire process tree
@@ -429,9 +483,9 @@ static int start_component(zl_comp_t *comp) {
 
   int fd_count = 3;
   int fd_map[3];
-
+  int bin_len = strlen(comp->bin);
   if (strcmp(&comp->bin[bin_len - 3], ".sh") == 0) {
-    script = fopen(full_path, "r");
+    script = fopen(comp->bin, "r");
     if (script == NULL) {
       ERROR("script not open for %s - %s\n", comp->name, strerror(errno));
       return -1;
@@ -448,7 +502,7 @@ static int start_component(zl_comp_t *comp) {
         comp->name, fd_map[0], fd_map[1], fd_map[2]);
 
   const char *c_envp[2] = {get_shareas_env(comp), NULL};
-  comp->pid = spawn(full_path, fd_count, fd_map, &inherit, NULL, c_envp);
+  comp->pid = spawn(comp->bin, fd_count, fd_map, &inherit, NULL, c_envp);
   if (comp->pid == -1) {
     ERROR("spawn() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;
@@ -825,8 +879,6 @@ static int send_event(enum zl_event_t event_type, void *event_data) {
   return 0;
 }
 
-void read_manifests();
-
 int main(int argc, char **argv) {
 
   INFO("Zowe Launcher starting\n");
@@ -837,9 +889,7 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
   
-  read_manifests();
-
-  if (load_cfg()) {
+  if (read_component_manifests()) {
     exit(EXIT_FAILURE);
   }
 

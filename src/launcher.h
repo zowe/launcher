@@ -36,6 +36,29 @@ typedef struct zl_config_t {
   bool debug_mode;
 } zl_config_t;
 
+typedef struct zl_manifest_commands_t {
+  char start[PATH_MAX+1];
+  char configure[PATH_MAX+1];
+  char validate[PATH_MAX+1];
+} zl_manifest_commands_t;
+
+typedef struct zl_manifest_build_t {
+  char branch[15+1];
+  char number[15+1];
+  char commit_hash[40+1];
+  char timestamp[20+1];
+} zl_manifest_build_t;
+
+typedef struct zl_manifest_t {
+  char name[24+1];
+  char id[16+1];
+  char title[40+1];
+  char description[128+1];
+  char license[16+1];
+  zl_manifest_commands_t commands;
+  zl_manifest_build_t build;
+} zl_manifest_t;
+
 typedef struct zl_comp_t {
 
   char name[32];
@@ -55,6 +78,7 @@ typedef struct zl_comp_t {
   } share_as;
 
   pthread_t comm_thid;
+  zl_manifest_t manifest;
 
 } zl_comp_t;
 
@@ -98,38 +122,8 @@ extern struct zl_context_t zl_context;
   printf("%s DEBUG: "fmt, gettime().value, ##__VA_ARGS__)
 #define ERROR(fmt, ...) printf("%s ERROR: "fmt, gettime().value, ##__VA_ARGS__)
 
-typedef struct zl_manifest_commands_t {
-  char start[PATH_MAX+1];
-  char configure[PATH_MAX+1];
-  char validate[PATH_MAX+1];
-} zl_manifest_commands_t;
-
-typedef struct zl_manifest_build_t {
-  char branch[15+1];
-  char number[15+1];
-  char commit_hash[40+1];
-  char timestamp[20+1];
-} zl_manifest_build_t;
-
-typedef struct zl_manifest_t {
-  char name[24+1];
-  char id[16+1];
-  char title[40+1];
-  char description[128+1];
-  char license[16+1];
-  zl_manifest_commands_t commands;
-  zl_manifest_build_t build;
-} zl_manifest_t;
-
-#define KEY_LEN 255
-
-#define INFO(fmt, ...)  printf("%s INFO:  "fmt, gettime().value, ##__VA_ARGS__)
-#define WARN(fmt, ...)  printf("%s WARN:  "fmt, gettime().value, ##__VA_ARGS__)
-#define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
-  printf("%s DEBUG: "fmt, gettime().value, ##__VA_ARGS__)
-#define ERROR(fmt, ...) printf("%s ERROR: "fmt, gettime().value, ##__VA_ARGS__)
-
 int load_instance_dot_env(const char *instance_dir);
+int load_manifest(const char *filename, zl_manifest_t *manifest);
 
 #endif // LAUNCHER_H
 

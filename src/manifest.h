@@ -15,14 +15,14 @@ typedef struct zl_manifest_build_t {
   char branch[15+1];
   char number[15+1];
   char commit_hash[40+1];
-  char timestamp[13+1];
+  char timestamp[20+1];
 } zl_manifest_build_t;
 
 typedef struct zl_manifest_t {
   char name[24+1];
   char id[16+1];
   char title[40+1];
-  char description[40+1];
+  char description[128+1];
   char license[16+1];
   zl_manifest_commands_t commands;
   zl_manifest_build_t build;

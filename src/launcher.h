@@ -112,6 +112,7 @@ struct zl_context_t {
 #define MAX_ENV_VAR_COUNT 256
 #define ENV_VAR_SIZE 128
   char environment[MAX_ENV_VAR_COUNT][ENV_VAR_SIZE];
+  size_t env_var_count;
 };
 
 extern struct zl_context_t zl_context;

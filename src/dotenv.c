@@ -93,6 +93,16 @@ int load_instance_dot_env(const char *instance_dir) {
       substitute(value, sizeof(value));
       INFO("set env %s=%s\n", key, value);
       setenv(key, value, 1);
+      if (zl_context.env_var_count < (MAX_ENV_VAR_COUNT - 1)) {
+        snprintf(
+          zl_context.environment[zl_context.env_var_count],
+          sizeof(zl_context.environment[0]),
+          "%s=%s", key, value);
+          zl_context.env_var_count++;
+      } else {
+        ERROR("max environment variable number reached, ignoring the rest\n");
+        break;
+      }
     }
     
   }

@@ -80,7 +80,14 @@ static int init_context(const struct zl_config_t *cfg) {
   memset(zl_context.instance_dir, 0, sizeof(zl_context.instance_dir));
   memcpy(zl_context.instance_dir, dir_start, dir_len);
   zl_context.config = *cfg;
-  
+
+  size_t env_var_count = zl_context.env_var_count;
+  snprintf(zl_context.environment[env_var_count],
+           sizeof(zl_context.environment[0]),
+           "INSTANCE_DIR=%s",
+           zl_context.instance_dir);
+  zl_context.env_var_count++;
+
   if (load_instance_dot_env(zl_context.instance_dir)) {
     ERROR("failed to load instance.env\n");
     return -1;
@@ -501,7 +508,13 @@ static int start_component(zl_comp_t *comp) {
   DEBUG("%s fd_map[0]=%d, fd_map[1]=%d, fd_map[2]=%d\n",
         comp->name, fd_map[0], fd_map[1], fd_map[2]);
 
-  const char *c_envp[2] = {get_shareas_env(comp), NULL};
+  const char *c_envp[zl_context.env_var_count+2];
+  size_t i;
+  for (i = 0; i < zl_context.env_var_count; i++) {
+    c_envp[i] = zl_context.environment[i];
+  }
+  c_envp[i++] = get_shareas_env(comp);
+  c_envp[i++] = NULL;
   comp->pid = spawn(comp->bin, fd_count, fd_map, &inherit, NULL, c_envp);
   if (comp->pid == -1) {
     ERROR("spawn() failed for %s - %s\n", comp->name, strerror(errno));

@@ -28,6 +28,8 @@
 #include <sys/__messag.h>
 #include <unistd.h>
 
+#include "launcher.h"
+
 /*
  * TODO:
  * - Better process monitoring and clean up. For example, can we find all the
@@ -35,19 +37,6 @@
  * killed process?
  * - a REST endpoint? Zowe CLI?
  */
-
-#define CONFIG_DEBUG_MODE_KEY     "ZLDEBUG"
-#define CONFIG_DEBUG_MODE_VALUE   "ON"
-
-#define MIN_UPTIME_SECS 90
-
-#ifndef PATH_MAX
-#define PATH_MAX _POSIX_PATH_MAX
-#endif
-
-typedef struct zl_time_t {
-  char value[32];
-} zl_time_t;
 
 static zl_time_t gettime(void) {
 
@@ -64,65 +53,7 @@ static zl_time_t gettime(void) {
   return result;
 }
 
-typedef struct zl_config_t {
-  bool debug_mode;
-} zl_config_t;
-
-typedef struct zl_comp_t {
-
-  char name[32];
-  char bin[_POSIX_PATH_MAX + 1];
-  pid_t pid;
-  int output;
-
-  bool clean_stop;
-  int restart_cnt;
-  int fail_cnt;
-  time_t start_time;
-
-  enum {
-    ZL_COMP_AS_SHARE_NO,
-    ZL_COMP_AS_SHARE_YES,
-    ZL_COMP_AS_SHARE_MUST,
-  } share_as;
-
-  pthread_t comm_thid;
-
-} zl_comp_t;
-
-enum zl_event_t {
-  ZL_EVENT_NONE = 0,
-  ZL_EVENT_TERM,
-  ZL_EVENT_COMP_RESTART,
-};
-
-struct {
-
-  pthread_t console_thid;
-
-#define MAX_CHILD_COUNT 128
-
-  zl_comp_t children[MAX_CHILD_COUNT];
-  size_t child_count;
-
-  zl_config_t config;
-
-  bool is_term;
-
-  enum zl_event_t event_type;
-  void *event_data;
-  pthread_cond_t event_cv;
-  pthread_mutex_t event_lock;
-
-  char workdir[_POSIX_PATH_MAX + 1];
-
-} zl_context = {.config = {.debug_mode = true}};
-
-#define INFO(fmt, ...)  printf("%s INFO:  "fmt, gettime().value, ##__VA_ARGS__)
-#define WARN(fmt, ...)  printf("%s WARN:  "fmt, gettime().value, ##__VA_ARGS__)
-#define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
-  printf("%s DEBUG: "fmt, gettime().value, ##__VA_ARGS__)
-#define ERROR(fmt, ...) printf("%s ERROR: "fmt, gettime().value, ##__VA_ARGS__)
+struct zl_context_t zl_context = {.config = {.debug_mode = true}};
 
 static int init_context(const struct zl_config_t *cfg) {
 

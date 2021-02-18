@@ -23,7 +23,7 @@
 #include <sys/stat.h>
 
 #include "yaml.h"
-#include "manifest.h"
+#include "launcher.h"
 
 static int yaml_read_handler(void *data, unsigned char *buffer, size_t size, size_t *size_read) {
   FILE * fp = data;

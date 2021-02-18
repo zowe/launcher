@@ -30,6 +30,8 @@ typedef struct zl_time_t {
   char value[32];
 } zl_time_t;
 
+zl_time_t gettime(void);
+
 typedef struct zl_config_t {
   bool debug_mode;
 } zl_config_t;
@@ -81,7 +83,10 @@ struct zl_context_t {
   pthread_mutex_t event_lock;
 
   char workdir[PATH_MAX + 1];
-
+  
+#define MAX_ENV_VAR_COUNT 256
+#define ENV_VAR_SIZE 128
+  char environment[MAX_ENV_VAR_COUNT][ENV_VAR_SIZE];
 };
 
 extern struct zl_context_t zl_context;
@@ -122,6 +127,8 @@ typedef struct zl_manifest_t {
 #define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
   printf("%s DEBUG: "fmt, gettime().value, ##__VA_ARGS__)
 #define ERROR(fmt, ...) printf("%s ERROR: "fmt, gettime().value, ##__VA_ARGS__)
+
+int load_instance_dot_env();
 
 #endif // LAUNCHER_H
 

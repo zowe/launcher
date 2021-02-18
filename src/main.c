@@ -38,7 +38,7 @@
  * - a REST endpoint? Zowe CLI?
  */
 
-static zl_time_t gettime(void) {
+zl_time_t gettime(void) {
 
   time_t t = time(NULL);
   const char *format = "%Y-%m-%d %H:%M:%S";
@@ -299,95 +299,6 @@ static int load_cfg(void) {
   fclose(cfg);
   cfg = NULL;
 
-  return 0;
-}
-
-void substitute(char *value, size_t size) {
-  char copy[size];
-
-  while (true) {
-    char *start = strstr(value, "${");
-    if (!start) {
-      break;
-    }
-    char *var_start = start + 2;
-    char *var_end = strstr(var_start, "}");
-    if (!var_end) {
-      break;
-    }
-    char var[var_end - var_start + 1];
-    snprintf(var, sizeof(var), "%.*s", (int)(var_end - var_start), var_start);
-    char *val = getenv(var);
-    snprintf(copy, size, "%.*s%s%s", (int)(start - value), value, val, var_end + 1);
-    strcpy(value, copy);
-  }
-}
-
-void unquote(char *value, size_t size) {
-  char copy[size];
-  size_t len = strlen(value);
-  if (len == 0) {
-    return;
-  }
-  if (value[0] == '\"' && value[len-1] == '\"') {
-    snprintf(copy, size, "%.*s", (int)(len - 2), value + 1);
-    strcpy(value, copy);
-  }
-}
-
-static int load_instance_env() {
-  char *instance_dir = getenv("INSTANCE_DIR");
-  if (!instance_dir) {
-    ERROR("INSTANCE_DIR environemnt variable not found\n");
-    return -1;
-  }
-  char path[PATH_MAX];
-  snprintf (path, sizeof(path), "%s/instance.env", instance_dir);
-  FILE *fp;
-
-  if ((fp = fopen(path, "r")) == NULL) {
-    ERROR("instace.env %s file not open - %s\n", path, strerror(errno));
-    return -1;
-  }
-  INFO("%s opened\n", path);
-
-  char *line;
-  char buf[1024];
-  char key[sizeof(buf)];
-  char value[sizeof(buf)];
-
-  while ((line = fgets(buf, sizeof(buf), fp)) != NULL) {
-    size_t len = strlen(line);
-    if (len > 0 && line[len-1] == '\n') {
-      line[len-1] = '\0';
-    }
-    DEBUG("handling line \'%s\'\n", line);
-    char *hash = strchr(line, '#');
-    if (hash) {
-      *hash = '\0';
-    }
-    for (int i = strlen(line) - 1; i >= 0; i--) {
-      if (line[i] != ' ') {
-        break;
-      } else {
-        line[i] = '\0';
-      }
-    }
-    char *equal = strchr(line, '=');
-    if (equal) {
-      snprintf(key, sizeof(key), "%.*s", (int)(equal - line), line);
-      snprintf(value, sizeof(value), "%s", equal + 1);
-      unquote(value, sizeof(value));
-      substitute(value, sizeof(value));
-      INFO("set env %s=%s\n", key, value);
-      setenv(key, value, 1);
-    }
-    
-  }
-
-  DEBUG("reading instance.env finished - %s\n", strerror(errno));
-
-  fclose(fp);
   return 0;
 }
 
@@ -912,7 +823,7 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
   
-  if (load_instance_env()) {
+  if (load_instance_dot_env()) {
     exit(EXIT_FAILURE);
   }
   

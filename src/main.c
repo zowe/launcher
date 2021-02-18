@@ -57,29 +57,42 @@ struct zl_context_t zl_context = {.config = {.debug_mode = true}};
 
 static int init_context(const struct zl_config_t *cfg) {
 
-  const char *workdir = getenv("WORKDIR");
-  if (workdir == NULL) {
-    ERROR("WORKDIR env variable not found\n");
+  const char *instance_dir = getenv("INSTANCE_DIR");
+  if (instance_dir == NULL) {
+    ERROR("INSTANCE_DIR env variable not found\n");
     return -1;
   }
 
-  const char *dir_start = workdir;
-  const char *dir_end = dir_start + strlen(workdir) - 1;
+  const char *dir_start = instance_dir;
+  const char *dir_end = dir_start + strlen(instance_dir) - 1;
   while (*dir_end == ' ' && dir_end != dir_start) {
     dir_end--;
   }
 
   size_t dir_len = dir_end - dir_start + 1;
-  if (dir_len > sizeof(zl_context.workdir) - 1) {
-    ERROR("WORKDIR env too large\n");
+  if (dir_len > sizeof(zl_context.instance_dir) - 1) {
+    ERROR("INSTANCE_DIR env too large\n");
     return -1;
   }
 
-  memset(zl_context.workdir, 0, sizeof(zl_context.workdir));
-  memcpy(zl_context.workdir, dir_start, dir_len);
+  memset(zl_context.instance_dir, 0, sizeof(zl_context.instance_dir));
+  memcpy(zl_context.instance_dir, dir_start, dir_len);
   zl_context.config = *cfg;
+  
+  if (load_instance_dot_env(zl_context.instance_dir)) {
+    ERROR("failed to load instance.env\n");
+    return -1;
+  }
+  
+  char *root_dir = getenv("ROOT_DIR");
+  if (!root_dir) {
+    ERROR("ROOT_DIR not set by instance.env\n");
+    return -1;
+  }
+  snprintf(zl_context.root_dir, sizeof(zl_context.root_dir), "%s", root_dir);
 
-  if (chdir(zl_context.workdir)) {
+  /* do we really need to change work dir? */
+  if (chdir(zl_context.instance_dir)) {
     ERROR("working directory not changed - %s\n", strerror(errno));
     return -1;
   }
@@ -94,7 +107,8 @@ static int init_context(const struct zl_config_t *cfg) {
     return -1;
   }
 
-  DEBUG("work directory is \'%s\'\n", zl_context.workdir);
+  DEBUG("instance directory is \'%s\'\n", zl_context.instance_dir);
+  DEBUG("root directory is \'%s\'\n", zl_context.root_dir);
 
   return 0;
 }
@@ -379,16 +393,16 @@ static int start_component(zl_comp_t *comp) {
 
   DEBUG("about to start component %s\n", comp->name);
 
-  size_t workdir_len = strlen(zl_context.workdir);
+  size_t root_dir_len = strlen(zl_context.root_dir);
   size_t bin_len = strlen(comp->bin);
 
-  if (workdir_len + bin_len > _POSIX_PATH_MAX) {
+  if (root_dir_len + bin_len > _POSIX_PATH_MAX) {
     ERROR("bin name \'%s\' too long\n", comp->bin);
     return -1;
   }
 
   char full_path[_POSIX_PATH_MAX + 1 + 1] = {0};
-  strcpy(full_path, zl_context.workdir);
+  strcpy(full_path, zl_context.root_dir);
   strcat(full_path, "/");
   strcat(full_path, comp->bin);
 
@@ -820,10 +834,6 @@ int main(int argc, char **argv) {
   zl_config_t config = read_config(argc, argv);
 
   if (init_context(&config)) {
-    exit(EXIT_FAILURE);
-  }
-  
-  if (load_instance_dot_env()) {
     exit(EXIT_FAILURE);
   }
   

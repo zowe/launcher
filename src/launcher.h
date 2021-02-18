@@ -82,7 +82,8 @@ struct zl_context_t {
   pthread_cond_t event_cv;
   pthread_mutex_t event_lock;
 
-  char workdir[PATH_MAX + 1];
+  char instance_dir[PATH_MAX + 1];
+  char root_dir[PATH_MAX+1];
   
 #define MAX_ENV_VAR_COUNT 256
 #define ENV_VAR_SIZE 128
@@ -128,7 +129,7 @@ typedef struct zl_manifest_t {
   printf("%s DEBUG: "fmt, gettime().value, ##__VA_ARGS__)
 #define ERROR(fmt, ...) printf("%s ERROR: "fmt, gettime().value, ##__VA_ARGS__)
 
-int load_instance_dot_env();
+int load_instance_dot_env(const char *instance_dir);
 
 #endif // LAUNCHER_H
 

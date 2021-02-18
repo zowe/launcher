@@ -52,12 +52,7 @@ static void strip_quotes(char *value, size_t size) {
   }
 }
 
-int load_instance_dot_env() {
-  char *instance_dir = getenv("INSTANCE_DIR");
-  if (!instance_dir) {
-    ERROR("INSTANCE_DIR environemnt variable not found\n");
-    return -1;
-  }
+int load_instance_dot_env(const char *instance_dir) {
   char path[PATH_MAX];
   snprintf (path, sizeof(path), "%s/instance.env", instance_dir);
   FILE *fp;

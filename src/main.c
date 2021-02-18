@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <errno.h>
 
 #include <time.h>
@@ -425,7 +426,7 @@ static int stop_components(void) {
 static zl_comp_t *find_comp(const char *name) {
 
   for (size_t i = 0; i < zl_context.child_count; i++) {
-    if (!strcmp(name, zl_context.children[i].name)) {
+    if (!strcasecmp(name, zl_context.children[i].name)) {
       return &zl_context.children[i];
     }
   }

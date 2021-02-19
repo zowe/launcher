@@ -25,13 +25,9 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <spawn.h>
-#include <dirent.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/__messag.h>
 #include <unistd.h>
-
-#include "launcher.h"
 
 extern char ** environ;
 /*
@@ -42,7 +38,20 @@ extern char ** environ;
  * - a REST endpoint? Zowe CLI?
  */
 
-zl_time_t gettime(void) {
+#define CONFIG_DEBUG_MODE_KEY     "ZLDEBUG"
+#define CONFIG_DEBUG_MODE_VALUE   "ON"	
+
+#define MIN_UPTIME_SECS 90
+
+#ifndef PATH_MAX
+#define PATH_MAX _POSIX_PATH_MAX
+#endif
+
+typedef struct zl_time_t {	
+  char value[32];	
+} zl_time_t;	
+
+static zl_time_t gettime(void) {
 
   time_t t = time(NULL);
   const char *format = "%Y-%m-%d %H:%M:%S";
@@ -57,7 +66,79 @@ zl_time_t gettime(void) {
   return result;
 }
 
-struct zl_context_t zl_context = {.config = {.debug_mode = true}};
+typedef struct zl_config_t {
+  bool debug_mode;
+} zl_config_t;
+
+typedef struct zl_comp_t {
+
+  char name[32];
+  char bin[_POSIX_PATH_MAX + 1];
+  pid_t pid;
+  int output;
+
+  bool clean_stop;
+  int restart_cnt;
+  int fail_cnt;
+  time_t start_time;
+
+  enum {
+    ZL_COMP_AS_SHARE_NO,
+    ZL_COMP_AS_SHARE_YES,
+    ZL_COMP_AS_SHARE_MUST,
+  } share_as;
+
+  pthread_t comm_thid;
+
+} zl_comp_t;
+
+enum zl_event_t {
+  ZL_EVENT_NONE = 0,
+  ZL_EVENT_TERM,
+  ZL_EVENT_COMP_RESTART,
+};
+
+enum zl_start_mode_t {
+  ZL_START_MODE_STC,
+  ZL_START_MODE_PS
+};
+
+struct {
+
+  pthread_t console_thid;
+
+#define MAX_CHILD_COUNT 128
+
+  zl_comp_t children[MAX_CHILD_COUNT];
+  size_t child_count;
+
+  zl_config_t config;
+
+  bool is_term;
+
+  enum zl_event_t event_type;
+  void *event_data;
+  pthread_cond_t event_cv;
+  pthread_mutex_t event_lock;
+
+  char instance_dir[PATH_MAX + 1];
+  char root_dir[PATH_MAX+1];
+  
+  enum zl_start_mode_t start_mode;
+  
+#define MAX_ENV_VAR_COUNT 256
+#define ENV_VAR_SIZE 512
+  char environment[MAX_ENV_VAR_COUNT][ENV_VAR_SIZE];
+  size_t env_var_count;
+} zl_context = {.config = {.debug_mode = true}};
+
+#define INFO(fmt, ...)  printf("%s INFO:  "fmt, gettime().value, ##__VA_ARGS__)
+#define WARN(fmt, ...)  printf("%s WARN:  "fmt, gettime().value, ##__VA_ARGS__)
+#define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
+  printf("%s DEBUG: "fmt, gettime().value, ##__VA_ARGS__)
+#define ERROR(fmt, ...) printf("%s ERROR: "fmt, gettime().value, ##__VA_ARGS__)
+
+static int load_instance_dot_env(const char *instance_dir);
 
 static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
 
@@ -125,24 +206,6 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
   return 0;
 }
 
-static int init_component_from_manifest(zl_manifest_t *manifest, const char *component_dir, zl_comp_t *result) {
-  if (strlen(manifest->commands.start) == 0) {
-    WARN("component %s doesn't have start command use default start command\n", manifest->name);
-    snprintf (manifest->commands.start, sizeof(manifest->commands.start), "%s", "bin/start.sh");
-  }
-  snprintf(result->bin, sizeof(result->bin), "%s/%s", component_dir, manifest->commands.start);
-  snprintf(result->name, sizeof(result->name), "%s", manifest->name);
-  result->pid = -1;
-  result->share_as = ZL_COMP_AS_SHARE_NO;
-  result->manifest = *manifest;
-  result->restart_cnt = 5;
-  
-  INFO("new component init'd \'%s\', \'%s\', restart_cnt=%d, share_as=%d\n",
-       result->name, result->bin, result->restart_cnt, result->share_as);
-
-  return 0;
-}
-
 static int init_component(const char *name, zl_comp_t *result) {
   snprintf(result->name, sizeof(result->name), "%s", name);
   result->pid = -1;
@@ -170,52 +233,6 @@ static const char *get_shareas_env(const zl_comp_t *comp) {
 
 }
 
-/*static */int read_component_manifests() {
-  char *root_dir = zl_context.root_dir;
-  char path[strlen(root_dir) + strlen("/components") + 1];
-  strcpy(path, root_dir);
-  strcat(path, "/components");
-  DIR *components_dir = opendir(path);
-  if (!components_dir) {
-    ERROR("unable to open components directory %s\n", path);
-    return -1;
-  }
-  DEBUG("components dir %s opened\n", path);
-  struct dirent *entry;
-  struct stat    file_stat;
-  char           dir_path[PATH_MAX + 1];
-  char           manifest_path[PATH_MAX + 1];
-  while ((entry = readdir(components_dir)) != NULL) {
-    if (entry->d_name[0] == '.') {
-      continue;
-    }
-    snprintf(dir_path, sizeof(dir_path), "%s/%s", path, entry->d_name);
-    if (stat(dir_path, &file_stat)) {
-      WARN("unable get info about %s\n", dir_path);
-      continue;
-    };
-    if (!S_ISDIR(file_stat.st_mode)) {
-      continue;
-    }
-    snprintf(manifest_path, sizeof(manifest_path), "%s/manifest.yaml", dir_path);
-    zl_manifest_t manifest = {0};
-    if (load_manifest(manifest_path, &manifest)) {
-      WARN("failed to load component manifest file %s\n", manifest_path);
-      continue;
-    }
-    zl_comp_t comp = {0};
-    if (!init_component_from_manifest(&manifest, dir_path, &comp)) {
-      if (zl_context.child_count != MAX_CHILD_COUNT) {
-        zl_context.children[zl_context.child_count++] = comp;
-      } else {
-        ERROR("max component number reached, ignoring the rest\n");
-        break;
-      }
-    }
-  }
-  closedir(components_dir);
-  return 0;
-}
 static int init_components(char *components) {
   if (!components) {
     ERROR("components to launch not set\n");
@@ -753,6 +770,74 @@ static int send_event(enum zl_event_t event_type, void *event_data) {
     return -1;
   }
 
+  return 0;
+}
+
+static int load_instance_dot_env(const char *instance_dir) {
+  
+  char command[PATH_MAX];
+  snprintf (command, sizeof(command), "%s/bin/internal/save-env.sh", getenv("ROOT_DIR"));
+  int rc;
+  if ((rc = system(command)) != 0) {
+    ERROR("save-env exited with %d\n", rc);
+    return -1;
+  }
+  INFO("save-env successful\n");
+  char path[PATH_MAX];
+  snprintf (path, sizeof(path), "%s/instance-saved.env", instance_dir);
+  FILE *fp;
+
+  if ((fp = fopen(path, "r")) == NULL) {
+    ERROR("instace.env %s file not open - %s\n", path, strerror(errno));
+    return -1;
+  }
+  INFO("%s opened\n", path);
+
+  char *line;
+  char buf[1024];
+  char key[sizeof(buf)];
+  char value[sizeof(buf)];
+
+  while ((line = fgets(buf, sizeof(buf), fp)) != NULL) {
+    size_t len = strlen(line);
+    if (len > 0 && line[len-1] == '\n') {
+      line[len-1] = '\0';
+    }
+    DEBUG("handling line \'%s\'\n", line);
+    char *hash = strchr(line, '#');
+    if (hash) {
+      *hash = '\0';
+    }
+    for (int i = strlen(line) - 1; i >= 0; i--) {
+      if (line[i] != ' ') {
+        break;
+      } else {
+        line[i] = '\0';
+      }
+    }
+    char *equal = strchr(line, '=');
+    if (equal) {
+      snprintf(key, sizeof(key), "%.*s", (int)(equal - line), line);
+      snprintf(value, sizeof(value), "%s", equal + 1);
+      INFO("set env %s=%s\n", key, value);
+      setenv(key, value, 1);
+      if (zl_context.env_var_count < (MAX_ENV_VAR_COUNT - 1)) {
+        snprintf(
+          zl_context.environment[zl_context.env_var_count],
+          sizeof(zl_context.environment[0]),
+          "%s=%s", key, value);
+          zl_context.env_var_count++;
+      } else {
+        ERROR("max environment variable number reached, ignoring the rest\n");
+        break;
+      }
+    }
+    
+  }
+
+  DEBUG("reading instance-saved.env finished - %s\n", strerror(errno));
+
+  fclose(fp);
   return 0;
 }
 

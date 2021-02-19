@@ -39,7 +39,7 @@ extern char ** environ;
  */
 
 #define CONFIG_DEBUG_MODE_KEY     "ZLDEBUG"
-#define CONFIG_DEBUG_MODE_VALUE   "ON"	
+#define CONFIG_DEBUG_MODE_VALUE   "ON"
 
 #define MIN_UPTIME_SECS 90
 
@@ -48,8 +48,8 @@ extern char ** environ;
 #endif
 
 typedef struct zl_time_t {	
-  char value[32];	
-} zl_time_t;	
+  char value[32];
+} zl_time_t;
 
 static zl_time_t gettime(void) {
 
@@ -137,8 +137,6 @@ struct {
 #define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
   printf("%s DEBUG: "fmt, gettime().value, ##__VA_ARGS__)
 #define ERROR(fmt, ...) printf("%s ERROR: "fmt, gettime().value, ##__VA_ARGS__)
-
-static int load_instance_dot_env(const char *instance_dir);
 
 static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
 
@@ -417,14 +415,8 @@ static int start_components(void) {
   INFO("starting components\n");
 
   int rc = 0;
-  char *components_to_start = getenv("LAUNCH_COMPONENTS");
-  INFO("components to start %s\n", components_to_start);
+
   for (size_t i = 0; i < zl_context.child_count; i++) {
-    // zl_comp_t *comp = &zl_context.children[i];
-    // if (!strstr(components_to_start, comp->name)) {
-    //   INFO("skip component %s\n", comp->name);
-    //   continue;
-    // }
     if (start_component(&zl_context.children[i])) {
       rc = -1;
     }
@@ -863,10 +855,6 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
   
-  // if (read_component_manifests()) {
-  //   exit(EXIT_FAILURE);
-  // }
-
   start_components();
 
   if (start_console_tread()) {

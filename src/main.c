@@ -500,7 +500,6 @@ static zl_comp_t *find_comp(const char *name) {
 
 static int handle_start(const char *comp_name) {
 
-  printf ("handle start %s\n", comp_name);
   zl_comp_t *comp = find_comp(comp_name);
   if (comp == NULL) {
     WARN("component %s not found\n", comp_name);

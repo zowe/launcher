@@ -33,6 +33,7 @@
 
 #include "launcher.h"
 
+extern char ** environ;
 /*
  * TODO:
  * - Better process monitoring and clean up. For example, can we find all the
@@ -58,7 +59,7 @@ zl_time_t gettime(void) {
 
 struct zl_context_t zl_context = {.config = {.debug_mode = true}};
 
-static int init_context(const struct zl_config_t *cfg) {
+static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
 
   const char *instance_dir = getenv("INSTANCE_DIR");
   if (instance_dir == NULL) {
@@ -77,9 +78,16 @@ static int init_context(const struct zl_config_t *cfg) {
     ERROR("INSTANCE_DIR env too large\n");
     return -1;
   }
-
+  
   memset(zl_context.instance_dir, 0, sizeof(zl_context.instance_dir));
   memcpy(zl_context.instance_dir, dir_start, dir_len);
+  
+  const char *root_dir = getenv("ROOT_DIR");
+  if (root_dir == NULL) {
+    ERROR("ROOT_DIR env variable not found\n");
+    return -1;
+  }
+  snprintf(zl_context.root_dir, sizeof(zl_context.root_dir), "%s", root_dir);
   zl_context.config = *cfg;
 
   size_t env_var_count = zl_context.env_var_count;
@@ -88,19 +96,13 @@ static int init_context(const struct zl_config_t *cfg) {
            "INSTANCE_DIR=%s",
            zl_context.instance_dir);
   zl_context.env_var_count++;
+  snprintf(zl_context.environment[env_var_count],
+           sizeof(zl_context.environment[0]),
+           "ROOT_DIR=%s",
+           zl_context.root_dir);
+  zl_context.env_var_count++;
 
-  if (load_instance_dot_env(zl_context.instance_dir)) {
-    ERROR("failed to load instance.env\n");
-    return -1;
-  }
-  
-  char *root_dir = getenv("ROOT_DIR");
-  if (!root_dir) {
-    ERROR("ROOT_DIR not set by instance.env\n");
-    return -1;
-  }
-  snprintf(zl_context.root_dir, sizeof(zl_context.root_dir), "%s", root_dir);
-
+  zl_context.start_mode = argc > 1 ? ZL_START_MODE_PS : ZL_START_MODE_STC;
   /* do we really need to change work dir? */
   if (chdir(zl_context.instance_dir)) {
     ERROR("working directory not changed - %s\n", strerror(errno));
@@ -214,8 +216,7 @@ static const char *get_shareas_env(const zl_comp_t *comp) {
   closedir(components_dir);
   return 0;
 }
-static int init_components() {
-  char *components = getenv("LAUNCH_COMPONENTS");
+static int init_components(char *components) {
   if (!components) {
     ERROR("components to launch not set\n");
     return -1;
@@ -368,11 +369,11 @@ static int start_component(zl_comp_t *comp) {
   const char *c_args[] = {
     bin,
     "-c", getenv("INSTANCE_DIR"),
-    "-r", getenv("ROOT_DIR"), 
+    "-r", getenv("ROOT_DIR"),
     "-o", comp->name, 
     NULL
   };
-  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_envp);
+  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, zl_context.start_mode == ZL_START_MODE_STC ? c_envp : (const char**)environ);
   if (comp->pid == -1) {
     ERROR("spawn() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;
@@ -761,11 +762,19 @@ int main(int argc, char **argv) {
 
   zl_config_t config = read_config(argc, argv);
 
-  if (init_context(&config)) {
+  if (init_context(argc, argv, &config)) {
     exit(EXIT_FAILURE);
   }
   
-  if (init_components()) {
+  if (zl_context.start_mode == ZL_START_MODE_STC) {
+    if (load_instance_dot_env(zl_context.instance_dir)) {
+      ERROR("failed to load instance environment\n");
+      return -1;
+    }
+  }
+  char *components = zl_context.start_mode == ZL_START_MODE_STC ? getenv("LAUNCH_COMPONENTS") : argv[1];
+
+  if (init_components(components)) {
     exit(EXIT_FAILURE);
   }
   

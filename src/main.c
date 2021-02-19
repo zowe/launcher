@@ -375,12 +375,12 @@ static int start_component(zl_comp_t *comp) {
   c_envp[i++] = NULL;
   const char *c_args[] = {
     bin,
-    "-c", getenv("INSTANCE_DIR"),
-    "-r", getenv("ROOT_DIR"),
+    "-c", zl_context.instance_dir,
+    "-r", zl_context.root_dir,
     "-o", comp->name, 
     NULL
   };
-  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, zl_context.start_mode == ZL_START_MODE_STC ? c_envp : (const char**)environ);
+  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, (const char**)environ);
   if (comp->pid == -1) {
     ERROR("spawn() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;
@@ -756,16 +756,47 @@ static int send_event(enum zl_event_t event_type, void *event_data) {
   return 0;
 }
 
-static int load_instance_dot_env(const char *instance_dir) {
-  
-  char command[PATH_MAX];
-  snprintf (command, sizeof(command), "%s/bin/internal/save-env.sh", getenv("ROOT_DIR"));
-  int rc;
-  if ((rc = system(command)) != 0) {
-    ERROR("save-env exited with %d\n", rc);
+static int get_components(char *buf, size_t buf_size) {
+  char command[3*PATH_MAX];
+  snprintf (command, sizeof(command), "%s/bin/internal/get-launch-components.sh -c %s -r %s",
+    zl_context.root_dir, zl_context.instance_dir, zl_context.root_dir);
+  INFO("about to tun command %s\n", command);
+  FILE *fp = popen(command, "r");
+  if (!fp) {
+    ERROR("unable to get start components - %s\n", strerror(errno));
     return -1;
   }
-  INFO("save-env successful\n");
+  char *line = fgets(buf, buf_size - 1, fp);
+  fclose(fp);
+  if (!line) {
+    ERROR("failed to read start components - %s\n", strerror(errno));
+    return -1;
+  }
+  size_t len = strlen(line);
+  if (len > 0 && line[len-1] == '\n') {
+    line[len-1] = '\0';
+  }
+  len = strlen(line);
+  if (len > 0 && line[len-1] == ',') {
+    line[len-1] = '\0';
+  }
+  
+  INFO("start components: '%s'\n", line);
+  return 0;
+}
+
+static int load_instance_dot_env(const char *instance_dir) {
+  char command[PATH_MAX];
+  const char *script = "bin/internal/prepare-zowe-for-launcher.sh";
+  snprintf (command, sizeof(command), "%s/%s", zl_context.root_dir, script);
+  int rc;
+  if ((rc = system(command)) != 0) {
+    ERROR("%s with %d\n", command, rc);
+    return -1;
+  }
+  INFO("prepare zowe successful\n");
+  return 0;
+  /*
   char path[PATH_MAX];
   snprintf (path, sizeof(path), "%s/instance-saved.env", instance_dir);
   FILE *fp;
@@ -815,12 +846,12 @@ static int load_instance_dot_env(const char *instance_dir) {
         break;
       }
     }
-    
   }
+  fclose(fp);
+    */
 
   DEBUG("reading instance-saved.env finished - %s\n", strerror(errno));
 
-  fclose(fp);
   return 0;
 }
 
@@ -834,15 +865,23 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
   
+  char buf[512];
+  char *component_list = NULL;
+  
   if (zl_context.start_mode == ZL_START_MODE_STC) {
     if (load_instance_dot_env(zl_context.instance_dir)) {
       ERROR("failed to load instance environment\n");
       return -1;
     }
+    if (get_components(buf, sizeof(buf))) {
+      exit(EXIT_FAILURE);
+    }
+    component_list = buf;
+  } else {
+    component_list = argv[1];
   }
-  char *components = zl_context.start_mode == ZL_START_MODE_STC ? getenv("LAUNCH_COMPONENTS") : argv[1];
 
-  if (init_components(components)) {
+  if (init_components(component_list)) {
     exit(EXIT_FAILURE);
   }
 

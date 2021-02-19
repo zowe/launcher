@@ -329,8 +329,6 @@ static int start_component(zl_comp_t *comp) {
 
   DEBUG("about to start component %s\n", comp->name);
 
-  DEBUG("about to start component %s at \'%s\'\n", comp->name, comp->bin);
-
   // ensure the new process has its own process group ID so we can terminate
   // the entire process tree
   struct inheritance inherit = {
@@ -353,21 +351,15 @@ static int start_component(zl_comp_t *comp) {
   int fd_count = 3;
   int fd_map[3];
   char bin[PATH_MAX];
+
   snprintf(bin, sizeof(bin), "%s/bin/internal/start-component-with-launcher.sh", getenv("ROOT_DIR"));
-  // const char *bin = comp->bin;
-  int bin_len = strlen(bin);
-  
-  if (strcmp(&bin[bin_len - 3], ".sh") == 0) {
-    script = fopen(bin, "r");
-    if (script == NULL) {
-      ERROR("script not open for %s - %s\n", comp->name, strerror(errno));
-      return -1;
-    }
-    fd_map[0] = dup(fileno(script));
-    fclose(script);
-  } else {
-    fd_map[0] = dup(STDIN_FILENO);
+  script = fopen(bin, "r");
+  if (script == NULL) {
+    ERROR("script not open for %s - %s\n", comp->name, strerror(errno));
+    return -1;
   }
+  fd_map[0] = dup(fileno(script));
+  fclose(script);
   fd_map[1] = dup(c_stdout[1]);
   fd_map[2] = dup(c_stdout[1]);
 

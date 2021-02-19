@@ -47,7 +47,7 @@ extern char ** environ;
 #define PATH_MAX _POSIX_PATH_MAX
 #endif
 
-typedef struct zl_time_t {	
+typedef struct zl_time_t {
   char value[32];
 } zl_time_t;
 
@@ -238,7 +238,7 @@ static int init_components(char *components) {
   }
   char *name = strtok(components, ",");
 
-	while(name != NULL) {
+  while(name != NULL) {
     zl_comp_t comp = { 0 };
     init_component(name, &comp);
     if (zl_context.child_count != MAX_CHILD_COUNT) {

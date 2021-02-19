@@ -19,42 +19,18 @@
 #include <time.h>
 #include "launcher.h"
 
-static void substitute(char *value, size_t size) {
-  char copy[size];
-
-  while (true) {
-    char *start = strstr(value, "${");
-    if (!start) {
-      break;
-    }
-    char *var_start = start + 2;
-    char *var_end = strstr(var_start, "}");
-    if (!var_end) {
-      break;
-    }
-    char var[var_end - var_start + 1];
-    snprintf(var, sizeof(var), "%.*s", (int)(var_end - var_start), var_start);
-    char *val = getenv(var);
-    snprintf(copy, size, "%.*s%s%s", (int)(start - value), value, val, var_end + 1);
-    strcpy(value, copy);
-  }
-}
-
-static void strip_quotes(char *value, size_t size) {
-  char copy[size];
-  size_t len = strlen(value);
-  if (len == 0) {
-    return;
-  }
-  if (value[0] == '\"' && value[len-1] == '\"') {
-    snprintf(copy, size, "%.*s", (int)(len - 2), value + 1);
-    strcpy(value, copy);
-  }
-}
-
 int load_instance_dot_env(const char *instance_dir) {
+  
+  char command[PATH_MAX];
+  snprintf (command, sizeof(command), "%s/bin/internal/save-env.sh", getenv("ROOT_DIR"));
+  int rc;
+  if ((rc = system(command)) != 0) {
+    ERROR("save-env exited with %d\n", rc);
+    return -1;
+  }
+  INFO("save-env successful\n");
   char path[PATH_MAX];
-  snprintf (path, sizeof(path), "%s/instance.env", instance_dir);
+  snprintf (path, sizeof(path), "%s/instance-saved.env", instance_dir);
   FILE *fp;
 
   if ((fp = fopen(path, "r")) == NULL) {
@@ -89,8 +65,6 @@ int load_instance_dot_env(const char *instance_dir) {
     if (equal) {
       snprintf(key, sizeof(key), "%.*s", (int)(equal - line), line);
       snprintf(value, sizeof(value), "%s", equal + 1);
-      strip_quotes(value, sizeof(value));
-      substitute(value, sizeof(value));
       INFO("set env %s=%s\n", key, value);
       setenv(key, value, 1);
       if (zl_context.env_var_count < (MAX_ENV_VAR_COUNT - 1)) {
@@ -107,7 +81,7 @@ int load_instance_dot_env(const char *instance_dir) {
     
   }
 
-  DEBUG("reading instance.env finished - %s\n", strerror(errno));
+  DEBUG("reading instance-saved.env finished - %s\n", strerror(errno));
 
   fclose(fp);
   return 0;

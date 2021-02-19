@@ -125,8 +125,8 @@ static int init_context(const struct zl_config_t *cfg) {
 
 static int init_component_from_manifest(zl_manifest_t *manifest, const char *component_dir, zl_comp_t *result) {
   if (strlen(manifest->commands.start) == 0) {
-    WARN("component %s doesn't have start command\n", manifest->name);
-    return -1;
+    WARN("component %s doesn't have start command use default start command\n", manifest->name);
+    snprintf (manifest->commands.start, sizeof(manifest->commands.start), "%s", "bin/start.sh");
   }
   snprintf(result->bin, sizeof(result->bin), "%s/%s", component_dir, manifest->commands.start);
   snprintf(result->name, sizeof(result->name), "%s", manifest->name);
@@ -137,6 +137,18 @@ static int init_component_from_manifest(zl_manifest_t *manifest, const char *com
   
   INFO("new component init'd \'%s\', \'%s\', restart_cnt=%d, share_as=%d\n",
        result->name, result->bin, result->restart_cnt, result->share_as);
+
+  return 0;
+}
+
+static int init_component(const char *name, zl_comp_t *result) {
+  snprintf(result->name, sizeof(result->name), "%s", name);
+  result->pid = -1;
+  result->share_as = ZL_COMP_AS_SHARE_NO;
+  result->restart_cnt = 5;
+  
+  INFO("new component init'd \'%s\', restart_cnt=%d, share_as=%d\n",
+       result->name, result->restart_cnt, result->share_as);
 
   return 0;
 }
@@ -156,7 +168,7 @@ static const char *get_shareas_env(const zl_comp_t *comp) {
 
 }
 
-static int read_component_manifests() {
+/*static */int read_component_manifests() {
   char *root_dir = zl_context.root_dir;
   char path[strlen(root_dir) + strlen("/components") + 1];
   strcpy(path, root_dir);
@@ -200,6 +212,27 @@ static int read_component_manifests() {
     }
   }
   closedir(components_dir);
+  return 0;
+}
+static int init_components() {
+  char *components = getenv("LAUNCH_COMPONENTS");
+  if (!components) {
+    ERROR("components to launch not set\n");
+    return -1;
+  }
+  char *name = strtok(components, ",");
+
+	while(name != NULL) {
+    zl_comp_t comp = { 0 };
+    init_component(name, &comp);
+    if (zl_context.child_count != MAX_CHILD_COUNT) {
+      zl_context.children[zl_context.child_count++] = comp;
+    } else {
+      ERROR("max component number reached, ignoring the rest\n");
+      break;
+    }
+    name = strtok(NULL, ",");
+	}
   return 0;
 }
 
@@ -303,9 +336,13 @@ static int start_component(zl_comp_t *comp) {
 
   int fd_count = 3;
   int fd_map[3];
-  int bin_len = strlen(comp->bin);
-  if (strcmp(&comp->bin[bin_len - 3], ".sh") == 0) {
-    script = fopen(comp->bin, "r");
+  char bin[PATH_MAX];
+  snprintf(bin, sizeof(bin), "%s/bin/internal/start-component-with-launcher.sh", getenv("ROOT_DIR"));
+  // const char *bin = comp->bin;
+  int bin_len = strlen(bin);
+  
+  if (strcmp(&bin[bin_len - 3], ".sh") == 0) {
+    script = fopen(bin, "r");
     if (script == NULL) {
       ERROR("script not open for %s - %s\n", comp->name, strerror(errno));
       return -1;
@@ -328,7 +365,14 @@ static int start_component(zl_comp_t *comp) {
   }
   c_envp[i++] = get_shareas_env(comp);
   c_envp[i++] = NULL;
-  comp->pid = spawn(comp->bin, fd_count, fd_map, &inherit, NULL, c_envp);
+  const char *c_args[] = {
+    bin,
+    "-c", getenv("INSTANCE_DIR"),
+    "-r", getenv("ROOT_DIR"), 
+    "-o", comp->name, 
+    NULL
+  };
+  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_envp);
   if (comp->pid == -1) {
     ERROR("spawn() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;
@@ -355,8 +399,14 @@ static int start_components(void) {
   INFO("starting components\n");
 
   int rc = 0;
-
+  char *components_to_start = getenv("LAUNCH_COMPONENTS");
+  INFO("components to start %s\n", components_to_start);
   for (size_t i = 0; i < zl_context.child_count; i++) {
+    // zl_comp_t *comp = &zl_context.children[i];
+    // if (!strstr(components_to_start, comp->name)) {
+    //   INFO("skip component %s\n", comp->name);
+    //   continue;
+    // }
     if (start_component(&zl_context.children[i])) {
       rc = -1;
     }
@@ -715,9 +765,13 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
   
-  if (read_component_manifests()) {
+  if (init_components()) {
     exit(EXIT_FAILURE);
   }
+  
+  // if (read_component_manifests()) {
+  //   exit(EXIT_FAILURE);
+  // }
 
   start_components();
 

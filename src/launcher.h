@@ -88,6 +88,11 @@ enum zl_event_t {
   ZL_EVENT_COMP_RESTART,
 };
 
+enum zl_start_mode_t {
+  ZL_START_MODE_STC,
+  ZL_START_MODE_PS
+};
+
 struct zl_context_t {
 
   pthread_t console_thid;
@@ -109,8 +114,10 @@ struct zl_context_t {
   char instance_dir[PATH_MAX + 1];
   char root_dir[PATH_MAX+1];
   
+  enum zl_start_mode_t start_mode;
+  
 #define MAX_ENV_VAR_COUNT 256
-#define ENV_VAR_SIZE 128
+#define ENV_VAR_SIZE 512
   char environment[MAX_ENV_VAR_COUNT][ENV_VAR_SIZE];
   size_t env_var_count;
 };

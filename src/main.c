@@ -853,7 +853,7 @@ int main(int argc, char **argv) {
   if (init_components(components)) {
     exit(EXIT_FAILURE);
   }
-  
+
   start_components();
 
   if (start_console_tread()) {

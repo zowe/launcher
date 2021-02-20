@@ -126,10 +126,6 @@ struct {
   
   enum zl_start_mode_t start_mode;
   
-#define MAX_ENV_VAR_COUNT 256
-#define ENV_VAR_SIZE 512
-  char environment[MAX_ENV_VAR_COUNT][ENV_VAR_SIZE];
-  size_t env_var_count;
 } zl_context = {.config = {.debug_mode = true}};
 
 #define INFO(fmt, ...)  printf("%s INFO:  "fmt, gettime().value, ##__VA_ARGS__)
@@ -168,18 +164,6 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
   }
   snprintf(zl_context.root_dir, sizeof(zl_context.root_dir), "%s", root_dir);
   zl_context.config = *cfg;
-
-  size_t env_var_count = zl_context.env_var_count;
-  snprintf(zl_context.environment[env_var_count],
-           sizeof(zl_context.environment[0]),
-           "INSTANCE_DIR=%s",
-           zl_context.instance_dir);
-  zl_context.env_var_count++;
-  snprintf(zl_context.environment[env_var_count],
-           sizeof(zl_context.environment[0]),
-           "ROOT_DIR=%s",
-           zl_context.root_dir);
-  zl_context.env_var_count++;
 
   zl_context.start_mode = argc > 1 ? ZL_START_MODE_PS : ZL_START_MODE_STC;
   /* do we really need to change work dir? */
@@ -366,13 +350,7 @@ static int start_component(zl_comp_t *comp) {
   DEBUG("%s fd_map[0]=%d, fd_map[1]=%d, fd_map[2]=%d\n",
         comp->name, fd_map[0], fd_map[1], fd_map[2]);
 
-  const char *c_envp[zl_context.env_var_count+2];
-  size_t i;
-  for (i = 0; i < zl_context.env_var_count; i++) {
-    c_envp[i] = zl_context.environment[i];
-  }
-  c_envp[i++] = get_shareas_env(comp);
-  c_envp[i++] = NULL;
+  const char *c_envp[2] = {get_shareas_env(comp), NULL};
   const char *c_args[] = {
     bin,
     "-c", zl_context.instance_dir,
@@ -380,7 +358,7 @@ static int start_component(zl_comp_t *comp) {
     "-o", comp->name, 
     NULL
   };
-  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, (const char**)environ);
+  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_envp);
   if (comp->pid == -1) {
     ERROR("spawn() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;
@@ -756,11 +734,11 @@ static int send_event(enum zl_event_t event_type, void *event_data) {
   return 0;
 }
 
-static int get_components(char *buf, size_t buf_size) {
-  char command[3*PATH_MAX];
+static int get_component_list(char *buf, size_t buf_size) {
+  char command[4*PATH_MAX];
   snprintf (command, sizeof(command), "%s/bin/internal/get-launch-components.sh -c %s -r %s",
     zl_context.root_dir, zl_context.instance_dir, zl_context.root_dir);
-  INFO("about to tun command %s\n", command);
+  INFO("about to run command %s\n", command);
   FILE *fp = popen(command, "r");
   if (!fp) {
     ERROR("unable to get start components - %s\n", strerror(errno));
@@ -769,89 +747,35 @@ static int get_components(char *buf, size_t buf_size) {
   char *line = fgets(buf, buf_size - 1, fp);
   fclose(fp);
   if (!line) {
-    ERROR("failed to read start components - %s\n", strerror(errno));
+    ERROR("failed to read start component list - %s\n", strerror(errno));
     return -1;
   }
-  size_t len = strlen(line);
-  if (len > 0 && line[len-1] == '\n') {
-    line[len-1] = '\0';
+  int len = strlen(line);
+  for (int i = len - 1; i >= 0; i--) {
+    if (line[i] != ' ' && line[i] != '\n' && line[i] != ',') {
+      break;
+    }
+    line[i] = '\0';
   }
-  len = strlen(line);
-  if (len > 0 && line[len-1] == ',') {
-    line[len-1] = '\0';
+  if (strlen(line) == 0) {
+    ERROR("start component list is empty\n");
+    return -1;
   }
-  
-  INFO("start components: '%s'\n", line);
+  INFO("start component list: '%s'\n", line);
   return 0;
 }
 
-static int load_instance_dot_env(const char *instance_dir) {
+static int prepare_workspace() {
   char command[PATH_MAX];
+  INFO("about to prepare zowe workspace\n");
   const char *script = "bin/internal/prepare-zowe-for-launcher.sh";
   snprintf (command, sizeof(command), "%s/%s", zl_context.root_dir, script);
   int rc;
   if ((rc = system(command)) != 0) {
-    ERROR("%s with %d\n", command, rc);
+    ERROR("failed to prepare zowe workspace: %s ended with code %d\n", command, rc);
     return -1;
   }
-  INFO("prepare zowe successful\n");
-  return 0;
-  /*
-  char path[PATH_MAX];
-  snprintf (path, sizeof(path), "%s/instance-saved.env", instance_dir);
-  FILE *fp;
-
-  if ((fp = fopen(path, "r")) == NULL) {
-    ERROR("instace.env %s file not open - %s\n", path, strerror(errno));
-    return -1;
-  }
-  INFO("%s opened\n", path);
-
-  char *line;
-  char buf[1024];
-  char key[sizeof(buf)];
-  char value[sizeof(buf)];
-
-  while ((line = fgets(buf, sizeof(buf), fp)) != NULL) {
-    size_t len = strlen(line);
-    if (len > 0 && line[len-1] == '\n') {
-      line[len-1] = '\0';
-    }
-    DEBUG("handling line \'%s\'\n", line);
-    char *hash = strchr(line, '#');
-    if (hash) {
-      *hash = '\0';
-    }
-    for (int i = strlen(line) - 1; i >= 0; i--) {
-      if (line[i] != ' ') {
-        break;
-      } else {
-        line[i] = '\0';
-      }
-    }
-    char *equal = strchr(line, '=');
-    if (equal) {
-      snprintf(key, sizeof(key), "%.*s", (int)(equal - line), line);
-      snprintf(value, sizeof(value), "%s", equal + 1);
-      INFO("set env %s=%s\n", key, value);
-      setenv(key, value, 1);
-      if (zl_context.env_var_count < (MAX_ENV_VAR_COUNT - 1)) {
-        snprintf(
-          zl_context.environment[zl_context.env_var_count],
-          sizeof(zl_context.environment[0]),
-          "%s=%s", key, value);
-          zl_context.env_var_count++;
-      } else {
-        ERROR("max environment variable number reached, ignoring the rest\n");
-        break;
-      }
-    }
-  }
-  fclose(fp);
-    */
-
-  DEBUG("reading instance-saved.env finished - %s\n", strerror(errno));
-
+  INFO("zowe workspace prepared successfully\n");
   return 0;
 }
 
@@ -869,11 +793,10 @@ int main(int argc, char **argv) {
   char *component_list = NULL;
   
   if (zl_context.start_mode == ZL_START_MODE_STC) {
-    if (load_instance_dot_env(zl_context.instance_dir)) {
-      ERROR("failed to load instance environment\n");
+    if (prepare_workspace()) {
       return -1;
     }
-    if (get_components(buf, sizeof(buf))) {
+    if (get_component_list(buf, sizeof(buf))) {
       exit(EXIT_FAILURE);
     }
     component_list = buf;

@@ -157,9 +157,19 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
   memset(zl_context.instance_dir, 0, sizeof(zl_context.instance_dir));
   memcpy(zl_context.instance_dir, dir_start, dir_len);
   
-  const char *root_dir = getenv("ROOT_DIR");
+  char *root_dir = getenv("ROOT_DIR");
   if (root_dir == NULL) {
     ERROR("ROOT_DIR env variable not found\n");
+    return -1;
+  }
+  for (int i = strlen(root_dir) - 1; i >=0; i++) {
+    if (root_dir[i] != ' ') {
+      break;
+    }
+    root_dir[i] = '\0';
+  }
+    if (strlen(root_dir) == 0) {
+    ERROR("ROOT_DIR env variable is empty\n");
     return -1;
   }
   snprintf(zl_context.root_dir, sizeof(zl_context.root_dir), "%s", root_dir);

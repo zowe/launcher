@@ -768,7 +768,7 @@ static int get_component_list(char *buf, size_t buf_size) {
 static int prepare_workspace() {
   char command[PATH_MAX];
   INFO("about to prepare zowe workspace\n");
-  const char *script = "bin/internal/prepare-zowe-for-launcher.sh";
+  const char *script = "bin/internal/prepare-workspace-for-launcher.sh";
   snprintf (command, sizeof(command), "%s/%s", zl_context.root_dir, script);
   int rc;
   if ((rc = system(command)) != 0) {

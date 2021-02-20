@@ -18,7 +18,10 @@
 //*       yet.                                                       */
 //*                                                                  */
 //* NOTE: this procedure is a template, you will need to modify      */
-//*       #zwelnch variable to point to your bin/zowe_launcher       */
+//*       #instance_dir variable to point to your                    */
+//*       Zowe instance directory                                    */
+//*       #root_dir variable to point to your                    */
+//*       Zowe installation directory                                    */
 //*                                                                  */
 //* Check https://github.com/zowe/launcher for more details.         */
 //*                                                                  */
@@ -34,5 +37,6 @@ RPTOPTS(ON)
 POSIX(ON)
 /*
 //STDENV   DD  *
-WORKDIR=#zwelnch
+INSTANCE_DIR=#instance_dir
+ROOT_DIR=#root_dir
 /*

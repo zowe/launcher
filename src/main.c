@@ -813,7 +813,7 @@ int main(int argc, char **argv) {
   
   if (zl_context.start_mode == ZL_START_MODE_STC) {
     if (prepare_workspace()) {
-      return -1;
+      exit(EXIT_FAILURE);
     }
     if (get_component_list(comp_buf, sizeof(comp_buf))) {
       exit(EXIT_FAILURE);

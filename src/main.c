@@ -805,7 +805,7 @@ static int init() {
 }
 
 int main(int argc, char **argv) {
-  if (!init()) {
+  if (init()) {
     exit(EXIT_FAILURE);
   }
 

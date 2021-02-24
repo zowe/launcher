@@ -797,10 +797,7 @@ static int prepare_workspace() {
 
 static int init() {
   zl_context.pid = getpid();
-  if (getlogin_r(zl_context.userid, sizeof(zl_context.userid))) {
-    ERROR("failed to obtain current userid - %s\n", strerror(errno));
-    return -1;
-  }
+  getlogin_r(zl_context.userid, sizeof(zl_context.userid));
   return 0;
 }
 

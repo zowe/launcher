@@ -346,7 +346,7 @@ static int start_component(zl_comp_t *comp) {
   int fd_map[3];
   char bin[PATH_MAX];
 
-  snprintf(bin, sizeof(bin), "%s/bin/internal/start-component-with-launcher.sh", getenv("ROOT_DIR"));
+  snprintf(bin, sizeof(bin), "%s/bin/internal/start-component.sh", zl_context.root_dir);
   script = fopen(bin, "r");
   if (script == NULL) {
     ERROR("script not open for %s - %s\n", comp->name, strerror(errno));
@@ -683,11 +683,13 @@ static void monitor_events(void) {
   while (true) {
 
     while (zl_context.event_type == ZL_EVENT_NONE) {
+      INFO("about to pthread_cond_wait\n");
       if (pthread_cond_wait(&zl_context.event_cv, &zl_context.event_lock) !=0) {
         ERROR("monitor_events: pthread_cond_wait() error - %s\n",
               strerror(errno));
         return;
       }
+      INFO("done with pthread_cond_wait\n");
     }
 
     DEBUG("event with type %d and data 0x%p has been received\n",
@@ -789,6 +791,11 @@ static int prepare_workspace() {
   return 0;
 }
 
+static void sigintHandler(int sig_num) {
+  INFO("Ctrl+C received. Terminating...\n");
+  send_event(ZL_EVENT_TERM, NULL);
+}
+
 int main(int argc, char **argv) {
 
   INFO("Zowe Launcher starting\n");
@@ -798,6 +805,8 @@ int main(int argc, char **argv) {
   if (init_context(argc, argv, &config)) {
     exit(EXIT_FAILURE);
   }
+  
+  signal(SIGINT, sigintHandler);
   
   char buf[512];
   char *component_list = NULL;

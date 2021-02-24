@@ -808,17 +808,17 @@ int main(int argc, char **argv) {
   
   signal(SIGINT, sigintHandler);
   
-  char buf[512];
+  char comp_buf[512];
   char *component_list = NULL;
   
   if (zl_context.start_mode == ZL_START_MODE_STC) {
     if (prepare_workspace()) {
       return -1;
     }
-    if (get_component_list(buf, sizeof(buf))) {
+    if (get_component_list(comp_buf, sizeof(comp_buf))) {
       exit(EXIT_FAILURE);
     }
-    component_list = buf;
+    component_list = comp_buf;
   } else {
     component_list = argv[1];
   }

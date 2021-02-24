@@ -785,7 +785,7 @@ static int prepare_workspace() {
   char command[PATH_MAX];
   INFO("about to prepare zowe workspace\n");
   const char *script = "bin/internal/prepare-workspace-for-launcher.sh";
-  snprintf (command, sizeof(command), "%s/%s", zl_context.root_dir, script);
+  snprintf (command, sizeof(command), "/bin/sh %s/%s", zl_context.root_dir, script);
   int rc;
   if ((rc = system(command)) != 0) {
     ERROR("failed to prepare zowe workspace: %s ended with code %d\n", command, rc);

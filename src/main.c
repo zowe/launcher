@@ -41,6 +41,8 @@ extern char ** environ;
 #define CONFIG_DEBUG_MODE_KEY     "ZLDEBUG"
 #define CONFIG_DEBUG_MODE_VALUE   "ON"
 
+#define COMP_ID "ZWELNCH"
+
 #define MIN_UPTIME_SECS 90
 
 #ifndef PATH_MAX
@@ -126,13 +128,18 @@ struct {
   
   enum zl_start_mode_t start_mode;
   
+  pid_t pid;
+  char userid[9];
+  
 } zl_context = {.config = {.debug_mode = true}};
 
-#define INFO(fmt, ...)  printf("%s INFO:  "fmt, gettime().value, ##__VA_ARGS__)
-#define WARN(fmt, ...)  printf("%s WARN:  "fmt, gettime().value, ##__VA_ARGS__)
+
+
+#define INFO(fmt, ...)  printf("%s <%s:%d> %s INFO "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+#define WARN(fmt, ...)  printf("%s <%s:%d> %s WARN "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 #define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
-  printf("%s DEBUG: "fmt, gettime().value, ##__VA_ARGS__)
-#define ERROR(fmt, ...) printf("%s ERROR: "fmt, gettime().value, ##__VA_ARGS__)
+  printf("%s <%s:%d> %s DEBUG "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+#define ERROR(fmt, ...) printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 
 static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
 
@@ -292,8 +299,7 @@ static void *handle_comp_comm(void *args) {
         char *next_line = strtok(msg, "\n");
 
         while (next_line) {
-          char *tm = gettime().value;
-          printf("%s CMSG:  %s(%d) - %s\n", tm, comp->name, comp->pid, next_line);
+          printf("%s\n", next_line);
           next_line = strtok(NULL, "\n");
         }
 
@@ -790,6 +796,9 @@ static int prepare_workspace() {
 }
 
 int main(int argc, char **argv) {
+  getlogin_r(zl_context.userid, sizeof(zl_context.userid));
+
+  zl_context.pid = getpid();
 
   INFO("Zowe Launcher starting\n");
 

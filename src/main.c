@@ -131,7 +131,7 @@ struct {
   pid_t pid;
   char userid[9];
   
-} zl_context = {.config = {.debug_mode = true}};
+} zl_context = {.config = {.debug_mode = true}, .userid = "(NONE)"} ;
 
 
 
@@ -795,10 +795,19 @@ static int prepare_workspace() {
   return 0;
 }
 
-int main(int argc, char **argv) {
-  getlogin_r(zl_context.userid, sizeof(zl_context.userid));
-
+static int init() {
   zl_context.pid = getpid();
+  if (getlogin_r(zl_context.userid, sizeof(zl_context.userid))) {
+    ERROR("failed to obtain current userid - %s\n", strerror(errno));
+    return -1;
+  }
+  return 0;
+}
+
+int main(int argc, char **argv) {
+  if (!init()) {
+    exit(EXIT_FAILURE);
+  }
 
   INFO("Zowe Launcher starting\n");
 

@@ -797,7 +797,8 @@ static int prepare_workspace() {
 
 static int init() {
   zl_context.pid = getpid();
-  getlogin_r(zl_context.userid, sizeof(zl_context.userid));
+  char *login = __getlogin1();
+  snprintf(zl_context.userid, sizeof(zl_context.userid), "%s", login);
   return 0;
 }
 

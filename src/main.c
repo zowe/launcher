@@ -281,7 +281,7 @@ static void *handle_comp_comm(void *args) {
       DEBUG("waitpid RC = 0 for %s(%d)\n", comp->name, comp->pid);
     }
 
-    char msg[1024];
+    char msg[4096];
     int retries_left = 3;
     while (retries_left > 0) {
 

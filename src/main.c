@@ -169,7 +169,7 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
     ERROR("ROOT_DIR env variable not found\n");
     return -1;
   }
-  for (int i = strlen(root_dir) - 1; i >=0; i++) {
+  for (int i = strlen(root_dir) - 1; i >=0; i--) {
     if (root_dir[i] != ' ') {
       break;
     }
@@ -199,8 +199,10 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
     return -1;
   }
 
-  DEBUG("instance directory is \'%s\'\n", zl_context.instance_dir);
-  DEBUG("root directory is \'%s\'\n", zl_context.root_dir);
+  setenv("ROOT_DIR", zl_context.root_dir, 1);
+  setenv("INSTANCE_DIR", zl_context.instance_dir, 1);
+  INFO("instance directory is \'%s\'\n", zl_context.instance_dir);
+  INFO("root directory is \'%s\'\n", zl_context.root_dir);
 
   return 0;
 }
@@ -754,16 +756,23 @@ static int get_component_list(char *buf, size_t buf_size) {
   char command[4*PATH_MAX];
   snprintf (command, sizeof(command), "%s/bin/internal/get-launch-components.sh -c %s -r %s",
     zl_context.root_dir, zl_context.instance_dir, zl_context.root_dir);
-  INFO("about to run command %s\n", command);
+  DEBUG("about to run get component list with '%s'\n", command);
   FILE *fp = popen(command, "r");
   if (!fp) {
-    ERROR("unable to get start components - %s\n", strerror(errno));
+    ERROR("failed to run %s, unable to get start components - %s\n", command, strerror(errno));
     return -1;
   }
   char *line = fgets(buf, buf_size - 1, fp);
-  fclose(fp);
+  int rc = pclose(fp);
+  if (rc == -1) {
+    ERROR("failed to get start components - %s\n", strerror(errno));
+    return -1;
+  } else if (rc != 0) {
+    ERROR("script %s ended with %d\n", command, rc);
+    return -1;
+  }
   if (!line) {
-    ERROR("failed to read start component list - %s\n", strerror(errno));
+    ERROR("component list is empty\n");
     return -1;
   }
   int len = strlen(line);
@@ -785,9 +794,22 @@ static int prepare_workspace() {
   char command[PATH_MAX];
   INFO("about to prepare zowe workspace\n");
   const char *script = "bin/internal/prepare-workspace-for-launcher.sh";
-  snprintf (command, sizeof(command), "/bin/sh %s/%s", zl_context.root_dir, script);
-  int rc;
-  if ((rc = system(command)) != 0) {
+  snprintf (command, sizeof(command), "%s/%s", zl_context.root_dir, script);
+  FILE *fp = popen(command, "r");
+  if (!fp) {
+    ERROR("failed to run script %s - %s\n", command, strerror(errno));
+    return -1;
+  }
+  char *line;
+  char buf[1024];
+  while((line = fgets(buf, sizeof(buf) - 1, fp)) != NULL) {
+    line[sizeof(buf) - 1] = '\0';
+    printf ("%s", line);
+  }
+  int rc = pclose(fp);
+  if (rc == -1) {
+    ERROR("failed to prepare zowe workspace - %s\n", strerror(errno));
+  } else if (rc > 0) {
     ERROR("failed to prepare zowe workspace: %s ended with code %d\n", command, rc);
     return -1;
   }

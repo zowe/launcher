@@ -784,10 +784,11 @@ static int get_component_list(char *buf, size_t buf_size) {
 }
 
 static int prepare_workspace() {
-  char command[PATH_MAX];
+  char command[4*PATH_MAX];
   INFO("about to prepare zowe workspace\n");
   const char *script = "bin/internal/prepare-workspace-for-launcher.sh";
-  snprintf (command, sizeof(command), "%s/%s", zl_context.root_dir, script);
+  snprintf(command, sizeof(command), "%s/%s -c %s -r %s", zl_context.root_dir, script, zl_context.instance_dir,
+           zl_context.root_dir);
   FILE *fp = popen(command, "r");
   if (!fp) {
     ERROR("failed to run script %s - %s\n", command, strerror(errno));

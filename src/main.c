@@ -141,45 +141,38 @@ struct {
   printf("%s <%s:%d> %s DEBUG "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 #define ERROR(fmt, ...) printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 
+static int get_env(const char *name, char *buf, size_t buf_size) {
+  const char *value = getenv(name);
+  if (value == NULL) {
+    ERROR("%s env variable not found\n", name);
+    return -1;
+  }
+  
+  const char *value_start = value;
+  const char *value_end = value_start + strlen(value) - 1;
+  while (*value_end == ' ' && value_end != value_start) {
+    value_end--;
+  }
+
+  size_t value_len = value_end - value_start + 1;
+  if (value_len > buf_size - 1) {
+    ERROR("%s env too large\n", name);
+    return -1;
+  }
+  
+  memset(buf, 0, buf_size);
+  memcpy(buf, value_start, value_len);
+  return 0;
+}
+
 static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
 
-  const char *instance_dir = getenv("INSTANCE_DIR");
-  if (instance_dir == NULL) {
-    ERROR("INSTANCE_DIR env variable not found\n");
+  if (get_env("INSTANCE_DIR", zl_context.instance_dir, sizeof(zl_context.instance_dir))) {
     return -1;
   }
-
-  const char *dir_start = instance_dir;
-  const char *dir_end = dir_start + strlen(instance_dir) - 1;
-  while (*dir_end == ' ' && dir_end != dir_start) {
-    dir_end--;
-  }
-
-  size_t dir_len = dir_end - dir_start + 1;
-  if (dir_len > sizeof(zl_context.instance_dir) - 1) {
-    ERROR("INSTANCE_DIR env too large\n");
+  if (get_env("ROOT_DIR", zl_context.root_dir, sizeof(zl_context.root_dir))) {
     return -1;
   }
-  
-  memset(zl_context.instance_dir, 0, sizeof(zl_context.instance_dir));
-  memcpy(zl_context.instance_dir, dir_start, dir_len);
-  
-  char *root_dir = getenv("ROOT_DIR");
-  if (root_dir == NULL) {
-    ERROR("ROOT_DIR env variable not found\n");
-    return -1;
-  }
-  for (int i = strlen(root_dir) - 1; i >=0; i--) {
-    if (root_dir[i] != ' ') {
-      break;
-    }
-    root_dir[i] = '\0';
-  }
-    if (strlen(root_dir) == 0) {
-    ERROR("ROOT_DIR env variable is empty\n");
-    return -1;
-  }
-  snprintf(zl_context.root_dir, sizeof(zl_context.root_dir), "%s", root_dir);
   zl_context.config = *cfg;
 
   zl_context.start_mode = argc > 1 ? ZL_START_MODE_PS : ZL_START_MODE_STC;

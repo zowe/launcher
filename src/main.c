@@ -749,7 +749,7 @@ static int get_component_list(char *buf, size_t buf_size) {
   char command[4*PATH_MAX];
   snprintf (command, sizeof(command), "%s/bin/internal/get-launch-components.sh -c %s -r %s",
     zl_context.root_dir, zl_context.instance_dir, zl_context.root_dir);
-  DEBUG("about to run get component list with '%s'\n", command);
+  INFO("about to run get component list with '%s'\n", command);
   FILE *fp = popen(command, "r");
   if (!fp) {
     ERROR("failed to run %s, unable to get start components - %s\n", command, strerror(errno));
@@ -795,10 +795,15 @@ static int prepare_workspace() {
     return -1;
   }
   char *line;
-  char buf[1024];
+  char buf[1024] = {0};
   while((line = fgets(buf, sizeof(buf) - 1, fp)) != NULL) {
-    line[sizeof(buf) - 1] = '\0';
     printf ("%s", line);
+    memset(buf, '\0', sizeof(buf));
+  }
+  if (ferror(fp)) {
+    pclose(fp);
+    ERROR("error reading output - %s\n", strerror(errno));
+    return -1;
   }
   int rc = pclose(fp);
   if (rc == -1) {

@@ -833,6 +833,28 @@ static int init() {
   return 0;
 }
 
+static void terminate(int sig) {
+  INFO("Zowe Launcher stopping\n");
+  stop_components();
+  exit(EXIT_SUCCESS);
+}
+
+static int setup_signal_handlers() {
+  struct sigaction sa;
+  sa.sa_handler = terminate;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;
+  if (sigaction(SIGINT, &sa, NULL) == -1) {
+    ERROR("failed to set SIGINT handler - %s\n", strerror(errno));
+    return -1;
+  }
+  if (sigaction(SIGTERM, &sa, NULL) == -1) {
+    ERROR("failed to set SIGTERM handler - %s\n", strerror(errno));
+    return -1;
+  }
+  return 0;
+}
+
 int main(int argc, char **argv) {
   if (init()) {
     exit(EXIT_FAILURE);
@@ -843,6 +865,10 @@ int main(int argc, char **argv) {
   zl_config_t config = read_config(argc, argv);
 
   if (init_context(argc, argv, &config)) {
+    exit(EXIT_FAILURE);
+  }
+  
+  if (setup_signal_handlers()) {
     exit(EXIT_FAILURE);
   }
   

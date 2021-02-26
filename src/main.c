@@ -45,6 +45,8 @@ extern char ** environ;
 
 #define MIN_UPTIME_SECS 90
 
+#define COMP_LIST_SIZE 1024
+
 #ifndef PATH_MAX
 #define PATH_MAX _POSIX_PATH_MAX
 #endif
@@ -745,42 +747,69 @@ static int send_event(enum zl_event_t event_type, void *event_data) {
   return 0;
 }
 
+typedef void (*handle_line_callback_t)(void *data, const char *line);
+
+static int run_command(const char *command, handle_line_callback_t handle_line, void *data) {
+  INFO("about to run command '%s'\n", command);
+  FILE *fp = popen(command, "r");
+  if (!fp) {
+    ERROR("failed to run command %s - %s\n", command, strerror(errno));
+    return -1;
+  }
+  char *line;
+  char buf[1024] = {0};
+  while((line = fgets(buf, sizeof(buf) - 1, fp)) != NULL) {
+    handle_line(data, line);
+    memset(buf, '\0', sizeof(buf));
+  }
+  if (ferror(fp)) {
+    pclose(fp);
+    ERROR("error reading output from command '%s' - %s\n", command, strerror(errno));
+    return -1;
+  }
+  int rc = pclose(fp);
+  if (rc == -1) {
+    ERROR("failed to run command '%s' - %s\n", command, strerror(errno));
+  } else if (rc > 0) {
+    ERROR("command '%s' ended with code %d\n", command, rc);
+    return -1;
+  }
+  INFO("command '%s' ran successfully\n", command);
+  return 0;
+}
+
+static void handle_get_component_line(void *data, const char *line) {
+  char *comp_list = data;
+  snprintf(comp_list, COMP_LIST_SIZE, "%s", line);
+  int len = strlen(comp_list);
+  for (int i = len - 1; i >= 0; i--) {
+    if (comp_list[i] != ' ' && comp_list[i] != '\n' && comp_list[i] != ',') {
+      break;
+    }
+    comp_list[i] = '\0';
+  }
+}
+
 static int get_component_list(char *buf, size_t buf_size) {
   char command[4*PATH_MAX];
   snprintf (command, sizeof(command), "%s/bin/internal/get-launch-components.sh -c %s -r %s",
     zl_context.root_dir, zl_context.instance_dir, zl_context.root_dir);
-  INFO("about to run get component list with '%s'\n", command);
-  FILE *fp = popen(command, "r");
-  if (!fp) {
-    ERROR("failed to run %s, unable to get start components - %s\n", command, strerror(errno));
-    return -1;
+  INFO("about to get component list\n");
+  char comp_list[COMP_LIST_SIZE] = {0};
+  if (run_command(command, handle_get_component_line, (void*)comp_list)) {
+    ERROR("failed to get component list\n");
   }
-  char *line = fgets(buf, buf_size - 1, fp);
-  int rc = pclose(fp);
-  if (rc == -1) {
-    ERROR("failed to get start components - %s\n", strerror(errno));
-    return -1;
-  } else if (rc != 0) {
-    ERROR("script %s ended with %d\n", command, rc);
-    return -1;
-  }
-  if (!line) {
-    ERROR("component list is empty\n");
-    return -1;
-  }
-  int len = strlen(line);
-  for (int i = len - 1; i >= 0; i--) {
-    if (line[i] != ' ' && line[i] != '\n' && line[i] != ',') {
-      break;
-    }
-    line[i] = '\0';
-  }
-  if (strlen(line) == 0) {
+  if (strlen(comp_list) == 0) {
     ERROR("start component list is empty\n");
     return -1;
   }
-  INFO("start component list: '%s'\n", line);
+  snprintf(buf, buf_size, "%s", comp_list);
+  INFO("start component list: '%s'\n", buf);
   return 0;
+}
+
+static void print_line(void *data, const char *line) {
+  printf("%s", line);
 }
 
 static int prepare_workspace() {
@@ -789,27 +818,8 @@ static int prepare_workspace() {
   const char *script = "bin/internal/prepare-workspace-for-launcher.sh";
   snprintf(command, sizeof(command), "%s/%s -c %s -r %s", zl_context.root_dir, script, zl_context.instance_dir,
            zl_context.root_dir);
-  FILE *fp = popen(command, "r");
-  if (!fp) {
-    ERROR("failed to run script %s - %s\n", command, strerror(errno));
-    return -1;
-  }
-  char *line;
-  char buf[1024] = {0};
-  while((line = fgets(buf, sizeof(buf) - 1, fp)) != NULL) {
-    printf ("%s", line);
-    memset(buf, '\0', sizeof(buf));
-  }
-  if (ferror(fp)) {
-    pclose(fp);
-    ERROR("error reading output - %s\n", strerror(errno));
-    return -1;
-  }
-  int rc = pclose(fp);
-  if (rc == -1) {
-    ERROR("failed to prepare zowe workspace - %s\n", strerror(errno));
-  } else if (rc > 0) {
-    ERROR("failed to prepare zowe workspace: %s ended with code %d\n", command, rc);
+  if (run_command(command, print_line, NULL)) {
+    ERROR("failed to prepare zowe workspace\n");
     return -1;
   }
   INFO("zowe workspace prepared successfully\n");
@@ -836,7 +846,7 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
   
-  char comp_buf[512];
+  char comp_buf[COMP_LIST_SIZE];
   char *component_list = NULL;
   
   if (zl_context.start_mode == ZL_START_MODE_STC) {

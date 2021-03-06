@@ -172,9 +172,7 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
   if (get_env("INSTANCE_DIR", zl_context.instance_dir, sizeof(zl_context.instance_dir))) {
     return -1;
   }
-  if (get_env("ROOT_DIR", zl_context.root_dir, sizeof(zl_context.root_dir))) {
-    return -1;
-  }
+
   zl_context.config = *cfg;
 
   zl_context.start_mode = argc > 1 ? ZL_START_MODE_PS : ZL_START_MODE_STC;
@@ -194,10 +192,8 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
     return -1;
   }
 
-  setenv("ROOT_DIR", zl_context.root_dir, 1);
   setenv("INSTANCE_DIR", zl_context.instance_dir, 1);
   INFO("instance directory is \'%s\'\n", zl_context.instance_dir);
-  INFO("root directory is \'%s\'\n", zl_context.root_dir);
 
   return 0;
 }
@@ -808,6 +804,37 @@ static int get_component_list(char *buf, size_t buf_size) {
   return 0;
 }
 
+static void handle_get_root_dir_line(void *data, const char *line) {
+  char *root_dir = data;
+  snprintf(root_dir, PATH_MAX+1, "%s", line);
+  int len = strlen(root_dir);
+  for (int i = len - 1; i >= 0; i--) {
+    if (root_dir[i] != ' ' && root_dir[i] != '\n') {
+      break;
+    }
+    root_dir[i] = '\0';
+  }
+}
+
+static int get_root_dir(char *buf, size_t buf_size) {
+  char command[2*PATH_MAX];
+  snprintf (command, sizeof(command), ". %s/bin/internal/read-instance.sh && echo $ROOT_DIR",
+    zl_context.instance_dir);
+  INFO("about to get root dir\n");
+  char root_dir[PATH_MAX+1] = {0};
+  if (run_command(command, handle_get_root_dir_line, (void*)root_dir)) {
+    ERROR("failed to ROOT_DIR dir\n");
+  }
+  if (strlen(root_dir) == 0) {
+    ERROR("ROOT_DIR is empty\n");
+    return -1;
+  }
+  snprintf(buf, buf_size, "%s", root_dir);
+  setenv("ROOT_DIR", zl_context.root_dir, 1);
+  INFO("ROOT_DIR found: '%s'\n", buf);
+  return 0;
+}
+
 static void print_line(void *data, const char *line) {
   printf("%s", line);
 }
@@ -865,6 +892,10 @@ int main(int argc, char **argv) {
   zl_config_t config = read_config(argc, argv);
 
   if (init_context(argc, argv, &config)) {
+    exit(EXIT_FAILURE);
+  }
+  
+  if (get_root_dir(zl_context.root_dir, sizeof(zl_context.root_dir))) {
     exit(EXIT_FAILURE);
   }
   

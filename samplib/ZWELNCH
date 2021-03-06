@@ -20,8 +20,6 @@
 //* NOTE: this procedure is a template, you will need to modify      */
 //*       #instance_dir variable to point to your                    */
 //*       Zowe instance directory                                    */
-//*       #root_dir variable to point to your                    */
-//*       Zowe installation directory                                    */
 //*                                                                  */
 //* Check https://github.com/zowe/launcher for more details.         */
 //*                                                                  */
@@ -38,5 +36,4 @@ POSIX(ON)
 /*
 //STDENV   DD  *
 INSTANCE_DIR=#instance_dir
-ROOT_DIR=#root_dir
 /*

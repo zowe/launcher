@@ -26,6 +26,7 @@
 #include <signal.h>
 #include <spawn.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <sys/__messag.h>
 #include <unistd.h>
 
@@ -167,9 +168,25 @@ static int get_env(const char *name, char *buf, size_t buf_size) {
   return 0;
 }
 
+static int check_if_dir_exists(const char *dir, const char *name) {
+  struct stat s;
+  if (stat(dir, &s) != 0) {
+    ERROR("failed to get properties for dir %s='%s' - %s\n", name, dir, strerror(errno));
+    return -1;
+  }
+  if (!S_ISDIR(s.st_mode)) {
+    ERROR("%s='%s' is not a directory\n", name, dir);
+    return -1;
+  }
+  return 0;
+}
+
 static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
 
   if (get_env("INSTANCE_DIR", zl_context.instance_dir, sizeof(zl_context.instance_dir))) {
+    return -1;
+  }
+  if (check_if_dir_exists(zl_context.instance_dir, "INSTANCE_DIR")) {
     return -1;
   }
 
@@ -830,6 +847,9 @@ static int get_root_dir(char *buf, size_t buf_size) {
     return -1;
   }
   snprintf(buf, buf_size, "%s", root_dir);
+  if (check_if_dir_exists(zl_context.root_dir, "ROOT_DIR")) {
+    return -1;
+  }
   setenv("ROOT_DIR", zl_context.root_dir, 1);
   INFO("ROOT_DIR found: '%s'\n", buf);
   return 0;

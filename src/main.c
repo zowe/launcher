@@ -43,6 +43,9 @@ extern char ** environ;
 #define CONFIG_DEBUG_MODE_VALUE   "ON"
 
 #define COMP_ID "ZWELNCH"
+#define MSG_PREFIX "ZWEL"
+#define MSG_COMPONENT_STARTED MSG_PREFIX "0001I component %s started\n"
+#define MSG_COMPONENT_STOPPED MSG_PREFIX "0002I component %s stopped\n"
 
 #define MIN_UPTIME_SECS 90
 
@@ -396,7 +399,7 @@ static int start_component(zl_comp_t *comp) {
 
   comp->clean_stop = false;
 
-  INFO("process with PID = %d started for comp %s\n", comp->pid, comp->name);
+  INFO(MSG_COMPONENT_STARTED, comp->name);
 
   if (pthread_create(&comp->comm_thid, NULL, handle_comp_comm, comp) != 0) {
     ERROR("comm thread not started for %s - %s\n", comp->name, strerror(errno));
@@ -453,7 +456,7 @@ static int stop_component(zl_comp_t *comp) {
   }
 
   comp->pid = -1;
-  INFO("component %s stopped\n", comp->name);
+  INFO(MSG_COMPONENT_STOPPED, comp->name);
 
   return 0;
 }

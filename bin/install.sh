@@ -24,8 +24,8 @@ if [ ! -f bin/zowe_launcher ]; then
   >&2 echo "Error: Zowe launcher loadlib is missing"
   exit 1
 fi
-if [ ! -f samplib/ZWELNCH ]; then
-  >&2 echo "Error: ZWELNCH sampllib is missing"
+if [ ! -f samplib/ZWESLNCH ]; then
+  >&2 echo "Error: ZWESLNCH sampllib is missing"
   exit 1
 fi
 
@@ -33,16 +33,16 @@ script=launcher/install.sh
 
 # copy samplib to SZWESAMP
 if [ -z "${LOG_FILE}" ]; then
-  cp -v samplib/ZWELNCH "//'${ZOWE_DSN_PREFIX}.SZWESAMP'"
+  cp -v samplib/ZWESLNCH "//'${ZOWE_DSN_PREFIX}.SZWESAMP'"
   rc=$?
 else
-  cp -v samplib/ZWELNCH "//'${ZOWE_DSN_PREFIX}.SZWESAMP'" >> ${LOG_FILE}
+  cp -v samplib/ZWESLNCH "//'${ZOWE_DSN_PREFIX}.SZWESAMP'" >> ${LOG_FILE}
   rc=$?
 fi
 if [ "${rc}" = "0" ] ; then
-  print_and_log_message "$script ZWELNCH copied to ${ZOWE_DSN_PREFIX}.SZWESAMP"
+  print_and_log_message "$script ZWESLNCH copied to ${ZOWE_DSN_PREFIX}.SZWESAMP"
 else
-  print_and_log_message "$script ZWELNCH not copied to ${ZOWE_DSN_PREFIX}.SZWESAMP, RC=$rc"
+  print_and_log_message "$script ZWESLNCH not copied to ${ZOWE_DSN_PREFIX}.SZWESAMP, RC=$rc"
 fi
 
 # copy launcher program to 

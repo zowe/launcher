@@ -218,7 +218,7 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
 static int init_component(const char *name, zl_comp_t *result) {
   snprintf(result->name, sizeof(result->name), "%s", name);
   result->pid = -1;
-  result->share_as = ZL_COMP_AS_SHARE_NO;
+  result->share_as = ZL_COMP_AS_SHARE_YES;
   result->restart_cnt = 5;
   
   INFO("new component init'd \'%s\', restart_cnt=%d, share_as=%d\n",

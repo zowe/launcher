@@ -55,6 +55,10 @@ extern char ** environ;
 #define PATH_MAX _POSIX_PATH_MAX
 #endif
 
+// Progressive restart internals in seconds
+static size_t restart_intervals[] = {1, 1, 1, 5, 5, 10, 20, 60, 120, 240};
+#define RETRY_COUNT (sizeof(restart_intervals) / (sizeof restart_intervals[0]))
+
 typedef struct zl_time_t {
   char value[32];
 } zl_time_t;
@@ -222,7 +226,7 @@ static int init_component(const char *name, zl_comp_t *result) {
   snprintf(result->name, sizeof(result->name), "%s", name);
   result->pid = -1;
   result->share_as = ZL_COMP_AS_SHARE_YES;
-  result->restart_cnt = 5;
+  result->restart_cnt = RETRY_COUNT;
   
   INFO("new component init'd \'%s\', restart_cnt=%d, share_as=%d\n",
        result->name, result->restart_cnt, result->share_as);
@@ -288,8 +292,15 @@ static void *handle_comp_comm(void *args) {
       } else {
         comp->fail_cnt++;
       }
-      if (!comp->clean_stop && (comp->fail_cnt < comp->restart_cnt)) {
-        send_event(ZL_EVENT_COMP_RESTART, comp);
+      if (!comp->clean_stop) {
+        if (comp->fail_cnt <= comp->restart_cnt) {
+          size_t delay = restart_intervals[comp->fail_cnt - 1];
+          INFO("next attempt to restart component %s in %d seconds\n", comp->name, (int)delay);
+          sleep(delay);
+          send_event(ZL_EVENT_COMP_RESTART, comp);
+        } else {
+          ERROR("failed to restart component %s, max retries reached\n", comp->name);
+        }
       }
 
       break;

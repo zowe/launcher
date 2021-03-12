@@ -274,7 +274,7 @@ static int send_event(enum zl_event_t event_type, void *event_data);
 
 static void *handle_comp_comm(void *args) {
 
-  INFO("starting a component communication thread\n");
+  DEBUG("starting a component communication thread\n");
 
   zl_comp_t *comp = args;
 
@@ -777,7 +777,7 @@ static int send_event(enum zl_event_t event_type, void *event_data) {
 typedef void (*handle_line_callback_t)(void *data, const char *line);
 
 static int run_command(const char *command, handle_line_callback_t handle_line, void *data) {
-  INFO("about to run command '%s'\n", command);
+  DEBUG("about to run command '%s'\n", command);
   FILE *fp = popen(command, "r");
   if (!fp) {
     ERROR("failed to run command %s - %s\n", command, strerror(errno));
@@ -801,7 +801,7 @@ static int run_command(const char *command, handle_line_callback_t handle_line, 
     ERROR("command '%s' ended with code %d\n", command, rc);
     return -1;
   }
-  INFO("command '%s' ran successfully\n", command);
+  DEBUG("command '%s' ran successfully\n", command);
   return 0;
 }
 
@@ -821,7 +821,7 @@ static int get_component_list(char *buf, size_t buf_size) {
   char command[4*PATH_MAX];
   snprintf (command, sizeof(command), "%s/bin/internal/get-launch-components.sh -c %s -r %s",
     zl_context.root_dir, zl_context.instance_dir, zl_context.root_dir);
-  INFO("about to get component list\n");
+  DEBUG("about to get component list\n");
   char comp_list[COMP_LIST_SIZE] = {0};
   if (run_command(command, handle_get_component_line, (void*)comp_list)) {
     ERROR("failed to get component list\n");
@@ -851,7 +851,7 @@ static int get_root_dir(char *buf, size_t buf_size) {
   char command[2*PATH_MAX];
   snprintf (command, sizeof(command), ". %s/bin/internal/read-instance.sh && echo $ROOT_DIR",
     zl_context.instance_dir);
-  INFO("about to get root dir\n");
+  DEBUG("about to get root dir\n");
   char root_dir[PATH_MAX+1] = {0};
   if (run_command(command, handle_get_root_dir_line, (void*)root_dir)) {
     ERROR("failed to ROOT_DIR dir\n");

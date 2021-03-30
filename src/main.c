@@ -849,7 +849,7 @@ static void handle_get_root_dir_line(void *data, const char *line) {
 
 static int get_root_dir(char *buf, size_t buf_size) {
   char command[2*PATH_MAX];
-  snprintf (command, sizeof(command), ". %s/bin/internal/read-instance.sh && echo $ROOT_DIR",
+  snprintf (command, sizeof(command), ". %s/bin/internal/read-essential-vars.sh && echo $ROOT_DIR",
     zl_context.instance_dir);
   DEBUG("about to get root dir\n");
   char root_dir[PATH_MAX+1] = {0};
@@ -876,7 +876,7 @@ static void print_line(void *data, const char *line) {
 static int prepare_workspace() {
   char command[4*PATH_MAX];
   INFO("about to prepare zowe workspace\n");
-  const char *script = "bin/internal/prepare-workspace-for-launcher.sh";
+  const char *script = "bin/internal/prepare-instance.sh";
   snprintf(command, sizeof(command), "%s/%s -c %s -r %s 2>&1", zl_context.root_dir, script, zl_context.instance_dir,
            zl_context.root_dir);
   if (run_command(command, print_line, NULL)) {

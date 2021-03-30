@@ -21,11 +21,11 @@ fi
 
 # we should already in component directory
 if [ ! -f bin/zowe_launcher ]; then
-  >&2 echo "Error: Zowe launcher loadlib is missing"
+  >&2 echo "Error: Zowe launcher program is missing"
   exit 1
 fi
 if [ ! -f samplib/ZWESLSTC ]; then
-  >&2 echo "Error: ZWESLSTC sampllib is missing"
+  >&2 echo "Error: ZWESLSTC procedure samplib is missing"
   exit 1
 fi
 

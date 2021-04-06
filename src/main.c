@@ -110,11 +110,6 @@ enum zl_event_t {
   ZL_EVENT_COMP_RESTART,
 };
 
-enum zl_start_mode_t {
-  ZL_START_MODE_STC,
-  ZL_START_MODE_PS
-};
-
 struct {
 
   pthread_t console_thid;
@@ -136,7 +131,7 @@ struct {
   char instance_dir[PATH_MAX + 1];
   char root_dir[PATH_MAX+1];
   
-  enum zl_start_mode_t start_mode;
+  char ha_instance_id[64];
   
   pid_t pid;
   char userid[9];
@@ -199,7 +194,13 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
 
   zl_context.config = *cfg;
 
-  zl_context.start_mode = argc > 1 ? ZL_START_MODE_PS : ZL_START_MODE_STC;
+  if (argc != 2) {
+    ERROR("Invalid command line arguments, provide HA_INSTANCE_ID as a first argument\n");
+    return -1;
+  }
+  snprintf (zl_context.ha_instance_id, sizeof(zl_context.ha_instance_id), "%s", argv[1]);
+  INFO("HA_INSTANCE_ID='%s'\n", zl_context.ha_instance_id);
+
   /* do we really need to change work dir? */
   if (chdir(zl_context.instance_dir)) {
     ERROR("working directory not changed - %s\n", strerror(errno));
@@ -395,6 +396,7 @@ static int start_component(zl_comp_t *comp) {
     bin,
     "-c", zl_context.instance_dir,
     "-r", zl_context.root_dir,
+    "-i", zl_context.ha_instance_id,
     "-o", comp->name, 
     NULL
   };
@@ -819,8 +821,9 @@ static void handle_get_component_line(void *data, const char *line) {
 
 static int get_component_list(char *buf, size_t buf_size) {
   char command[4*PATH_MAX];
-  snprintf (command, sizeof(command), "%s/bin/internal/get-launch-components.sh -c %s -r %s",
-    zl_context.root_dir, zl_context.instance_dir, zl_context.root_dir);
+  snprintf (command, sizeof(command), "%s/bin/internal/get-launch-components.sh -c %s -r %s -i %s",
+            zl_context.root_dir, zl_context.instance_dir,
+            zl_context.root_dir, zl_context.ha_instance_id);
   DEBUG("about to get component list\n");
   char comp_list[COMP_LIST_SIZE] = {0};
   if (run_command(command, handle_get_component_line, (void*)comp_list)) {
@@ -873,17 +876,18 @@ static void print_line(void *data, const char *line) {
   printf("%s", line);
 }
 
-static int prepare_workspace() {
+static int prepare_instance() {
   char command[4*PATH_MAX];
-  INFO("about to prepare zowe workspace\n");
+  INFO("about to prepare Zowe instance\n");
   const char *script = "bin/internal/prepare-instance.sh";
-  snprintf(command, sizeof(command), "%s/%s -c %s -r %s 2>&1", zl_context.root_dir, script, zl_context.instance_dir,
-           zl_context.root_dir);
+  snprintf(command, sizeof(command), "%s/%s -c %s -r %s -i %s 2>&1",
+           zl_context.root_dir, script, zl_context.instance_dir,
+           zl_context.root_dir, zl_context.ha_instance_id);
   if (run_command(command, print_line, NULL)) {
-    ERROR("failed to prepare zowe workspace\n");
+    ERROR("failed to prepare Zowe instance\n");
     return -1;
   }
-  INFO("zowe workspace prepared successfully\n");
+  INFO("Zowe instance prepared successfully\n");
   return 0;
 }
 
@@ -939,18 +943,14 @@ int main(int argc, char **argv) {
   
   char comp_buf[COMP_LIST_SIZE];
   char *component_list = NULL;
-  
-  if (zl_context.start_mode == ZL_START_MODE_STC) {
-    if (prepare_workspace()) {
-      exit(EXIT_FAILURE);
-    }
-    if (get_component_list(comp_buf, sizeof(comp_buf))) {
-      exit(EXIT_FAILURE);
-    }
-    component_list = comp_buf;
-  } else {
-    component_list = argv[1];
+
+  if (prepare_instance()) {
+    exit(EXIT_FAILURE);
   }
+  if (get_component_list(comp_buf, sizeof(comp_buf))) {
+    exit(EXIT_FAILURE);
+  }
+  component_list = comp_buf;
 
   if (init_components(component_list)) {
     exit(EXIT_FAILURE);

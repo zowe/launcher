@@ -25,7 +25,7 @@
 //*                                                                  */
 //********************************************************************/
 //ZWELNCH  EXEC PGM=ZWELNCH,REGION=&RGN,
-// PARM='ENVAR(_CEE_ENVFILE=DD:STDENV)/&HAINST')
+// PARM='ENVAR(_CEE_ENVFILE=DD:STDENV)/&HAINST.'
 //STEPLIB  DD   DSNAME=&SYSUID..LOADLIB,DISP=SHR
 //SYSIN    DD   DUMMY
 //SYSPRINT DD   SYSOUT=*

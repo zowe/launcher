@@ -62,3 +62,6 @@ dkms.conf
 !.pax/post-packaging.sh
 !.pax/prepare-workspace.sh
 !.pax/catchall-packaging.sh
+
+# VSCode 
+.vscode

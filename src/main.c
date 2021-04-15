@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <errno.h>
 
 #include <time.h>
@@ -25,9 +26,11 @@
 #include <signal.h>
 #include <spawn.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <sys/__messag.h>
 #include <unistd.h>
 
+extern char ** environ;
 /*
  * TODO:
  * - Better process monitoring and clean up. For example, can we find all the
@@ -39,7 +42,22 @@
 #define CONFIG_DEBUG_MODE_KEY     "ZLDEBUG"
 #define CONFIG_DEBUG_MODE_VALUE   "ON"
 
+#define COMP_ID "ZWELNCH"
+#define MSG_PREFIX "ZWEL"
+#define MSG_COMPONENT_STARTED MSG_PREFIX "0001I component %s started\n"
+#define MSG_COMPONENT_STOPPED MSG_PREFIX "0002I component %s stopped\n"
+
 #define MIN_UPTIME_SECS 90
+
+#define COMP_LIST_SIZE 1024
+
+#ifndef PATH_MAX
+#define PATH_MAX _POSIX_PATH_MAX
+#endif
+
+// Progressive restart internals in seconds
+static size_t restart_intervals[] = {1, 1, 1, 5, 5, 10, 20, 60, 120, 240};
+#define RETRY_COUNT (sizeof(restart_intervals) / (sizeof restart_intervals[0]))
 
 typedef struct zl_time_t {
   char value[32];
@@ -110,41 +128,81 @@ struct {
   pthread_cond_t event_cv;
   pthread_mutex_t event_lock;
 
-  char workdir[_POSIX_PATH_MAX + 1];
+  char instance_dir[PATH_MAX + 1];
+  char root_dir[PATH_MAX+1];
+  
+  char ha_instance_id[64];
+  
+  pid_t pid;
+  char userid[9];
+  
+} zl_context = {.config = {.debug_mode = true}, .userid = "(NONE)"} ;
 
-} zl_context = {0};
 
-#define INFO(fmt, ...)  printf("%s INFO:  "fmt, gettime().value, ##__VA_ARGS__)
-#define WARN(fmt, ...)  printf("%s WARN:  "fmt, gettime().value, ##__VA_ARGS__)
+
+#define INFO(fmt, ...)  printf("%s <%s:%d> %s INFO "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+#define WARN(fmt, ...)  printf("%s <%s:%d> %s WARN "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 #define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
-  printf("%s DEBUG: "fmt, gettime().value, ##__VA_ARGS__)
-#define ERROR(fmt, ...) printf("%s ERROR: "fmt, gettime().value, ##__VA_ARGS__)
+  printf("%s <%s:%d> %s DEBUG "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+#define ERROR(fmt, ...) printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 
-static int init_context(const struct zl_config_t *cfg) {
+static int get_env(const char *name, char *buf, size_t buf_size) {
+  const char *value = getenv(name);
+  if (value == NULL) {
+    ERROR("%s env variable not found\n", name);
+    return -1;
+  }
+  
+  const char *value_start = value;
+  const char *value_end = value_start + strlen(value) - 1;
+  while (*value_end == ' ' && value_end != value_start) {
+    value_end--;
+  }
 
-  const char *workdir = getenv("WORKDIR");
-  if (workdir == NULL) {
-    ERROR("WORKDIR env variable not found\n");
+  size_t value_len = value_end - value_start + 1;
+  if (value_len > buf_size - 1) {
+    ERROR("%s env too large\n", name);
+    return -1;
+  }
+  
+  memset(buf, 0, buf_size);
+  memcpy(buf, value_start, value_len);
+  return 0;
+}
+
+static int check_if_dir_exists(const char *dir, const char *name) {
+  struct stat s;
+  if (stat(dir, &s) != 0) {
+    ERROR("failed to get properties for dir %s='%s' - %s\n", name, dir, strerror(errno));
+    return -1;
+  }
+  if (!S_ISDIR(s.st_mode)) {
+    ERROR("%s='%s' is not a directory\n", name, dir);
+    return -1;
+  }
+  return 0;
+}
+
+static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
+
+  if (get_env("INSTANCE_DIR", zl_context.instance_dir, sizeof(zl_context.instance_dir))) {
+    return -1;
+  }
+  if (check_if_dir_exists(zl_context.instance_dir, "INSTANCE_DIR")) {
     return -1;
   }
 
-  const char *dir_start = workdir;
-  const char *dir_end = dir_start + strlen(workdir) - 1;
-  while (*dir_end == ' ' && dir_end != dir_start) {
-    dir_end--;
-  }
-
-  size_t dir_len = dir_end - dir_start + 1;
-  if (dir_len > sizeof(zl_context.workdir) - 1) {
-    ERROR("WORKDIR env too large\n");
-    return -1;
-  }
-
-  memset(zl_context.workdir, 0, sizeof(zl_context.workdir));
-  memcpy(zl_context.workdir, dir_start, dir_len);
   zl_context.config = *cfg;
 
-  if (chdir(zl_context.workdir)) {
+  if (argc != 2) {
+    ERROR("Invalid command line arguments, provide HA_INSTANCE_ID as a first argument\n");
+    return -1;
+  }
+  snprintf (zl_context.ha_instance_id, sizeof(zl_context.ha_instance_id), "%s", argv[1]);
+  INFO("HA_INSTANCE_ID='%s'\n", zl_context.ha_instance_id);
+
+  /* do we really need to change work dir? */
+  if (chdir(zl_context.instance_dir)) {
     ERROR("working directory not changed - %s\n", strerror(errno));
     return -1;
   }
@@ -159,137 +217,20 @@ static int init_context(const struct zl_config_t *cfg) {
     return -1;
   }
 
-  DEBUG("work directory is \'%s\'\n", zl_context.workdir);
+  setenv("INSTANCE_DIR", zl_context.instance_dir, 1);
+  INFO("instance directory is \'%s\'\n", zl_context.instance_dir);
 
   return 0;
 }
 
-/**
- * @brief Extract the component option name and value from options in
- * the "key1=value1,key2=value2" format
- * @param opt_str Option string
- * @param opt_name Result option name
- * @param opt_name_len Result option name length
- * @param opt_val Result option value string
- * @param opt_val_len Result option value string length
- */
-static void get_comp_opt(const char *opt_str,
-                         const char **opt_name, size_t *opt_name_len,
-                         const char **opt_val, size_t *opt_val_len) {
-
-  *opt_name = "";
-  *opt_name_len = 0;
-  *opt_val = "";
-  *opt_val_len = 0;
-
-  if (opt_str == NULL) {
-    return ;
-  }
-
-  size_t opt_str_len = 0;
-  const char *next_opt_comma = strchr(opt_str, ',');
-  if (next_opt_comma) {
-    opt_str_len = next_opt_comma - opt_str;
-  } else {
-    opt_str_len = strlen(opt_str);
-  }
-
-  const char *eq = strchr(opt_str, '=');
-
-  *opt_name = opt_str;
-  if (eq) {
-    *opt_name_len = eq - opt_str;
-  } else {
-    *opt_name_len = opt_str_len;
-    return;
-  }
-
-  const char *val = eq + 1;
-  size_t val_len = 0;
-  if (next_opt_comma) {
-    val_len = next_opt_comma - val;
-  } else {
-    val_len = opt_str + opt_str_len - val;
-  }
-
-  // strip trailing spaces in case that's the last option
-  for (size_t i = val_len - 1; i != 0; i--) {
-    if (val[i] != ' ') {
-      break;
-    }
-    val_len--;
-  }
-
-  *opt_val = val;
-  *opt_val_len = val_len;
-
-}
-
-static int init_component(const char *cfg_line, zl_comp_t *result) {
-
-  /* TODO parsing of parameters is not overly robust, improve */
-
-  const char *comp_start = cfg_line;
-  const char *comp_end = strchr(cfg_line, '=');
-
-  if (comp_end == NULL) {
-    ERROR("bad config (equal sign not found): \'%s\'\n", cfg_line);
-    return -1;
-  }
-
-  size_t comp_len = comp_end - comp_start;
-  if (comp_len > sizeof(result->name) - 1) {
-    ERROR("bad config (component too long): \'%s\'\n", cfg_line);
-    return -1;
-  }
-
-  const char *bin_start = comp_end + 1;
-  const char *bin_end = bin_start + 1;
-  while (*bin_end != ' ' && *bin_end != '\0' && *bin_end != '\n'
-      && *bin_end != ',') {
-    bin_end++;
-  }
-
-  size_t bin_len = bin_end - bin_start;
-  if (bin_len > sizeof(result->bin) - 1) {
-    ERROR("bad config (bin too long): \'%s\'\n", cfg_line);
-    return -1;
-  }
-
-  memset(result->name, 0, sizeof(result->name));
-  memset(result->bin, 0, sizeof(result->bin));
+static int init_component(const char *name, zl_comp_t *result) {
+  snprintf(result->name, sizeof(result->name), "%s", name);
   result->pid = -1;
-  result->share_as = ZL_COMP_AS_SHARE_NO;
-
-  memcpy(result->name, comp_start, comp_len);
-  memcpy(result->bin, bin_start, bin_len);
-
-  // any options?
-  const char *opt_next = bin_end;
-  while (opt_next && *opt_next == ',') {
-
-    opt_next++;
-    const char *opt_name; size_t opt_name_len;
-    const char *opt_val; size_t opt_val_len;
-    get_comp_opt(opt_next, &opt_name, &opt_name_len, &opt_val, &opt_val_len);
-
-    if (!strncmp(opt_name, "restart", opt_name_len)) {
-      result->restart_cnt = atoi(opt_val);
-    } else if (!strncmp(opt_name, "share_as", opt_name_len)) {
-      if (!strncmp(opt_val, "no", opt_val_len)) {
-        result->share_as = ZL_COMP_AS_SHARE_NO;
-      } else if (!strncmp(opt_val, "yes", opt_val_len)) {
-        result->share_as = ZL_COMP_AS_SHARE_YES;
-      } else if (!strncmp(opt_val, "must", opt_val_len)) {
-        result->share_as = ZL_COMP_AS_SHARE_MUST;
-      }
-    }
-
-    opt_next = strchr(opt_next, ',');
-  }
-
-  INFO("new component init'd \'%s\', \'%s\', restart_cnt=%d, share_as=%d\n",
-       result->name, result->bin, result->restart_cnt, result->share_as);
+  result->share_as = ZL_COMP_AS_SHARE_YES;
+  result->restart_cnt = RETRY_COUNT;
+  
+  INFO("new component init'd \'%s\', restart_cnt=%d, share_as=%d\n",
+       result->name, result->restart_cnt, result->share_as);
 
   return 0;
 }
@@ -309,61 +250,24 @@ static const char *get_shareas_env(const zl_comp_t *comp) {
 
 }
 
-static bool is_commented_out(const char *line) {
-  for (size_t i = 0; i < strlen(line); i++) {
-    if (line[i] == ' ') {
-      continue;
-    }
-    if (line[i] == '#') {
-      return true;
-    }
-    return false;
-  }
-  return false;
-}
-
-static int load_cfg(void) {
-
-  FILE *cfg;
-
-  if ((cfg = fopen("components.conf", "r")) == NULL) {
-    ERROR("components config file not open - %s\n", strerror(errno));
+static int init_components(char *components) {
+  if (!components) {
+    ERROR("components to launch not set\n");
     return -1;
   }
+  char *name = strtok(components, ",");
 
-  char *line;
-  char buff[1024];
-
-  while ((line = fgets(buff, sizeof(buff), cfg)) != NULL) {
-
-    for (size_t i = 0; i < strlen(line); i++) {
-      if (line[i] == '\n') {
-        line[i] = ' ';
-      }
+  while(name != NULL) {
+    zl_comp_t comp = { 0 };
+    init_component(name, &comp);
+    if (zl_context.child_count != MAX_CHILD_COUNT) {
+      zl_context.children[zl_context.child_count++] = comp;
+    } else {
+      ERROR("max component number reached, ignoring the rest\n");
+      break;
     }
-
-    if (is_commented_out(line)) {
-      DEBUG("line \'%s\' is commented out\n", line);
-      continue;
-    }
-
-    DEBUG("handling line \'%s\'\n", line);
-    zl_comp_t comp = {0};
-    if (!init_component(line, &comp)) {
-      if (zl_context.child_count != MAX_CHILD_COUNT) {
-        zl_context.children[zl_context.child_count++] = comp;
-      } else {
-        ERROR("max component number reached, ignoring the rest\n");
-        break;
-      }
-    }
-  }
-
-  DEBUG("reading config finished - %s\n", strerror(errno));
-
-  fclose(cfg);
-  cfg = NULL;
-
+    name = strtok(NULL, ",");
+	}
   return 0;
 }
 
@@ -371,7 +275,7 @@ static int send_event(enum zl_event_t event_type, void *event_data);
 
 static void *handle_comp_comm(void *args) {
 
-  INFO("starting a component communication thread\n");
+  DEBUG("starting a component communication thread\n");
 
   zl_comp_t *comp = args;
 
@@ -389,8 +293,15 @@ static void *handle_comp_comm(void *args) {
       } else {
         comp->fail_cnt++;
       }
-      if (!comp->clean_stop && (comp->fail_cnt < comp->restart_cnt)) {
-        send_event(ZL_EVENT_COMP_RESTART, comp);
+      if (!comp->clean_stop) {
+        if (comp->fail_cnt <= comp->restart_cnt) {
+          size_t delay = restart_intervals[comp->fail_cnt - 1];
+          INFO("next attempt to restart component %s in %d seconds\n", comp->name, (int)delay);
+          sleep(delay);
+          send_event(ZL_EVENT_COMP_RESTART, comp);
+        } else {
+          ERROR("failed to restart component %s, max retries reached\n", comp->name);
+        }
       }
 
       break;
@@ -402,7 +313,7 @@ static void *handle_comp_comm(void *args) {
       DEBUG("waitpid RC = 0 for %s(%d)\n", comp->name, comp->pid);
     }
 
-    char msg[1024];
+    char msg[4096];
     int retries_left = 3;
     while (retries_left > 0) {
 
@@ -413,8 +324,7 @@ static void *handle_comp_comm(void *args) {
         char *next_line = strtok(msg, "\n");
 
         while (next_line) {
-          char *tm = gettime().value;
-          printf("%s CMSG:  %s(%d) - %s\n", tm, comp->name, comp->pid, next_line);
+          printf("%s\n", next_line);
           next_line = strtok(NULL, "\n");
         }
 
@@ -444,21 +354,6 @@ static int start_component(zl_comp_t *comp) {
 
   DEBUG("about to start component %s\n", comp->name);
 
-  size_t workdir_len = strlen(zl_context.workdir);
-  size_t bin_len = strlen(comp->bin);
-
-  if (workdir_len + bin_len > _POSIX_PATH_MAX) {
-    ERROR("bin name \'%s\' too long\n", comp->bin);
-    return -1;
-  }
-
-  char full_path[_POSIX_PATH_MAX + 1 + 1] = {0};
-  strcpy(full_path, zl_context.workdir);
-  strcat(full_path, "/");
-  strcat(full_path, comp->bin);
-
-  DEBUG("about to start component %s at \'%s\'\n", comp->name, full_path);
-
   // ensure the new process has its own process group ID so we can terminate
   // the entire process tree
   struct inheritance inherit = {
@@ -480,18 +375,16 @@ static int start_component(zl_comp_t *comp) {
 
   int fd_count = 3;
   int fd_map[3];
+  char bin[PATH_MAX];
 
-  if (strcmp(&comp->bin[bin_len - 3], ".sh") == 0) {
-    script = fopen(full_path, "r");
-    if (script == NULL) {
-      ERROR("script not open for %s - %s\n", comp->name, strerror(errno));
-      return -1;
-    }
-    fd_map[0] = dup(fileno(script));
-    fclose(script);
-  } else {
-    fd_map[0] = dup(STDIN_FILENO);
+  snprintf(bin, sizeof(bin), "%s/bin/internal/start-component.sh", zl_context.root_dir);
+  script = fopen(bin, "r");
+  if (script == NULL) {
+    ERROR("script not open for %s - %s\n", comp->name, strerror(errno));
+    return -1;
   }
+  fd_map[0] = dup(fileno(script));
+  fclose(script);
   fd_map[1] = dup(c_stdout[1]);
   fd_map[2] = dup(c_stdout[1]);
 
@@ -499,7 +392,15 @@ static int start_component(zl_comp_t *comp) {
         comp->name, fd_map[0], fd_map[1], fd_map[2]);
 
   const char *c_envp[2] = {get_shareas_env(comp), NULL};
-  comp->pid = spawn(full_path, fd_count, fd_map, &inherit, NULL, c_envp);
+  const char *c_args[] = {
+    bin,
+    "-c", zl_context.instance_dir,
+    "-r", zl_context.root_dir,
+    "-i", zl_context.ha_instance_id,
+    "-o", comp->name, 
+    NULL
+  };
+  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_envp);
   if (comp->pid == -1) {
     ERROR("spawn() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;
@@ -511,7 +412,7 @@ static int start_component(zl_comp_t *comp) {
 
   comp->clean_stop = false;
 
-  INFO("process with PID = %d started for comp %s\n", comp->pid, comp->name);
+  INFO(MSG_COMPONENT_STARTED, comp->name);
 
   if (pthread_create(&comp->comm_thid, NULL, handle_comp_comm, comp) != 0) {
     ERROR("comm thread not started for %s - %s\n", comp->name, strerror(errno));
@@ -568,7 +469,7 @@ static int stop_component(zl_comp_t *comp) {
   }
 
   comp->pid = -1;
-  INFO("component %s stopped\n", comp->name);
+  INFO(MSG_COMPONENT_STOPPED, comp->name);
 
   return 0;
 }
@@ -597,7 +498,7 @@ static int stop_components(void) {
 static zl_comp_t *find_comp(const char *name) {
 
   for (size_t i = 0; i < zl_context.child_count; i++) {
-    if (!strcmp(name, zl_context.children[i].name)) {
+    if (!strcasecmp(name, zl_context.children[i].name)) {
       return &zl_context.children[i];
     }
   }
@@ -875,17 +776,183 @@ static int send_event(enum zl_event_t event_type, void *event_data) {
   return 0;
 }
 
+typedef void (*handle_line_callback_t)(void *data, const char *line);
+
+static int run_command(const char *command, handle_line_callback_t handle_line, void *data) {
+  DEBUG("about to run command '%s'\n", command);
+  FILE *fp = popen(command, "r");
+  if (!fp) {
+    ERROR("failed to run command %s - %s\n", command, strerror(errno));
+    return -1;
+  }
+  char *line;
+  char buf[1024] = {0};
+  while((line = fgets(buf, sizeof(buf) - 1, fp)) != NULL) {
+    handle_line(data, line);
+    memset(buf, '\0', sizeof(buf));
+  }
+  if (ferror(fp)) {
+    pclose(fp);
+    ERROR("error reading output from command '%s' - %s\n", command, strerror(errno));
+    return -1;
+  }
+  int rc = pclose(fp);
+  if (rc == -1) {
+    ERROR("failed to run command '%s' - %s\n", command, strerror(errno));
+  } else if (rc > 0) {
+    ERROR("command '%s' ended with code %d\n", command, rc);
+    return -1;
+  }
+  DEBUG("command '%s' ran successfully\n", command);
+  return 0;
+}
+
+static void handle_get_component_line(void *data, const char *line) {
+  char *comp_list = data;
+  snprintf(comp_list, COMP_LIST_SIZE, "%s", line);
+  int len = strlen(comp_list);
+  for (int i = len - 1; i >= 0; i--) {
+    if (comp_list[i] != ' ' && comp_list[i] != '\n' && comp_list[i] != ',') {
+      break;
+    }
+    comp_list[i] = '\0';
+  }
+}
+
+static int get_component_list(char *buf, size_t buf_size) {
+  char command[4*PATH_MAX];
+  snprintf (command, sizeof(command), "%s/bin/internal/get-launch-components.sh -c %s -r %s -i %s",
+            zl_context.root_dir, zl_context.instance_dir,
+            zl_context.root_dir, zl_context.ha_instance_id);
+  DEBUG("about to get component list\n");
+  char comp_list[COMP_LIST_SIZE] = {0};
+  if (run_command(command, handle_get_component_line, (void*)comp_list)) {
+    ERROR("failed to get component list\n");
+  }
+  if (strlen(comp_list) == 0) {
+    ERROR("start component list is empty\n");
+    return -1;
+  }
+  snprintf(buf, buf_size, "%s", comp_list);
+  INFO("start component list: '%s'\n", buf);
+  return 0;
+}
+
+static void handle_get_root_dir_line(void *data, const char *line) {
+  char *root_dir = data;
+  snprintf(root_dir, PATH_MAX+1, "%s", line);
+  int len = strlen(root_dir);
+  for (int i = len - 1; i >= 0; i--) {
+    if (root_dir[i] != ' ' && root_dir[i] != '\n') {
+      break;
+    }
+    root_dir[i] = '\0';
+  }
+}
+
+static int get_root_dir(char *buf, size_t buf_size) {
+  char command[2*PATH_MAX];
+  snprintf (command, sizeof(command), ". %s/bin/internal/read-essential-vars.sh && echo $ROOT_DIR",
+    zl_context.instance_dir);
+  DEBUG("about to get root dir\n");
+  char root_dir[PATH_MAX+1] = {0};
+  if (run_command(command, handle_get_root_dir_line, (void*)root_dir)) {
+    ERROR("failed to ROOT_DIR dir\n");
+  }
+  if (strlen(root_dir) == 0) {
+    ERROR("ROOT_DIR is empty\n");
+    return -1;
+  }
+  snprintf(buf, buf_size, "%s", root_dir);
+  if (check_if_dir_exists(zl_context.root_dir, "ROOT_DIR")) {
+    return -1;
+  }
+  setenv("ROOT_DIR", zl_context.root_dir, 1);
+  INFO("ROOT_DIR found: '%s'\n", buf);
+  return 0;
+}
+
+static void print_line(void *data, const char *line) {
+  printf("%s", line);
+}
+
+static int prepare_instance() {
+  char command[4*PATH_MAX];
+  INFO("about to prepare Zowe instance\n");
+  const char *script = "bin/internal/prepare-instance.sh";
+  snprintf(command, sizeof(command), "%s/%s -c %s -r %s -i %s 2>&1",
+           zl_context.root_dir, script, zl_context.instance_dir,
+           zl_context.root_dir, zl_context.ha_instance_id);
+  if (run_command(command, print_line, NULL)) {
+    ERROR("failed to prepare Zowe instance\n");
+    return -1;
+  }
+  INFO("Zowe instance prepared successfully\n");
+  return 0;
+}
+
+static int init() {
+  zl_context.pid = getpid();
+  char *login = __getlogin1();
+  snprintf(zl_context.userid, sizeof(zl_context.userid), "%s", login);
+  return 0;
+}
+
+static void terminate(int sig) {
+  INFO("Zowe Launcher stopping\n");
+  stop_components();
+  exit(EXIT_SUCCESS);
+}
+
+static int setup_signal_handlers() {
+  struct sigaction sa;
+  sa.sa_handler = terminate;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;
+  if (sigaction(SIGINT, &sa, NULL) == -1) {
+    ERROR("failed to set SIGINT handler - %s\n", strerror(errno));
+    return -1;
+  }
+  if (sigaction(SIGTERM, &sa, NULL) == -1) {
+    ERROR("failed to set SIGTERM handler - %s\n", strerror(errno));
+    return -1;
+  }
+  return 0;
+}
+
 int main(int argc, char **argv) {
+  if (init()) {
+    exit(EXIT_FAILURE);
+  }
 
   INFO("Zowe Launcher starting\n");
 
   zl_config_t config = read_config(argc, argv);
 
-  if (init_context(&config)) {
+  if (init_context(argc, argv, &config)) {
     exit(EXIT_FAILURE);
   }
+  
+  if (get_root_dir(zl_context.root_dir, sizeof(zl_context.root_dir))) {
+    exit(EXIT_FAILURE);
+  }
+  
+  if (setup_signal_handlers()) {
+    exit(EXIT_FAILURE);
+  }
+  
+  char comp_buf[COMP_LIST_SIZE];
+  char *component_list = NULL;
 
-  if (load_cfg()) {
+  if (prepare_instance()) {
+    exit(EXIT_FAILURE);
+  }
+  if (get_component_list(comp_buf, sizeof(comp_buf))) {
+    exit(EXIT_FAILURE);
+  }
+  component_list = comp_buf;
+
+  if (init_components(component_list)) {
     exit(EXIT_FAILURE);
   }
 

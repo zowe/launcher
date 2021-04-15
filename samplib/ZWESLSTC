@@ -1,4 +1,4 @@
-//ZWELNCH  PROC RGN=0M
+//ZWESLSTC  PROC RGN=0M,HAINST='{{ha_instance_id}}'
 //********************************************************************/
 //* This program and the accompanying materials are                  */
 //* made available under the terms of the                            */
@@ -18,21 +18,22 @@
 //*       yet.                                                       */
 //*                                                                  */
 //* NOTE: this procedure is a template, you will need to modify      */
-//*       #zwelnch variable to point to your bin/zowe_launcher       */
+//*       #instance_dir variable to point to your                    */
+//*       Zowe instance directory                                    */
 //*                                                                  */
 //* Check https://github.com/zowe/launcher for more details.         */
 //*                                                                  */
 //********************************************************************/
 //ZWELNCH  EXEC PGM=ZWELNCH,REGION=&RGN,
-// PARM='ENVAR(_CEE_ENVFILE=DD:STDENV)/'
+// PARM='ENVAR(_CEE_ENVFILE=DD:STDENV)/&HAINST.'
 //STEPLIB  DD   DSNAME=&SYSUID..LOADLIB,DISP=SHR
 //SYSIN    DD   DUMMY
 //SYSPRINT DD   SYSOUT=*
 //SYSERR   DD   SYSOUT=*
 //CEEOPTS  DD  *
-RPTOPTS(ON)
+//*RPTOPTS(ON)
 POSIX(ON)
 /*
 //STDENV   DD  *
-WORKDIR=#zwelnch
+INSTANCE_DIR=#instance_dir
 /*

@@ -5,7 +5,7 @@ name: launcher
 # Component identifier. This identifier matches artifact path in Zowe Artifactory https://zowe.jfrog.io/.
 id: org.zowe.launcher
 # Component version
-version: 0.0.3
+version: 0.0.4
 # Human readable component name
 title: Zowe Launcher
 # Human readable component description

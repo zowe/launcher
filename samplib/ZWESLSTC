@@ -31,9 +31,7 @@
 //SYSPRINT DD   SYSOUT=*
 //SYSERR   DD   SYSOUT=*
 //CEEOPTS  DD  *
-//*RPTOPTS(ON)
 POSIX(ON)
-/*
 //STDENV   DD  *
 INSTANCE_DIR=#instance_dir
 /*

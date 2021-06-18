@@ -18,7 +18,12 @@ node("zowe-jenkins-agent") {
     pipeline.admins.add("dnikolaev", "sgrady", "jackjia")
 
     // setup will read package information from manifest
-    pipeline.setup()
+    pipeline.setup(
+        extraInit: {
+            echo "Init submodules"
+            sh 'git submodule update --init --recursive'
+        }
+    )
 
     pipeline.build(
         operation: {

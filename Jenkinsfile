@@ -21,7 +21,10 @@ node("zowe-jenkins-agent") {
     pipeline.setup(
         extraInit: {
             echo "Init submodules"
-            sh 'git submodule update --init --recursive'
+            sh "git submodule update --init --recursive"
+            if (!fileExists("deps/libyaml/ReadMe.md")) {
+                error "Submodule libyaml is not inited successully."
+            }
         }
     )
 

@@ -13,6 +13,8 @@ CC = xlclang
 LD = xlclang
 
 LAUNCHER_TARGET = bin/zowe_launcher
+LIBYAML = ./deps/libyaml
+LIBYAMLA = ./deps/libyaml/lib/libyaml.a
 
 CFLAGS = -O -D_OPEN_THREADS -D_XOPEN_SOURCE=600 \
          "-Wa,goff" -Wall -Wextra -Werror -pedantic \
@@ -22,17 +24,24 @@ CFLAGS = -O -D_OPEN_THREADS -D_XOPEN_SOURCE=600 \
          -Wno-unused-parameter \
          "-Wc,langlvl(EXTC99),float(HEX),agg,list(),so(),search(),lp64,xplink" \
          "-Wc,goff,xref,gonum,roconst,gonum,asm,asmlib('SYS1.MACLIB'),asmlib('CEE.SCEEMAC')" \
-         -I .
+         -I . \
+         -I ./deps/libyaml/include
+
+LDFLAGS = -Ldeps/libyaml/lib
 
 all: $(LAUNCHER_TARGET)
 
-$(LAUNCHER_TARGET): main.o
+$(LAUNCHER_TARGET): main.o $(LIBYAMLA)
 	mkdir -p bin
-	$(LD) -o $(LAUNCHER_TARGET) $^ || { $(RM) $@; exit 1; }
+	$(LD) $(LDFLAGS) -o $(LAUNCHER_TARGET) main.o -lyaml || { $(RM) $@; exit 1; }
 	# cp -X $(LAUNCHER_TARGET) "//'${USER}.ZL.LOADLIB(ZLAUNCH)'"
 
 %.o: src/%.c
 	$(CC) $(CFLAGS) -o $@ -c $<
+
+$(LIBYAMLA):
+	cp src/Makefile-yaml deps/libyaml/Makefile
+	(cd deps/libyaml && $(MAKE))
 
 .PHONY: clean
 clean:

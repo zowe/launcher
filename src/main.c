@@ -300,8 +300,8 @@ static void get_int_array_from_yaml_sequence(yaml_document_t *doc, yaml_node_t *
   }
 }
 
-static yaml_node_t *get_node_by_path(yaml_document_t *doc, yaml_node_t *node, const char **path, int path_len) {
-  for (int i = 0; i < path_len; i++) {
+static yaml_node_t *get_node_by_path(yaml_document_t *doc, yaml_node_t *node, const char **path, size_t path_len) {
+  for (size_t i = 0; i < path_len; i++) {
     node = get_child_node(doc, node, path[i]);
     if (!node) {
       break;
@@ -310,7 +310,7 @@ static yaml_node_t *get_node_by_path(yaml_document_t *doc, yaml_node_t *node, co
   return node;
 }
 
-static int get_int_by_path(yaml_document_t *doc, yaml_node_t *root, const char **path, int path_len, int *result) {
+static int get_int_by_path(yaml_document_t *doc, yaml_node_t *root, const char **path, size_t path_len, int *result) {
   yaml_node_t *node = get_node_by_path(doc, root, path, path_len);
   if (node && node->type == YAML_SCALAR_NODE) {
     char buf[128];
@@ -321,7 +321,7 @@ static int get_int_by_path(yaml_document_t *doc, yaml_node_t *root, const char *
   return -1;
 }
 
-static int get_string_by_yaml_path(yaml_document_t *doc, yaml_node_t *root, const char **path, int path_len, char *buf, int buf_size) {
+static int get_string_by_yaml_path(yaml_document_t *doc, yaml_node_t *root, const char **path, size_t path_len, char *buf, int buf_size) {
   yaml_node_t *node = get_node_by_path(doc, root, path, path_len);
   if (node && node->type == YAML_SCALAR_NODE) {
     get_yaml_scalar(doc, node, buf, buf_size);
@@ -330,7 +330,7 @@ static int get_string_by_yaml_path(yaml_document_t *doc, yaml_node_t *root, cons
   return -1;
 }
 
-static int get_int_array_by_path(yaml_document_t *doc, yaml_node_t *root, const char **path, int path_len, zl_int_array_t *arr) {
+static int get_int_array_by_path(yaml_document_t *doc, yaml_node_t *root, const char **path, size_t path_len, zl_int_array_t *arr) {
   yaml_node_t *node = get_node_by_path(doc, root, path, path_len);
   if (node && node->type == YAML_SEQUENCE_NODE) {
     get_int_array_from_yaml_sequence(doc, node, arr);

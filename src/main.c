@@ -187,6 +187,12 @@ static int get_env(const char *name, char *buf, size_t buf_size) {
   return 0;
 }
 
+static void to_lower(char *s) {
+  for ( ; *s; s++) {
+    *s = tolower(*s);
+  }
+}
+
 static int check_if_dir_exists(const char *dir, const char *name) {
   struct stat s;
   if (stat(dir, &s) != 0) {
@@ -216,6 +222,7 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
     return -1;
   }
   snprintf (zl_context.ha_instance_id, sizeof(zl_context.ha_instance_id), "%s", argv[1]);
+  to_lower(zl_context.ha_instance_id);
   INFO("HA_INSTANCE_ID='%s'\n", zl_context.ha_instance_id);
 
   /* do we really need to change work dir? */

@@ -13,7 +13,6 @@ CC = xlclang
 LD = xlclang
 
 LAUNCHER_TARGET = bin/zowe_launcher
-LIBYAML = ./deps/libyaml
 LIBYAMLA = ./deps/libyaml/lib/libyaml.a
 
 CFLAGS = -O -D_OPEN_THREADS -D_XOPEN_SOURCE=600 \

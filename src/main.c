@@ -374,7 +374,7 @@ static void init_component_restart_intervals(zl_comp_t *comp) {
     }
   }
   if (!found) {
-    memcpy(&comp->restart_intervals, restart_intervals_default, sizeof(restart_intervals_default));
+    memcpy(&comp->restart_intervals.data, restart_intervals_default, sizeof(restart_intervals_default));
     comp->restart_intervals.count = sizeof(restart_intervals_default)/sizeof(restart_intervals_default[0]);
   }
 }

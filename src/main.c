@@ -1238,7 +1238,7 @@ int main(int argc, char **argv) {
   }
 
   if (read_zowe_yaml_config()) {
-    WARN ("failed to read zowe.yaml, launcher will use default settings");
+    WARN ("failed to read zowe.yaml, launcher will use default settings\n");
   }
   
   char comp_buf[COMP_LIST_SIZE];

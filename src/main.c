@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <sys/__messag.h>
 #include <unistd.h>
+#include "yaml.h"
 
 extern char ** environ;
 /*
@@ -56,8 +57,7 @@ extern char ** environ;
 #endif
 
 // Progressive restart internals in seconds
-static size_t restart_intervals[] = {1, 1, 1, 5, 5, 10, 20, 60, 120, 240};
-#define RETRY_COUNT (sizeof(restart_intervals) / (sizeof restart_intervals[0]))
+static int restart_intervals_default[] = {1, 1, 1, 5, 5, 10, 20, 60, 120, 240};
 
 typedef struct zl_time_t {
   char value[32];
@@ -78,6 +78,19 @@ static zl_time_t gettime(void) {
   return result;
 }
 
+typedef struct zl_yaml_config_t {
+  yaml_document_t document;
+  yaml_node_t *root;
+} zl_yaml_config_t;
+
+typedef struct zl_int_array_t {
+  int count;
+#define ZL_INT_ARRAY_CAPACITY 100
+  int data[ZL_INT_ARRAY_CAPACITY];
+} zl_int_array_t;
+
+#define ZL_YAML_KEY_LEN 255
+
 typedef struct zl_config_t {
   bool debug_mode;
 } zl_config_t;
@@ -90,7 +103,6 @@ typedef struct zl_comp_t {
   int output;
 
   bool clean_stop;
-  int restart_cnt;
   int fail_cnt;
   time_t start_time;
 
@@ -101,6 +113,9 @@ typedef struct zl_comp_t {
   } share_as;
 
   pthread_t comm_thid;
+
+  zl_int_array_t restart_intervals;
+  int min_uptime; // secs
 
 } zl_comp_t;
 
@@ -135,8 +150,10 @@ struct {
   
   pid_t pid;
   char userid[9];
+
+  zl_yaml_config_t yaml_config;
   
-} zl_context = {.config = {.debug_mode = true}, .userid = "(NONE)"} ;
+} zl_context = {.config = {.debug_mode = true}, .userid = "(NONE)", .yaml_config = {0}} ;
 
 
 
@@ -170,6 +187,12 @@ static int get_env(const char *name, char *buf, size_t buf_size) {
   return 0;
 }
 
+static void to_lower(char *s) {
+  for ( ; *s; s++) {
+    *s = tolower(*s);
+  }
+}
+
 static int check_if_dir_exists(const char *dir, const char *name) {
   struct stat s;
   if (stat(dir, &s) != 0) {
@@ -199,6 +222,7 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
     return -1;
   }
   snprintf (zl_context.ha_instance_id, sizeof(zl_context.ha_instance_id), "%s", argv[1]);
+  to_lower(zl_context.ha_instance_id);
   INFO("HA_INSTANCE_ID='%s'\n", zl_context.ha_instance_id);
 
   /* do we really need to change work dir? */
@@ -223,15 +247,219 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
   return 0;
 }
 
+static void get_yaml_pair_key(yaml_document_t *document, yaml_node_pair_t *pair, char *buf, size_t buf_size) {
+  yaml_node_t *node = yaml_document_get_node(document, pair->key);
+  if (node) {
+    snprintf(buf, buf_size, "%.*s", (int)node->data.scalar.length, (const char *)node->data.scalar.value);
+#ifdef __MVS__
+    __atoe(buf);
+#endif
+  } else {
+    snprintf(buf, buf_size, "");
+    DEBUG ("key node not found\n");
+  }
+}
+
+static void get_yaml_item(yaml_document_t *document, yaml_node_item_t item, char *buf, size_t buf_size) {
+  yaml_node_t *node = yaml_document_get_node(document, item);
+  if (node) {
+    snprintf(buf, buf_size, "%.*s", (int)node->data.scalar.length, (const char *)node->data.scalar.value);
+#ifdef __MVS__
+    __atoe(buf);
+#endif
+  } else {
+    snprintf(buf, buf_size, "");
+    DEBUG ("no node for item %d\n", item);
+  }
+}
+
+static void get_yaml_scalar(yaml_document_t *doc, yaml_node_t *node, char *buf, size_t buf_size) {
+  char *value = (char *)node->data.scalar.value;
+  snprintf(buf, buf_size, "%s", value);
+#ifdef __MVS__
+  __atoe(buf);
+#endif
+}
+
+static yaml_node_t *get_child_node(yaml_document_t *doc, yaml_node_t *node, const char *name) {
+  char key[ZL_YAML_KEY_LEN + 1];
+  yaml_node_t *value_node = NULL;
+  for (yaml_node_pair_t *pair = node->data.mapping.pairs.start; pair != node->data.mapping.pairs.top; pair++) {
+    get_yaml_pair_key(doc, pair, key, sizeof(key));
+    if (0 == strcmp(key, name)) {
+      value_node = yaml_document_get_node(doc, pair->value);
+      break;
+    }
+  }
+  return value_node;
+}
+
+static void get_int_array_from_yaml_sequence(yaml_document_t *doc, yaml_node_t *node, zl_int_array_t *data) {
+  char buf[ZL_YAML_KEY_LEN + 1];
+  for (yaml_node_item_t *item = node->data.sequence.items.start; item != node->data.sequence.items.top; item++) {
+    get_yaml_item(doc, *item, buf, sizeof(buf));
+    if (data->count < ZL_INT_ARRAY_CAPACITY) {
+      data->data[data->count++] = atoi(buf);
+    } else {
+      WARN ("yaml sequence is too large\n");
+      break;
+    }
+  }
+}
+
+static yaml_node_t *get_node_by_path(yaml_document_t *doc, yaml_node_t *node, const char **path, size_t path_len) {
+  for (size_t i = 0; i < path_len; i++) {
+    node = get_child_node(doc, node, path[i]);
+    if (!node) {
+      break;
+    }
+  }
+  return node;
+}
+
+static int get_int_by_path(yaml_document_t *doc, yaml_node_t *root, const char **path, size_t path_len, int *result) {
+  yaml_node_t *node = get_node_by_path(doc, root, path, path_len);
+  if (node && node->type == YAML_SCALAR_NODE) {
+    char buf[128];
+    get_yaml_scalar(doc, node, buf, sizeof(buf));
+    *result = atoi(buf);
+    return 0;
+  }
+  return -1;
+}
+
+static int get_string_by_yaml_path(yaml_document_t *doc, yaml_node_t *root, const char **path, size_t path_len, char *buf, int buf_size) {
+  yaml_node_t *node = get_node_by_path(doc, root, path, path_len);
+  if (node && node->type == YAML_SCALAR_NODE) {
+    get_yaml_scalar(doc, node, buf, buf_size);
+    return 0;
+  }
+  return -1;
+}
+
+static int get_int_array_by_path(yaml_document_t *doc, yaml_node_t *root, const char **path, size_t path_len, zl_int_array_t *arr) {
+  yaml_node_t *node = get_node_by_path(doc, root, path, path_len);
+  if (node && node->type == YAML_SEQUENCE_NODE) {
+    get_int_array_from_yaml_sequence(doc, node, arr);
+    return 0;
+  }
+  return -1;
+}
+
+static void snprint_int_array(zl_int_array_t *array, char *buf, size_t buf_size) {
+  int pos = 0;
+  for (int i = 0; i < array->count; i++) {
+    pos += snprintf(buf + pos, buf_size - pos, "%d%s", array->data[i], i == array->count - 1 ? "" : " ");
+  }
+}
+
+static void init_component_restart_intervals(zl_comp_t *comp) {
+  zl_yaml_config_t *zowe_yaml_config = &zl_context.yaml_config;
+  yaml_document_t *document = &zowe_yaml_config->document;
+  DEBUG ("loading restart intervals for component '%s'\n", comp->name);
+  yaml_node_t *root = zowe_yaml_config->root;
+  const char *zowe_path[] = {"zowe", "launcher", "restartIntervals"};
+  const char *component_path[] = {"components", comp->name, "launcher", "restartIntervals"};
+  const char *instance_path[] = {"haInstances", zl_context.ha_instance_id, "components", comp->name, "launcher", "restartIntervals"};
+  bool found = false;
+  if (root) {
+    if (!found && get_int_array_by_path(document, root, instance_path, sizeof(instance_path)/sizeof(instance_path[0]), &comp->restart_intervals) == 0) {
+      found = true;
+    }
+    if (!found && get_int_array_by_path(document, root, component_path, sizeof(component_path)/sizeof(component_path[0]), &comp->restart_intervals) == 0) {
+      found = true;
+    }
+    if (!found && get_int_array_by_path(document, root, zowe_path, sizeof(zowe_path)/sizeof(zowe_path[0]), &comp->restart_intervals) == 0) {
+      found = true;
+    }
+  }
+  if (!found) {
+    memcpy(&comp->restart_intervals.data, restart_intervals_default, sizeof(restart_intervals_default));
+    comp->restart_intervals.count = sizeof(restart_intervals_default)/sizeof(restart_intervals_default[0]);
+  }
+}
+
+static void init_component_min_uptime(zl_comp_t *comp) {
+  zl_yaml_config_t *zowe_yaml_config = &zl_context.yaml_config;
+  yaml_document_t *document = &zowe_yaml_config->document;
+  yaml_node_t *root = zowe_yaml_config->root;
+  const char *zowe_path[] = {"zowe", "launcher", "minUptime"};
+  const char *component_path[] = {"components", comp->name, "launcher", "minUptime"};
+  const char *instance_path[] = {"haInstances", zl_context.ha_instance_id, "components", comp->name, "launcher", "minUptime"};
+  bool found = false;
+  int min_uptime = 0;
+  if (root) {
+    if (!found && get_int_by_path(document, root, instance_path, sizeof(instance_path)/sizeof(instance_path[0]), &min_uptime) == 0) {
+      found = true;
+    }
+    if (!found && get_int_by_path(document, root, component_path, sizeof(component_path)/sizeof(component_path[0]), &min_uptime) == 0) {
+      found = true;
+    }
+    if (!found && get_int_by_path(document, root, zowe_path, sizeof(zowe_path)/sizeof(zowe_path[0]), &min_uptime) == 0) {
+      found = true;
+    }
+  }
+  comp->min_uptime = found ? min_uptime : MIN_UPTIME_SECS;
+}
+
+static void init_component_shareas(zl_comp_t *comp) {
+  zl_yaml_config_t *zowe_yaml_config = &zl_context.yaml_config;
+  yaml_document_t *document = &zowe_yaml_config->document;
+  yaml_node_t *root = zowe_yaml_config->root;
+  const char *zowe_path[] = {"zowe", "launcher", "shareAs"};
+  const char *component_path[] = {"components", comp->name, "launcher", "shareAs"};
+  const char *instance_path[] = {"haInstances", zl_context.ha_instance_id, "components", comp->name, "launcher", "shareAs"};
+  bool found = false;
+  char share_as[128] = {0};
+  if (root) {
+    if (!found && get_string_by_yaml_path(document, root, instance_path, sizeof(instance_path)/sizeof(instance_path[0]), share_as, sizeof(share_as)) == 0) {
+      found = true;
+    }
+    if (!found && get_string_by_yaml_path(document, root, component_path, sizeof(component_path)/sizeof(component_path[0]), share_as, sizeof(share_as)) == 0) {
+      found = true;
+    }
+    if (!found && get_string_by_yaml_path(document, root, zowe_path, sizeof(zowe_path)/sizeof(zowe_path[0]), share_as, sizeof(share_as)) == 0) {
+      found = true;
+    }
+  }
+  if (!strcmp(share_as, "no")) {
+    comp->share_as = ZL_COMP_AS_SHARE_NO;
+  } else if (!strcmp(share_as, "yes")) {
+    comp->share_as = ZL_COMP_AS_SHARE_YES;
+  } else if (!strcmp(share_as, "must")) {
+    comp->share_as = ZL_COMP_AS_SHARE_MUST;
+  } else {
+    comp->share_as = ZL_COMP_AS_SHARE_NO;
+  }
+}
+
+static const char *get_shareas_label(const zl_comp_t *comp) {
+  switch (comp->share_as) {
+  case ZL_COMP_AS_SHARE_NO:
+    return "no";
+  case ZL_COMP_AS_SHARE_YES:
+    return "yes";
+  case ZL_COMP_AS_SHARE_MUST:
+    return "must";
+  default:
+    return "no";
+  }
+}
+
 static int init_component(const char *name, zl_comp_t *result) {
   snprintf(result->name, sizeof(result->name), "%s", name);
   result->pid = -1;
-  result->share_as = ZL_COMP_AS_SHARE_YES;
-  result->restart_cnt = RETRY_COUNT;
+  init_component_shareas(result);
+  init_component_restart_intervals(result);
+  init_component_min_uptime(result);
   
-  INFO("new component init'd \'%s\', restart_cnt=%d, share_as=%d\n",
-       result->name, result->restart_cnt, result->share_as);
+  INFO("new component init'd \'%s\', restart_cnt=%d, min_uptime=%d seconds, share_as=%s\n", 
+       result->name, result->restart_intervals.count,
+       result->min_uptime, get_shareas_label(result));
 
+  char restart_intervals_buf[2048];
+  snprint_int_array(&result->restart_intervals, restart_intervals_buf, sizeof(restart_intervals_buf));
+  INFO("restart_intervals for component '%s'= %s\n", result->name, restart_intervals_buf);
   return 0;
 }
 
@@ -294,8 +522,8 @@ static void *handle_comp_comm(void *args) {
         comp->fail_cnt++;
       }
       if (!comp->clean_stop) {
-        if (comp->fail_cnt <= comp->restart_cnt) {
-          size_t delay = restart_intervals[comp->fail_cnt - 1];
+        if (comp->fail_cnt <= comp->restart_intervals.count) {
+          size_t delay = comp->restart_intervals.data[comp->fail_cnt - 1];
           INFO("next attempt to restart component %s in %d seconds\n", comp->name, (int)delay);
           sleep(delay);
           send_event(ZL_EVENT_COMP_RESTART, comp);
@@ -920,6 +1148,74 @@ static int setup_signal_handlers() {
   return 0;
 }
 
+static int yaml_read_handler(void *data, unsigned char *buffer, size_t size, size_t *size_read) {
+  FILE *fp = data;
+  int rc = 1;
+  size_t bytes_read = fread(buffer, 1, size, fp);
+  if (bytes_read > 0) {
+#ifdef __MVS__
+    if (__etoa_l((char *)buffer, bytes_read) == -1) {
+      ERROR("error converting yaml file - %s\n", strerror(errno));
+      rc = 0;
+    }
+#endif
+  }
+  if (ferror(fp)) {
+    ERROR("error reading yaml file - %s\n", strerror(errno));
+    rc = 0;
+  }
+  *size_read = bytes_read;
+  return rc;
+}
+
+static int read_zowe_yaml_config() {
+  zl_yaml_config_t *config = &zl_context.yaml_config;
+  FILE *fp = NULL;
+  yaml_parser_t parser;
+  yaml_document_t *document = &config->document;
+  int rc;
+  char zowe_yaml_file[PATH_MAX];
+
+  snprintf(zowe_yaml_file, sizeof(zowe_yaml_file), "%s/zowe.yaml", zl_context.instance_dir); 
+  
+  INFO("loading '%s'\n", zowe_yaml_file);
+
+  fp = fopen(zowe_yaml_file, "r");
+  if (!fp) {
+    ERROR("failed to open zowe.yaml - %s: %s\n", zowe_yaml_file, strerror(errno));
+    return -1;
+  }
+  if (!yaml_parser_initialize(&parser)) {
+    ERROR("failed to init YAML parser\n");
+    fclose(fp);
+    return -1;
+  };
+  yaml_parser_set_input(&parser, yaml_read_handler, fp);
+  if (!yaml_parser_load(&parser, document)) {
+    ERROR("failed to parse zowe.yaml %s\n", zowe_yaml_file);
+    yaml_parser_delete(&parser);
+    fclose(fp);
+    return -1;
+  }
+  yaml_node_t *root = yaml_document_get_root_node(document);
+  do {
+    if (!root) {
+      ERROR("failed to get root node in zowe.yaml %s\n", zowe_yaml_file);
+      rc = -1;
+      break;
+    }
+    if (root->type != YAML_MAPPING_NODE) {
+      ERROR("failed to find mapping node in zowe.yaml %s\n", zowe_yaml_file);
+      rc = -1;
+      break;
+    }
+    config->root = root; 
+  } while(0);
+  yaml_parser_delete(&parser);
+  fclose(fp);
+  return 0;
+}
+
 int main(int argc, char **argv) {
   if (init()) {
     exit(EXIT_FAILURE);
@@ -939,6 +1235,10 @@ int main(int argc, char **argv) {
   
   if (setup_signal_handlers()) {
     exit(EXIT_FAILURE);
+  }
+
+  if (read_zowe_yaml_config()) {
+    WARN ("failed to read zowe.yaml, launcher will use default settings\n");
   }
   
   char comp_buf[COMP_LIST_SIZE];
@@ -974,6 +1274,7 @@ int main(int argc, char **argv) {
 
   exit(EXIT_SUCCESS);
 }
+
 
 /*
   This program and the accompanying materials are

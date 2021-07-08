@@ -30,4 +30,4 @@ make -f zosMakefile
 # clean up content folder
 echo "$SCRIPT_NAME cleaning up pax folder ..."
 cd "$SCRIPT_DIR/content"
-rm -fr Jenkinsfile Makefile zosMakefile src *.o *.lst .git*
+rm -fr Jenkinsfile Makefile zosMakefile src deps *.o *.lst .git*

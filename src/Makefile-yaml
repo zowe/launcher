@@ -22,7 +22,7 @@ OBJS:=api.o reader.o scanner.o parser.o loader.o writer.o emitter.o dumper.o
 all:	$(LIBYAMLA)
 
 $(LIBYAMLA):	$(OBJS)
-	mkdir -p $(dir $(LIBYAMLA))
+	mkdir -p lib
 	ar rcs $@ $^
 
 %.o:	src/%.c

@@ -16,7 +16,7 @@
 
 #define MSG_COMP_STARTED        MSG_PREFIX "0001I" " component %s started\n"
 #define MSG_COMP_STOPPED        MSG_PREFIX "0002I" " component %s stopped\n"
-#define MSG_COMP_INITED         MSG_PREFIX "0003I" " new component init'd \'%s\', restart_cnt=%d, min_uptime=%d seconds, share_as=%s\n"
+#define MSG_COMP_INITED         MSG_PREFIX "0003I" " new component initialized %s, restart_cnt=%d, min_uptime=%d seconds, share_as=%s\n"
 #define MSG_COMP_TERMINATED     MSG_PREFIX "0004I" " component %s(%d) terminated, status = %d\n"
 #define MSG_NEXT_RESTART        MSG_PREFIX "0005I" " next attempt to restart component %s in %d seconds\n"
 #define MSG_STARTING_COMPS      MSG_PREFIX "0006I" " starting components\n"

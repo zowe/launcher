@@ -68,6 +68,7 @@
 #define MSG_NOT_ALL_STARTED     MSG_PREFIX "0052W" " not all components started\n"
 #define MSG_NOT_ALL_STOPPED     MSG_PREFIX "0053W" " not all components stopped\n"
 #define MSG_COMP_NOT_FOUND      MSG_PREFIX "0054W" " component %s not found\n"
+#define MSG_STDIN_ERROR         MSG_PREFIX "0055E" " failed to create file for stdin(%s) - %s\n"
 
 #endif // MSG_H
 

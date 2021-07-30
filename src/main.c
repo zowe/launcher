@@ -243,6 +243,20 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
   setenv("INSTANCE_DIR", zl_context.instance_dir, 1);
   INFO(MSG_INST_DIR, zl_context.instance_dir);
 
+  char stdin_file[PATH_MAX] = {0};
+  snprintf (stdin_file, sizeof(stdin_file), "%s/workspace/launcher.stdin.txt", zl_context.instance_dir);
+  FILE *stdin_fp = fopen(stdin_file, "w");
+  if (!stdin_fp) {
+    ERROR(MSG_STDIN_CREATE_ERROR, stdin_file, strerror(errno));
+    return -1;
+  }
+  fclose(stdin_fp);
+  stdin_fp = fopen(stdin_file, "r");
+  if (!stdin_fp) {
+    ERROR(MSG_STDIN_OPEN_ERROR, stdin_file, strerror(errno));
+    return -1;
+  }
+  stdin = stdin_fp;
   return 0;
 }
 

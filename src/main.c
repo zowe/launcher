@@ -243,6 +243,15 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
   setenv("INSTANCE_DIR", zl_context.instance_dir, 1);
   INFO(MSG_INST_DIR, zl_context.instance_dir);
 
+  char workspace_dir[PATH_MAX] = {0};
+  snprintf (workspace_dir, sizeof(workspace_dir), "%s/workspace", zl_context.instance_dir);
+  if (mkdir(workspace_dir, 0775) != 0) {
+    if (errno != EEXIST) {
+      ERROR(MSG_WORKSPACE_ERROR, workspace_dir, strerror(errno));
+      return -1;
+    }
+  }
+
   char stdin_file[PATH_MAX] = {0};
   snprintf (stdin_file, sizeof(stdin_file), "%s/workspace/launcher.stdin.txt", zl_context.instance_dir);
   FILE *stdin_fp = fopen(stdin_file, "w");

@@ -12,7 +12,7 @@
 
 node("zowe-jenkins-agent") {
 
-    def lib = library("jenkins-library").org.zowe.jenkins_shared_library
+    def lib = library("jenkins-library@users/tom/build-on-marist4").org.zowe.jenkins_shared_library
     def pipeline = lib.pipelines.generic.GenericPipeline.new(this)
 
     pipeline.admins.add("dnikolaev", "sgrady", "jackjia")

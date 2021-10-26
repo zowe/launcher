@@ -24,7 +24,7 @@
 //* Check https://github.com/zowe/launcher for more details.         */
 //*                                                                  */
 //********************************************************************/
-//ZWELNCH  EXEC PGM=ZWELNCH,REGION=&RGN,
+//ZWELNCH  EXEC PGM=ZWELNCH,REGION=&RGN,LIMIT=NOLIMIT,
 // PARM='ENVAR(_CEE_ENVFILE=DD:STDENV)/&HAINST.'
 //STEPLIB  DD   DSNAME=&SYSUID..LOADLIB,DISP=SHR
 //SYSIN    DD   DUMMY

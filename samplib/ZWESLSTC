@@ -13,15 +13,11 @@
 //*                                                                  */
 //* ZOWE LAUNCHER PROCEDURE                                          */
 //*                                                                  */
-//* NOTE: this procedure is for testing purpose. Please use it at    */
-//*       your own risk and there is no support for this procedure   */
-//*       yet.                                                       */
-//*                                                                  */
 //* NOTE: this procedure is a template, you will need to modify      */
-//*       #instance_dir variable to point to your                    */
-//*       Zowe instance directory                                    */
+//*       #zoweyaml variable to point to your                        */
+//*       Zowe YAML configuration file                               */
 //*                                                                  */
-//* Check https://github.com/zowe/launcher for more details.         */
+//* Check https://docs.zowe.org for more details.                    */
 //*                                                                  */
 //********************************************************************/
 //ZWELNCH  EXEC PGM=ZWELNCH,REGION=&RGN,LIMIT=NOLIMIT,
@@ -33,5 +29,5 @@
 //CEEOPTS  DD  *
 POSIX(ON)
 //STDENV   DD  *
-INSTANCE_DIR=#instance_dir
+CONFIG=#zoweyaml
 /*

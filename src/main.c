@@ -211,7 +211,7 @@ static int check_if_file_exists(const char *file, const char *name) {
     DEBUG("failed to get properties for file %s='%s' - %s\n", name, file, strerror(errno));
     return -1;
   }
-  if (!S_IFREG(s.st_mode)) {
+  if (!S_ISREG(s.st_mode)) {
     DEBUG("%s='%s' is not a file\n", name, file);
     return -1;
   }

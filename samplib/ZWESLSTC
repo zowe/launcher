@@ -15,8 +15,7 @@
 //*                                                                  */
 //* NOTE: this procedure is a template, you will need to modify      */
 //*       #zowe_yaml variable to point to your Zowe YAML config      */
-//*       file and #workspace_dir variable to your workspace         */
-//*       directory.                                                 */
+//*       file.                                                 */
 //*                                                                  */
 //* Check https://docs.zowe.org for more details.                    */
 //*                                                                  */
@@ -31,5 +30,4 @@
 POSIX(ON)
 //STDENV   DD  *
 CONFIG=#zowe_yaml
-WORKSPACE_DIR=#workspace_dir
 /*

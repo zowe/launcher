@@ -141,8 +141,9 @@ struct {
   pthread_cond_t event_cv;
   pthread_mutex_t event_lock;
 
-  char instance_dir[PATH_MAX + 1];
+  char yaml_file[PATH_MAX + 1];
   char root_dir[PATH_MAX+1];
+  char workspace_dir[PATH_MAX+1];
   
   char ha_instance_id[64];
   
@@ -204,15 +205,31 @@ static int check_if_dir_exists(const char *dir, const char *name) {
   return 0;
 }
 
+static int check_if_file_exists(const char *file, const char *name) {
+  struct stat s;
+  if (stat(file, &s) != 0) {
+    DEBUG("failed to get properties for file %s='%s' - %s\n", name, file, strerror(errno));
+    return -1;
+  }
+  if (!S_IFREG(s.st_mode)) {
+    DEBUG("%s='%s' is not a file\n", name, file);
+    return -1;
+  }
+  return 0;
+}
+
 static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
 
-  if (get_env("INSTANCE_DIR", zl_context.instance_dir, sizeof(zl_context.instance_dir))) {
+  if (get_env("CONFIG", zl_context.yaml_file, sizeof(zl_context.yaml_file))) {
     return -1;
   }
-  if (check_if_dir_exists(zl_context.instance_dir, "INSTANCE_DIR")) {
-    ERROR(MSG_DIR_ERR, "INSTANCE_DIR", zl_context.instance_dir);
+  if (check_if_file_exists(zl_context.yaml_file, "CONFIG")) {
+    ERROR(MSG_FILE_ERR, "CONFIG", zl_context.yaml_file);
     return -1;
   }
+
+  setenv("CONFIG", zl_context.yaml_file, 1);
+  INFO(MSG_YAML_FILE, zl_context.yaml_file);
 
   zl_context.config = *cfg;
 
@@ -224,12 +241,6 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
   to_lower(zl_context.ha_instance_id);
   INFO(MSG_HA_INST_ID, zl_context.ha_instance_id);
 
-  /* do we really need to change work dir? */
-  if (chdir(zl_context.instance_dir)) {
-    DEBUG("working directory not changed - %s\n", strerror(errno));
-    return -1;
-  }
-
   if (pthread_cond_init(&zl_context.event_cv, NULL) != 0) {
     DEBUG("pthread_cond_init() error - %s\n", strerror(errno));
     return -1;
@@ -240,32 +251,6 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
     return -1;
   }
 
-  setenv("INSTANCE_DIR", zl_context.instance_dir, 1);
-  INFO(MSG_INST_DIR, zl_context.instance_dir);
-
-  char workspace_dir[PATH_MAX] = {0};
-  snprintf (workspace_dir, sizeof(workspace_dir), "%s/workspace", zl_context.instance_dir);
-  if (mkdir(workspace_dir, 0775) != 0) {
-    if (errno != EEXIST) {
-      ERROR(MSG_WORKSPACE_ERROR, workspace_dir, strerror(errno));
-      return -1;
-    }
-  }
-
-  char stdin_file[PATH_MAX] = {0};
-  snprintf (stdin_file, sizeof(stdin_file), "%s/workspace/launcher.stdin.txt", zl_context.instance_dir);
-  FILE *stdin_fp = fopen(stdin_file, "w");
-  if (!stdin_fp) {
-    ERROR(MSG_STDIN_CREATE_ERROR, stdin_file, strerror(errno));
-    return -1;
-  }
-  fclose(stdin_fp);
-  stdin_fp = fopen(stdin_file, "r");
-  if (!stdin_fp) {
-    ERROR(MSG_STDIN_OPEN_ERROR, stdin_file, strerror(errno));
-    return -1;
-  }
-  stdin = stdin_fp;
   return 0;
 }
 
@@ -623,7 +608,7 @@ static int start_component(zl_comp_t *comp) {
   int fd_map[3];
   char bin[PATH_MAX];
 
-  snprintf(bin, sizeof(bin), "%s/bin/internal/start-component.sh", zl_context.root_dir);
+  snprintf(bin, sizeof(bin), "%s/bin/zwe internal start component", zl_context.root_dir);
   script = fopen(bin, "r");
   if (script == NULL) {
     DEBUG("script not open for %s - %s\n", comp->name, strerror(errno));
@@ -640,10 +625,9 @@ static int start_component(zl_comp_t *comp) {
   const char *c_envp[2] = {get_shareas_env(comp), NULL};
   const char *c_args[] = {
     bin,
-    "-c", zl_context.instance_dir,
-    "-r", zl_context.root_dir,
-    "-i", zl_context.ha_instance_id,
-    "-o", comp->name, 
+    "--config", zl_context.yaml_file,
+    "--ha-instance", zl_context.ha_instance_id,
+    "--component", comp->name, 
     NULL
   };
   comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_envp);
@@ -1068,9 +1052,8 @@ static void handle_get_component_line(void *data, const char *line) {
 
 static int get_component_list(char *buf, size_t buf_size) {
   char command[4*PATH_MAX];
-  snprintf (command, sizeof(command), "%s/bin/internal/get-launch-components.sh -c %s -r %s -i %s",
-            zl_context.root_dir, zl_context.instance_dir,
-            zl_context.root_dir, zl_context.ha_instance_id);
+  snprintf (command, sizeof(command), "%s/bin/zwe internal get-enabled-components --config %s --ha-instance %s",
+            zl_context.root_dir, zl_context.yaml_file, zl_context.ha_instance_id);
   DEBUG("about to get component list\n");
   char comp_list[COMP_LIST_SIZE] = {0};
   if (run_command(command, handle_get_component_line, (void*)comp_list)) {
@@ -1085,25 +1068,20 @@ static int get_component_list(char *buf, size_t buf_size) {
   return 0;
 }
 
-static void handle_get_root_dir_line(void *data, const char *line) {
-  char *root_dir = data;
-  snprintf(root_dir, PATH_MAX+1, "%s", line);
-  int len = strlen(root_dir);
-  for (int i = len - 1; i >= 0; i--) {
-    if (root_dir[i] != ' ' && root_dir[i] != '\n') {
-      break;
-    }
-    root_dir[i] = '\0';
-  }
-}
-
 static int get_root_dir(char *buf, size_t buf_size) {
-  char command[2*PATH_MAX];
-  snprintf (command, sizeof(command), ". %s/bin/internal/read-essential-vars.sh && echo $ROOT_DIR",
-    zl_context.instance_dir);
+  zl_yaml_config_t *zowe_yaml_config = &zl_context.yaml_config;
+  yaml_document_t *document = &zowe_yaml_config->document;
+  yaml_node_t *root = zowe_yaml_config->root;
+  const char *zowe_path[] = {"zowe", "runtimeDirectory"};
+  bool found = false;
   DEBUG("about to get root dir\n");
   char root_dir[PATH_MAX+1] = {0};
-  if (run_command(command, handle_get_root_dir_line, (void*)root_dir)) {
+  if (root) {
+    if (get_string_by_yaml_path(document, root, zowe_path, sizeof(zowe_path)/sizeof(zowe_path[0]), root_dir, sizeof(root_dir)) == 0) {
+      found = true;
+    }
+  }
+  if (!found) {
     ERROR(MSG_ROOT_DIR_ERR);
   }
   if (strlen(root_dir) == 0) {
@@ -1117,6 +1095,69 @@ static int get_root_dir(char *buf, size_t buf_size) {
   }
   setenv("ROOT_DIR", zl_context.root_dir, 1);
   INFO(MSG_ROOT_DIR, buf);
+
+  /* do we really need to change work dir? */
+  if (chdir(zl_context.root_dir)) {
+    DEBUG("working directory not changed - %s\n", strerror(errno));
+    return -1;
+  }
+
+  return 0;
+}
+
+static int get_workspace_dir(char *buf, size_t buf_size) {
+  zl_yaml_config_t *zowe_yaml_config = &zl_context.yaml_config;
+  yaml_document_t *document = &zowe_yaml_config->document;
+  yaml_node_t *root = zowe_yaml_config->root;
+  const char *zowe_path[] = {"zowe", "workspaceDirectory"};
+  bool found = false;
+  DEBUG("about to get workspace dir\n");
+  char workspace_dir[PATH_MAX+1] = {0};
+  if (root) {
+    if (get_string_by_yaml_path(document, root, zowe_path, sizeof(zowe_path)/sizeof(zowe_path[0]), workspace_dir, sizeof(workspace_dir)) == 0) {
+      found = true;
+    }
+  }
+  if (!found) {
+    ERROR(MSG_WKSP_DIR_ERR);
+  }
+  if (strlen(workspace_dir) == 0) {
+    ERROR(MSG_WKSP_DIR_EMPTY);
+    return -1;
+  }
+  snprintf(buf, buf_size, "%s", workspace_dir);
+  if (check_if_dir_exists(zl_context.workspace_dir, "WORKSPACE_DIR")) {
+    ERROR(MSG_DIR_ERR, "WORKSPACE_DIR", zl_context.workspace_dir);
+    return -1;
+  }
+  setenv("WORKSPACE_DIR", zl_context.workspace_dir, 1);
+  INFO(MSG_WKSP_DIR, buf);
+
+  // create folder if it doesn't exist
+  // FIXME: what's the proper permission?
+  if (mkdir(zl_context.workspace_dir, 0750) != 0) {
+    if (errno != EEXIST) {
+      ERROR(MSG_WORKSPACE_ERROR, workspace_dir, strerror(errno));
+      return -1;
+    }
+  }
+
+  // define stdin as a file in workspace directory
+  char stdin_file[PATH_MAX+1] = {0};
+  snprintf (stdin_file, sizeof(stdin_file), "%s/launcher.stdin.txt", zl_context.workspace_dir);
+  FILE *stdin_fp = fopen(stdin_file, "w");
+  if (!stdin_fp) {
+    ERROR(MSG_STDIN_CREATE_ERROR, stdin_file, strerror(errno));
+    return -1;
+  }
+  fclose(stdin_fp);
+  stdin_fp = fopen(stdin_file, "r");
+  if (!stdin_fp) {
+    ERROR(MSG_STDIN_OPEN_ERROR, stdin_file, strerror(errno));
+    return -1;
+  }
+  stdin = stdin_fp;
+
   return 0;
 }
 
@@ -1127,10 +1168,8 @@ static void print_line(void *data, const char *line) {
 static int prepare_instance() {
   char command[4*PATH_MAX];
   DEBUG("about to prepare Zowe instance\n");
-  const char *script = "bin/internal/prepare-instance.sh";
-  snprintf(command, sizeof(command), "%s/%s -c %s -r %s -i %s 2>&1",
-           zl_context.root_dir, script, zl_context.instance_dir,
-           zl_context.root_dir, zl_context.ha_instance_id);
+  snprintf(command, sizeof(command), "%s/bin/zwe internal start prepare --config %s --ha-instance %s 2>&1",
+           zl_context.root_dir, zl_context.yaml_file, zl_context.ha_instance_id);
   if (run_command(command, print_line, NULL)) {
     ERROR(MSG_INST_PREP_ERR);
     return -1;
@@ -1194,15 +1233,12 @@ static int read_zowe_yaml_config() {
   yaml_parser_t parser;
   yaml_document_t *document = &config->document;
   int rc;
-  char zowe_yaml_file[PATH_MAX];
-
-  snprintf(zowe_yaml_file, sizeof(zowe_yaml_file), "%s/zowe.yaml", zl_context.instance_dir); 
   
-  INFO(MSG_LOADING_YAML, zowe_yaml_file);
+  INFO(MSG_LOADING_YAML, zl_context.yaml_file);
 
-  fp = fopen(zowe_yaml_file, "r");
+  fp = fopen(zl_context.yaml_file, "r");
   if (!fp) {
-    ERROR(MSG_YAML_OPEN_ERR, zowe_yaml_file, strerror(errno));
+    ERROR(MSG_YAML_OPEN_ERR, zl_context.yaml_file, strerror(errno));
     return -1;
   }
   if (!yaml_parser_initialize(&parser)) {
@@ -1212,7 +1248,7 @@ static int read_zowe_yaml_config() {
   };
   yaml_parser_set_input(&parser, yaml_read_handler, fp);
   if (!yaml_parser_load(&parser, document)) {
-    ERROR(MSG_YAML_PARSE_ERR, zowe_yaml_file);
+    ERROR(MSG_YAML_PARSE_ERR, zl_context.yaml_file);
     yaml_parser_delete(&parser);
     fclose(fp);
     return -1;
@@ -1220,12 +1256,12 @@ static int read_zowe_yaml_config() {
   yaml_node_t *root = yaml_document_get_root_node(document);
   do {
     if (!root) {
-      DEBUG("failed to get root node in zowe.yaml %s\n", zowe_yaml_file);
+      DEBUG("failed to get root node in zowe.yaml %s\n", zl_context.yaml_file);
       rc = -1;
       break;
     }
     if (root->type != YAML_MAPPING_NODE) {
-      DEBUG("failed to find mapping node in zowe.yaml %s\n", zowe_yaml_file);
+      DEBUG("failed to find mapping node in zowe.yaml %s\n", zl_context.yaml_file);
       rc = -1;
       break;
     }
@@ -1250,10 +1286,6 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
   
-  if (get_root_dir(zl_context.root_dir, sizeof(zl_context.root_dir))) {
-    exit(EXIT_FAILURE);
-  }
-  
   if (setup_signal_handlers()) {
     ERROR(MSG_SIGNAL_ERR);
     exit(EXIT_FAILURE);
@@ -1261,6 +1293,14 @@ int main(int argc, char **argv) {
 
   if (read_zowe_yaml_config()) {
     WARN (MSG_USE_DEFAULTS);
+  }
+  
+  if (get_root_dir(zl_context.root_dir, sizeof(zl_context.root_dir))) {
+    exit(EXIT_FAILURE);
+  }
+
+  if (get_workspace_dir(zl_context.workspace_dir, sizeof(zl_context.workspace_dir))) {
+    exit(EXIT_FAILURE);
   }
   
   char comp_buf[COMP_LIST_SIZE];

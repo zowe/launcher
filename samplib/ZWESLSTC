@@ -14,8 +14,9 @@
 //* ZOWE LAUNCHER PROCEDURE                                          */
 //*                                                                  */
 //* NOTE: this procedure is a template, you will need to modify      */
-//*       #zoweyaml variable to point to your                        */
-//*       Zowe YAML configuration file                               */
+//*       #zowe_yaml variable to point to your Zowe YAML config      */
+//*       file and #workspace_dir variable to your workspace         */
+//*       directory.                                                 */
 //*                                                                  */
 //* Check https://docs.zowe.org for more details.                    */
 //*                                                                  */
@@ -29,5 +30,6 @@
 //CEEOPTS  DD  *
 POSIX(ON)
 //STDENV   DD  *
-CONFIG=#zoweyaml
+CONFIG=#zowe_yaml
+WORKSPACE_DIR=#workspace_dir
 /*

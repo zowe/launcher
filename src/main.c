@@ -608,7 +608,7 @@ static int start_component(zl_comp_t *comp) {
   int fd_map[3];
   char bin[PATH_MAX];
 
-  snprintf(bin, sizeof(bin), "%s/bin/zwe internal start component", zl_context.root_dir);
+  snprintf(bin, sizeof(bin), "%s/bin/zwe", zl_context.root_dir);
   script = fopen(bin, "r");
   if (script == NULL) {
     DEBUG("script not open for %s - %s\n", comp->name, strerror(errno));
@@ -625,6 +625,9 @@ static int start_component(zl_comp_t *comp) {
   const char *c_envp[2] = {get_shareas_env(comp), NULL};
   const char *c_args[] = {
     bin,
+    "internal",
+    "start",
+    "component",
     "--config", zl_context.yaml_file,
     "--ha-instance", zl_context.ha_instance_id,
     "--component", comp->name, 

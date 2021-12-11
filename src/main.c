@@ -1055,7 +1055,7 @@ static void handle_get_component_line(void *data, const char *line) {
 
 static int get_component_list(char *buf, size_t buf_size) {
   char command[4*PATH_MAX];
-  snprintf (command, sizeof(command), "%s/bin/zwe internal get-enabled-components --config %s --ha-instance %s",
+  snprintf (command, sizeof(command), "%s/bin/zwe internal get-launch-components --config %s --ha-instance %s",
             zl_context.root_dir, zl_context.yaml_file, zl_context.ha_instance_id);
   DEBUG("about to get component list\n");
   char comp_list[COMP_LIST_SIZE] = {0};

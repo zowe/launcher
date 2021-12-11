@@ -20,7 +20,7 @@
 //* Check https://docs.zowe.org for more details.                    */
 //*                                                                  */
 //********************************************************************/
-//ZWELNCH  EXEC PGM=ZWELNCH,REGION=&RGN,LIMIT=NOLIMIT,
+//ZWELNCH  EXEC PGM=ZWELNCH,REGION=&RGN,TIME=NOLIMIT,
 // PARM='ENVAR(_CEE_ENVFILE=DD:STDENV)/&HAINST.'
 //STEPLIB  DD   DSNAME=&SYSUID..LOADLIB,DISP=SHR
 //SYSIN    DD   DUMMY

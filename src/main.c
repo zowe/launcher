@@ -1126,12 +1126,6 @@ static int get_workspace_dir(char *buf, size_t buf_size) {
     return -1;
   }
   snprintf(buf, buf_size, "%s", workspace_dir);
-  if (check_if_dir_exists(zl_context.workspace_dir, "WORKSPACE_DIR")) {
-    ERROR(MSG_DIR_ERR, "WORKSPACE_DIR", zl_context.workspace_dir);
-    return -1;
-  }
-  setenv("WORKSPACE_DIR", zl_context.workspace_dir, 1);
-  INFO(MSG_WKSP_DIR, buf);
 
   // create folder if it doesn't exist
   // FIXME: what's the proper permission?
@@ -1141,6 +1135,14 @@ static int get_workspace_dir(char *buf, size_t buf_size) {
       return -1;
     }
   }
+
+  // we really created
+  if (check_if_dir_exists(zl_context.workspace_dir, "WORKSPACE_DIR")) {
+    ERROR(MSG_DIR_ERR, "WORKSPACE_DIR", zl_context.workspace_dir);
+    return -1;
+  }
+  setenv("WORKSPACE_DIR", zl_context.workspace_dir, 1);
+  INFO(MSG_WKSP_DIR, buf);
 
   // define stdin as a file in workspace directory
   char stdin_file[PATH_MAX+1] = {0};

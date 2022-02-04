@@ -436,7 +436,7 @@ static void init_component_shareas(zl_comp_t *comp) {
   } else if (!strcmp(share_as, "must")) {
     comp->share_as = ZL_COMP_AS_SHARE_MUST;
   } else {
-    comp->share_as = ZL_COMP_AS_SHARE_NO;
+    comp->share_as = ZL_COMP_AS_SHARE_YES;
   }
 }
 

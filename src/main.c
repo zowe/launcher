@@ -218,6 +218,24 @@ static int check_if_file_exists(const char *file, const char *name) {
   return 0;
 }
 
+static int mkdir_all(const char *path, mode_t mode) {
+  int path_len = strlen(path);
+  int curr_path_len = 0;
+  do {
+    const char *slash = strchr(path + curr_path_len + 1, '/');
+    char curr_path[PATH_MAX] = {0};
+    curr_path_len = slash ? (int)(slash - path) : path_len;
+    snprintf(curr_path, sizeof(curr_path), "%.*s", curr_path_len, path);
+    if (mkdir(curr_path, mode) != 0) {
+      if (errno != EEXIST) {
+        ERROR(MSG_MKDIR_ERR, curr_path, strerror(errno));
+        return -1;
+      }
+    }
+  } while (curr_path_len < path_len - 1);
+  return 0;
+}
+
 static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
 
   if (get_env("CONFIG", zl_context.yaml_file, sizeof(zl_context.yaml_file))) {
@@ -1132,11 +1150,9 @@ static int get_workspace_dir(char *buf, size_t buf_size) {
 
   // create folder if it doesn't exist
   // FIXME: what's the proper permission?
-  if (mkdir(zl_context.workspace_dir, 0750) != 0) {
-    if (errno != EEXIST) {
-      ERROR(MSG_WORKSPACE_ERROR, workspace_dir, strerror(errno));
-      return -1;
-    }
+  if (mkdir_all(zl_context.workspace_dir, 0750) != 0) {
+    ERROR(MSG_WORKSPACE_ERROR, workspace_dir);
+    return -1;
   }
 
   // we really created

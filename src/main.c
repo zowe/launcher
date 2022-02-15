@@ -1113,6 +1113,7 @@ static int process_root_dir() {
     return -1;
   }
   setenv("ROOT_DIR", zl_context.root_dir, 1);
+  INFO(MSG_ROOT_DIR, zl_context.root_dir);
 
   /* do we really need to change work dir? */
   if (chdir(zl_context.root_dir)) {
@@ -1156,7 +1157,7 @@ static int process_workspace_dir() {
     return -1;
   }
   setenv("WORKSPACE_DIR", zl_context.workspace_dir, 1);
-  INFO(MSG_WKSP_DIR, buf);
+  INFO(MSG_WKSP_DIR, zl_context.workspace_dir);
 
   // define stdin as a file in workspace directory
   char stdin_file[PATH_MAX+1] = {0};

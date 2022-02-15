@@ -1089,33 +1089,30 @@ static int get_component_list(char *buf, size_t buf_size) {
   return 0;
 }
 
-static int process_root_dir(char *buf, size_t buf_size) {
+static int process_root_dir() {
   zl_yaml_config_t *zowe_yaml_config = &zl_context.yaml_config;
   yaml_document_t *document = &zowe_yaml_config->document;
   yaml_node_t *root = zowe_yaml_config->root;
   const char *zowe_path[] = {"zowe", "runtimeDirectory"};
   bool found = false;
   DEBUG("about to get root dir\n");
-  char root_dir[PATH_MAX+1] = {0};
   if (root) {
-    if (get_string_by_yaml_path(document, root, zowe_path, sizeof(zowe_path)/sizeof(zowe_path[0]), root_dir, sizeof(root_dir)) == 0) {
+    if (get_string_by_yaml_path(document, root, zowe_path, sizeof(zowe_path)/sizeof(zowe_path[0]), zl_context.root_dir, sizeof(zl_context.root_dir)) == 0) {
       found = true;
     }
   }
   if (!found) {
     ERROR(MSG_ROOT_DIR_ERR);
   }
-  if (strlen(root_dir) == 0) {
+  if (strlen(zl_context.root_dir) == 0) {
     ERROR(MSG_ROOT_DIR_EMPTY);
     return -1;
   }
-  snprintf(buf, buf_size, "%s", root_dir);
   if (check_if_dir_exists(zl_context.root_dir, "ROOT_DIR")) {
     ERROR(MSG_DIR_ERR, "ROOT_DIR", zl_context.root_dir);
     return -1;
   }
   setenv("ROOT_DIR", zl_context.root_dir, 1);
-  INFO(MSG_ROOT_DIR, buf);
 
   /* do we really need to change work dir? */
   if (chdir(zl_context.root_dir)) {
@@ -1126,27 +1123,25 @@ static int process_root_dir(char *buf, size_t buf_size) {
   return 0;
 }
 
-static int process_workspace_dir(char *buf, size_t buf_size) {
+static int process_workspace_dir() {
   zl_yaml_config_t *zowe_yaml_config = &zl_context.yaml_config;
   yaml_document_t *document = &zowe_yaml_config->document;
   yaml_node_t *root = zowe_yaml_config->root;
   const char *zowe_path[] = {"zowe", "workspaceDirectory"};
   bool found = false;
   DEBUG("about to get workspace dir\n");
-  char workspace_dir[PATH_MAX+1] = {0};
   if (root) {
-    if (get_string_by_yaml_path(document, root, zowe_path, sizeof(zowe_path)/sizeof(zowe_path[0]), workspace_dir, sizeof(workspace_dir)) == 0) {
+    if (get_string_by_yaml_path(document, root, zowe_path, sizeof(zowe_path)/sizeof(zowe_path[0]), zl_context.workspace_dir, sizeof(zl_context.workspace_dir)) == 0) {
       found = true;
     }
   }
   if (!found) {
     ERROR(MSG_WKSP_DIR_ERR);
   }
-  if (strlen(workspace_dir) == 0) {
+  if (strlen(zl_context.workspace_dir) == 0) {
     ERROR(MSG_WKSP_DIR_EMPTY);
     return -1;
   }
-  snprintf(buf, buf_size, "%s", workspace_dir);
 
   // create folder if it doesn't exist
   // FIXME: what's the proper permission?
@@ -1316,11 +1311,11 @@ int main(int argc, char **argv) {
     WARN (MSG_USE_DEFAULTS);
   }
   
-  if (process_root_dir(zl_context.root_dir, sizeof(zl_context.root_dir))) {
+  if (process_root_dir()) {
     exit(EXIT_FAILURE);
   }
 
-  if (process_workspace_dir(zl_context.workspace_dir, sizeof(zl_context.workspace_dir))) {
+  if (process_workspace_dir()) {
     exit(EXIT_FAILURE);
   }
   

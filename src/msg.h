@@ -36,7 +36,7 @@
 #define MSG_LOADING_YAML        MSG_PREFIX "0020I" " loading '%s'\n"
 #define MSG_LAUNCHER_START      MSG_PREFIX "0021I" " Zowe Launcher starting\n"
 #define MSG_LAUNCHER_STOPPED    MSG_PREFIX "0022I" " Zowe Launcher stopped\n"
-#define MSG_INST_DIR            MSG_PREFIX "0023I" " instance directory is \'%s\'\n"
+#define MSG_YAML_FILE           MSG_PREFIX "0023I" " Zowe YAML config file is \'%s\'\n"
 #define MSG_HA_INST_ID          MSG_PREFIX "0024I" " HA_INSTANCE_ID is '%s'\n"
 #define MSG_RESTART_INTRVL      MSG_PREFIX "0025I" " restart_intervals for component '%s'= %s\n"
 #define MSG_ENV_NOT_FOUND       MSG_PREFIX "0026E" " %s env variable not found\n"
@@ -70,7 +70,12 @@
 #define MSG_COMP_NOT_FOUND      MSG_PREFIX "0054W" " component %s not found\n"
 #define MSG_STDIN_CREATE_ERROR  MSG_PREFIX "0055E" " failed to create file for stdin(%s) - %s\n"
 #define MSG_STDIN_OPEN_ERROR    MSG_PREFIX "0056E" " failed to open file for stdin(%s) - %s\n"
-#define MSG_WORKSPACE_ERROR     MSG_PREFIX "0057E" " failed to create workspace dir '%s' - %s\n"
+#define MSG_WORKSPACE_ERROR     MSG_PREFIX "0057E" " failed to create workspace dir '%s'\n"
+#define MSG_WKSP_DIR            MSG_PREFIX "0058I" " WORKSPACE_DIR is '%s'\n"
+#define MSG_WKSP_DIR_ERR        MSG_PREFIX "0059E" " failed to get WORKSPACE_DIR dir\n"
+#define MSG_WKSP_DIR_EMPTY      MSG_PREFIX "0060E" " WORKSPACE_DIR is empty string\n"
+#define MSG_FILE_ERR            MSG_PREFIX "0061E" " failed to find %s='%s', check if the file exists\n"
+#define MSG_MKDIR_ERR           MSG_PREFIX "0062E" " failed to create dir '%s' - %s\n"
 
 #endif // MSG_H
 

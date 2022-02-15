@@ -1089,7 +1089,7 @@ static int get_component_list(char *buf, size_t buf_size) {
   return 0;
 }
 
-static int get_root_dir(char *buf, size_t buf_size) {
+static int process_root_dir(char *buf, size_t buf_size) {
   zl_yaml_config_t *zowe_yaml_config = &zl_context.yaml_config;
   yaml_document_t *document = &zowe_yaml_config->document;
   yaml_node_t *root = zowe_yaml_config->root;
@@ -1126,7 +1126,7 @@ static int get_root_dir(char *buf, size_t buf_size) {
   return 0;
 }
 
-static int get_workspace_dir(char *buf, size_t buf_size) {
+static int process_workspace_dir(char *buf, size_t buf_size) {
   zl_yaml_config_t *zowe_yaml_config = &zl_context.yaml_config;
   yaml_document_t *document = &zowe_yaml_config->document;
   yaml_node_t *root = zowe_yaml_config->root;
@@ -1316,11 +1316,11 @@ int main(int argc, char **argv) {
     WARN (MSG_USE_DEFAULTS);
   }
   
-  if (get_root_dir(zl_context.root_dir, sizeof(zl_context.root_dir))) {
+  if (process_root_dir(zl_context.root_dir, sizeof(zl_context.root_dir))) {
     exit(EXIT_FAILURE);
   }
 
-  if (get_workspace_dir(zl_context.workspace_dir, sizeof(zl_context.workspace_dir))) {
+  if (process_workspace_dir(zl_context.workspace_dir, sizeof(zl_context.workspace_dir))) {
     exit(EXIT_FAILURE);
   }
   

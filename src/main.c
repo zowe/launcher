@@ -54,6 +54,9 @@ extern char ** environ;
 #define PATH_MAX _POSIX_PATH_MAX
 #endif
 
+#ifndef NAME_MAX
+#define NAME_MAX _POSIX_NAME_MAX
+#endif
 // Progressive restart internals in seconds
 static int restart_intervals_default[] = {1, 1, 1, 5, 5, 10, 20, 60, 120, 240};
 
@@ -611,14 +614,32 @@ static int start_component(zl_comp_t *comp) {
   };
 
   FILE *script = NULL;
-  int c_stdout[2];
-  if (pipe(c_stdout)) {
-    DEBUG("pipe() failed for %s - %s\n", comp->name, strerror(errno));
-    return -1;
+  int c_stdout[2] = {-1};
+  char fifoName[PATH_MAX + 1] = {'\0'};
+  snprintf(fifoName, sizeof(fifoName), "%s/%s-pipe", zl_context.workspace_dir, comp->name, comp->name);
+  printf("fifoName=%s\n",fifoName);
+  if ((mkfifo(fifoName, S_IRWXU | S_IRWXG)) != 0) {
+    printf("Unable to create a fifo for %s - %s\n", comp->name, strerror(errno));
+    return -1;                     
+  }
+
+  if ((c_stdout[0] = open(fifoName, O_NONBLOCK | O_RDONLY)) == -1) {
+    printf("open() failed for %s - %s\n", comp->name, strerror(errno));
+    return -1;    
+  }
+
+  if ((c_stdout[1] = open(fifoName, O_NONBLOCK | O_WRONLY)) == -1) {
+    printf("open() failed for %s - %s\n", comp->name, strerror(errno));
+    return -1;    
   }
 
   if (fcntl(c_stdout[0], F_SETFL, O_NONBLOCK)) {
-    DEBUG("fcntl() failed for %s - %s\n", comp->name, strerror(errno));
+    printf("fcntl() failed for %s - %s\n", comp->name, strerror(errno));
+    return -1;
+  }
+
+  if (fcntl(c_stdout[1], F_SETFL, O_NONBLOCK)) {
+    printf("fcntl() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;
   }
 

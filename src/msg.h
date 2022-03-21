@@ -34,7 +34,7 @@
 #define MSG_INST_PREPARED       MSG_PREFIX "0018I" " Zowe instance prepared successfully\n"
 #define MSG_LAUNCHER_STOPING    MSG_PREFIX "0019I" " Zowe Launcher stopping\n"
 #define MSG_LOADING_YAML        MSG_PREFIX "0020I" " loading '%s'\n"
-#define MSG_LAUNCHER_START      MSG_PREFIX "0021I" " Zowe Launcher starting\n"
+#define MSG_LAUNCHER_START      MSG_PREFIX "0021I" " Zowe Launcher starting Aditya Test\n"
 #define MSG_LAUNCHER_STOPPED    MSG_PREFIX "0022I" " Zowe Launcher stopped\n"
 #define MSG_YAML_FILE           MSG_PREFIX "0023I" " Zowe YAML config file is \'%s\'\n"
 #define MSG_HA_INST_ID          MSG_PREFIX "0024I" " HA_INSTANCE_ID is '%s'\n"

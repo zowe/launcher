@@ -622,7 +622,10 @@ static int start_component(zl_comp_t *comp) {
     printf("Unable to create a fifo for %s - %s\n", comp->name, strerror(errno));
     return -1;                     
   }
-
+  char sysCommand[PATH_MAX + 1] = {'\0'};
+  snprintf(sysCommand, sizeof(sysCommand), "chtag -tc IBM-1047 %s", fifoName);
+  printf("sysCommand=%s\n",sysCommand);
+  system (sysCommand);
   if ((c_stdout[0] = open(fifoName, O_NONBLOCK | O_RDONLY)) == -1) {
     printf("open() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;    

@@ -616,7 +616,7 @@ static int start_component(zl_comp_t *comp) {
   FILE *script = NULL;
   int c_stdout[2] = {-1};
   char fifoName[PATH_MAX + 1] = {'\0'};
-  snprintf(fifoName, sizeof(fifoName), "%s/%s-pipe", zl_context.workspace_dir, comp->name, comp->name);
+  snprintf(fifoName, sizeof(fifoName), "%s/%s-pipe", zl_context.workspace_dir, comp->name);
   printf("fifoName=%s\n",fifoName);
   if ((mkfifo(fifoName, S_IRWXU | S_IRWXG)) != 0) {
     printf("Unable to create a fifo for %s - %s\n", comp->name, strerror(errno));

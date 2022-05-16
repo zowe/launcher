@@ -21,13 +21,11 @@
 //*                                                                  */
 //********************************************************************/
 //ZWELNCH  EXEC PGM=ZWELNCH,REGION=&RGN,TIME=NOLIMIT,
-// PARM='ENVAR(_CEE_ENVFILE=DD:STDENV)/&HAINST.'
+// PARM='ENVAR(_CEE_ENVFILE=DD:STDENV),POSIX(ON)/&HAINST.'
 //STEPLIB  DD   DSNAME=&SYSUID..LOADLIB,DISP=SHR
 //SYSIN    DD   DUMMY
 //SYSPRINT DD   SYSOUT=*,LRECL=1600
 //SYSERR   DD   SYSOUT=*
-//CEEOPTS  DD  *
-POSIX(ON)
 //STDENV   DD  *
 CONFIG=#zowe_yaml
 /*

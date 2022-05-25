@@ -20,4 +20,4 @@ build:
   commitHash: "{{build.commitHash}}"
   timestamp: {{build.timestamp}}
 schemas:
-  configs: "trivial-schema.json"
+  configs: "schemas/trivial-schema.json"

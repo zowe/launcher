@@ -1,0 +1,24 @@
+name: Build and Test Workflow
+on:
+  push:
+    branches:
+      - v2.x/staging 
+  pull_request:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+    inputs:
+      PERFORM_RELEASE:
+        description: '[Release] perform release'
+        required: false
+        default: 'false'
+  
+
+jobs:
+  check-permission:
+    runs-on: ubuntu-latest
+    steps:
+      # this action will fail the whole workflow if permission check fails
+      - name: check permission
+        uses: zowe-actions/shared-actions/permission-check@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -50,7 +50,8 @@ jobs:
               -e "s|{{build\.number}}|${{ github.run_number }}|g" \
               -e "s|{{build\.commitHash}}|${COMMIT_HASH}|g" \
               -e "s|{{build\.timestamp}}|${CURRENT_TIME}|g" \
-              manifest.yaml > manifest.yaml
+              manifest.yaml > manifest.yaml.tmp
+          mv manifest.yaml.tmp manifest.yaml
           
           echo "Current manifest.yaml is:"
           cat manifest.yaml

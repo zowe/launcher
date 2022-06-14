@@ -34,7 +34,7 @@ jobs:
       - name: '[Prep 2] Setup jFrog CLI'
         uses: jfrog/setup-jfrog-cli@v2
         env:
-          JF_ARTIFACTORY_1: ${{ secrets.JF_ARTIFACTORY_TOKEN }}
+          JF_ENV_1: ${{ secrets.JF_ARTIFACTORY_TOKEN }}
           
       - name: 'convert manifest'
         run: |
@@ -50,7 +50,8 @@ jobs:
               -e "s|{{build\.number}}|${{ github.run_number }}|g" \
               -e "s|{{build\.commitHash}}|${COMMIT_HASH}|g" \
               -e "s|{{build\.timestamp}}|${CURRENT_TIME}|g" \
-              manifest.yaml > manifest.yaml
+              manifest.yaml > manifest.yaml.tmp
+          mv manifest.yaml.tmp manifest.yaml
           
           echo "Current manifest.yaml is:"
           cat manifest.yaml

@@ -707,17 +707,20 @@ static int stop_component(zl_comp_t *comp) {
         comp->name, comp->pid);
 
   pid_t pgid = -comp->pid;
-  if (!kill(pgid, SIGTERM)) {
+  kill(pgid, SIGTERM);
 
-    if (pthread_join(comp->comm_thid, NULL) != 0) {
-      DEBUG("pthread_join() failed for %s comm thread - %s\n",
-            comp->name, strerror(errno));
-      return -1;
-    }
-
-  } else {
-    DEBUG("kill() failed for %s - %s\n", comp->name, strerror(errno));
-    return -1;
+  int wait_time = 0;
+  int max_wait_time = 20 * 1000;
+  while (comp->pid > 0 && wait_time < max_wait_time) {
+    usleep(300 * 1000);
+    wait_time += 300;
+  }
+  
+  if (comp->pid > 0) {
+    DEBUG("Component %s(%d) reached timeout\n", comp->name, comp->pid);
+    DEBUG("Component %s(%d) will be terminated using SIGKILL\n", comp->name, comp->pid);
+    pid_t pgid = -comp->pid;
+    kill(pgid, SIGKILL);
   }
 
   comp->pid = -1;
@@ -730,19 +733,41 @@ static int stop_components(void) {
 
   INFO(MSG_STOPING_COMPS);
 
-  int rc = 0;
-
   for (size_t i = 0; i < zl_context.child_count; i++) {
-    if (stop_component(&zl_context.children[i])) {
-      rc = -1;
-    }
+      pid_t pgid = -zl_context.children[i].pid;
+      zl_comp_t *comp = &zl_context.children[i];
+      comp->clean_stop = true;
+      kill(pgid, SIGTERM);
   }
 
-  if (rc) {
-    WARN(MSG_NOT_ALL_STOPPED);
-  } else {
-    INFO(MSG_COMPS_STOPPED);
+  int wait_time = 0;
+  int max_wait_time = 20 * 1000;
+  bool all_exit = false;
+  while (!all_exit  && wait_time < max_wait_time) {
+    all_exit = true;
+    for (size_t i = 0; i < zl_context.child_count; i++) {
+      if (zl_context.children[i].pid > 0) {
+        all_exit = false;
+      }
+    }
+    usleep(300000);
+    wait_time += 300;
   }
+  
+  for (size_t i = 0; i < zl_context.child_count; i++) {
+    if (zl_context.children[i].pid > 0) {
+      pid_t pgid = -zl_context.children[i].pid;
+      DEBUG("Component %s(%d) reached timeout\n", 
+            zl_context.children[i].name, zl_context.children[i].pid);
+      DEBUG("Component %s(%d) will be terminated using SIGKILL\n", 
+            zl_context.children[i].name, zl_context.children[i].pid);
+      kill(pgid, SIGKILL);
+    }  
+    zl_context.children[i].pid = -1;
+    INFO(MSG_COMP_STOPPED, zl_context.children[i].name);
+  }
+
+  INFO(MSG_COMPS_STOPPED);
 
   return 0;
 }

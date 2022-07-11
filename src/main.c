@@ -48,6 +48,10 @@ extern char ** environ;
 
 #define MIN_UPTIME_SECS 90
 
+#define SHUTDOWN_GRACEFUL_PERIOD (20 * 1000)
+
+#define SHUTDOWN_POLLING_INTERVAL 300
+
 #define COMP_LIST_SIZE 1024
 
 #ifndef PATH_MAX
@@ -552,6 +556,8 @@ static void *handle_comp_comm(void *args) {
         } else {
           ERROR(MSG_MAX_RETRIES_REACHED, comp->name);
         }
+      }else{
+        INFO(MSG_COMP_STOPPED, comp->name);
       }
 
       break;
@@ -707,20 +713,29 @@ static int stop_component(zl_comp_t *comp) {
         comp->name, comp->pid);
 
   pid_t pgid = -comp->pid;
-  kill(pgid, SIGTERM);
+  if (!kill(pgid, SIGTERM)) {
+  } else {
+    DEBUG("kill() failed for %s - %s\n", comp->name, strerror(errno));
+    return -1;
+  }
 
   int wait_time = 0;
-  int max_wait_time = 20 * 1000;
+  int max_wait_time = SHUTDOWN_GRACEFUL_PERIOD;
   while (comp->pid > 0 && wait_time < max_wait_time) {
-    usleep(300 * 1000);
-    wait_time += 300;
+    usleep(SHUTDOWN_POLLING_INTERVAL * 1000);
+    wait_time += SHUTDOWN_POLLING_INTERVAL;
   }
   
   if (comp->pid > 0) {
-    DEBUG("Component %s(%d) reached timeout\n", comp->name, comp->pid);
-    DEBUG("Component %s(%d) will be terminated using SIGKILL\n", comp->name, comp->pid);
+    DEBUG("Component %s(%d) is not shutting down within %d seconds\n", 
+          comp->name, comp->pid, SHUTDOWN_GRACEFUL_PERIOD);
+    WARN(MSG_NOT_SIGTERM_STOPPED, comp->name, comp->pid);
     pid_t pgid = -comp->pid;
-    kill(pgid, SIGKILL);
+    if (!kill(pgid, SIGKILL)) {
+    } else {
+      DEBUG("kill() failed for %s - %s\n", comp->name, strerror(errno));
+      return -1;
+    }
   }
 
   comp->pid = -1;
@@ -733,42 +748,59 @@ static int stop_components(void) {
 
   INFO(MSG_STOPING_COMPS);
 
+  int rc = 0;
+
   for (size_t i = 0; i < zl_context.child_count; i++) {
-      pid_t pgid = -zl_context.children[i].pid;
-      zl_comp_t *comp = &zl_context.children[i];
-      comp->clean_stop = true;
-      kill(pgid, SIGTERM);
+    zl_comp_t *comp = &zl_context.children[i];
+    comp->clean_stop = true;
+    if (comp->pid != -1) {
+      DEBUG("about to send SIGTERM to component %s(%d)\n", comp->name, comp->pid); 
+      pid_t pgid = -comp->pid;
+      if (!kill(pgid, SIGTERM)) {
+      } else {
+        DEBUG("kill() failed for %s - %s\n", comp->name, strerror(errno));
+        return -1;
+      }
+    }
   }
 
   int wait_time = 0;
-  int max_wait_time = 20 * 1000;
+  int max_wait_time = SHUTDOWN_GRACEFUL_PERIOD;
   bool all_exit = false;
   while (!all_exit  && wait_time < max_wait_time) {
     all_exit = true;
     for (size_t i = 0; i < zl_context.child_count; i++) {
-      if (zl_context.children[i].pid > 0) {
+      zl_comp_t *comptout = &zl_context.children[i];
+      if (comptout->pid > 0) {
         all_exit = false;
       }
     }
     usleep(300000);
-    wait_time += 300;
+    wait_time += SHUTDOWN_POLLING_INTERVAL;
   }
   
   for (size_t i = 0; i < zl_context.child_count; i++) {
-    if (zl_context.children[i].pid > 0) {
-      pid_t pgid = -zl_context.children[i].pid;
-      DEBUG("Component %s(%d) reached timeout\n", 
-            zl_context.children[i].name, zl_context.children[i].pid);
-      DEBUG("Component %s(%d) will be terminated using SIGKILL\n", 
-            zl_context.children[i].name, zl_context.children[i].pid);
-      kill(pgid, SIGKILL);
+    zl_comp_t *compkill = &zl_context.children[i];
+    if (compkill->pid > 0) {
+      pid_t pgid = -compkill->pid;
+      DEBUG("Component %s(%d) is not shutting down within %d seconds\n", 
+            compkill->name, compkill->pid, SHUTDOWN_GRACEFUL_PERIOD);
+      WARN(MSG_NOT_SIGTERM_STOPPED, compkill->name, compkill->pid);
+      if (!kill(pgid, SIGKILL)) {
+      } else {
+        DEBUG("kill() failed for %s - %s\n", compkill->name, strerror(errno));
+        return -1;
+      }
+      rc = -1;
     }  
-    zl_context.children[i].pid = -1;
-    INFO(MSG_COMP_STOPPED, zl_context.children[i].name);
   }
 
-  INFO(MSG_COMPS_STOPPED);
-
+  if (rc) {
+    WARN(MSG_NOT_ALL_STOPPED);
+  } else {
+    INFO(MSG_COMPS_STOPPED);
+  }
+  
   return 0;
 }
 

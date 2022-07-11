@@ -713,27 +713,24 @@ static int stop_component(zl_comp_t *comp) {
         comp->name, comp->pid);
 
   pid_t pgid = -comp->pid;
-  if (!kill(pgid, SIGTERM)) {
-  } else {
-    DEBUG("kill() failed for %s - %s\n", comp->name, strerror(errno));
+  if (kill(pgid, SIGTERM)) {
+    ERROR("kill() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;
   }
 
   int wait_time = 0;
-  int max_wait_time = SHUTDOWN_GRACEFUL_PERIOD;
-  while (comp->pid > 0 && wait_time < max_wait_time) {
+  while (comp->pid > 0 && wait_time < SHUTDOWN_GRACEFUL_PERIOD) {
     usleep(SHUTDOWN_POLLING_INTERVAL * 1000);
     wait_time += SHUTDOWN_POLLING_INTERVAL;
   }
   
   if (comp->pid > 0) {
-    DEBUG("Component %s(%d) is not shutting down within %d seconds\n", 
+    DEBUG("Component %s(%d) is not shutting down within %d milliseconds\n", 
           comp->name, comp->pid, SHUTDOWN_GRACEFUL_PERIOD);
     WARN(MSG_NOT_SIGTERM_STOPPED, comp->name, comp->pid);
     pid_t pgid = -comp->pid;
-    if (!kill(pgid, SIGKILL)) {
-    } else {
-      DEBUG("kill() failed for %s - %s\n", comp->name, strerror(errno));
+    if (kill(pgid, SIGKILL)) {
+      ERROR("kill() failed for %s - %s\n", comp->name, strerror(errno));
       return -1;
     }
   }
@@ -756,18 +753,15 @@ static int stop_components(void) {
     if (comp->pid != -1) {
       DEBUG("about to send SIGTERM to component %s(%d)\n", comp->name, comp->pid); 
       pid_t pgid = -comp->pid;
-      if (!kill(pgid, SIGTERM)) {
-      } else {
-        DEBUG("kill() failed for %s - %s\n", comp->name, strerror(errno));
-        return -1;
+      if (kill(pgid, SIGTERM)) {
+        WARN("kill() failed for %s - %s\n", comp->name, strerror(errno));
       }
     }
   }
 
   int wait_time = 0;
-  int max_wait_time = SHUTDOWN_GRACEFUL_PERIOD;
   bool all_exit = false;
-  while (!all_exit  && wait_time < max_wait_time) {
+  while (!all_exit  && wait_time < SHUTDOWN_GRACEFUL_PERIOD) {
     all_exit = true;
     for (size_t i = 0; i < zl_context.child_count; i++) {
       zl_comp_t *comptout = &zl_context.children[i];
@@ -775,7 +769,7 @@ static int stop_components(void) {
         all_exit = false;
       }
     }
-    usleep(300000);
+    usleep(SHUTDOWN_POLLING_INTERVAL * 1000);
     wait_time += SHUTDOWN_POLLING_INTERVAL;
   }
   
@@ -783,13 +777,11 @@ static int stop_components(void) {
     zl_comp_t *compkill = &zl_context.children[i];
     if (compkill->pid > 0) {
       pid_t pgid = -compkill->pid;
-      DEBUG("Component %s(%d) is not shutting down within %d seconds\n", 
+      DEBUG("Component %s(%d) is not shutting down within %d milliseconds\n", 
             compkill->name, compkill->pid, SHUTDOWN_GRACEFUL_PERIOD);
       WARN(MSG_NOT_SIGTERM_STOPPED, compkill->name, compkill->pid);
-      if (!kill(pgid, SIGKILL)) {
-      } else {
-        DEBUG("kill() failed for %s - %s\n", compkill->name, strerror(errno));
-        return -1;
+      if (kill(pgid, SIGKILL)) {
+        WARN("kill() failed for %s - %s\n", compkill->name, strerror(errno));
       }
       rc = -1;
     }  

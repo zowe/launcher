@@ -226,11 +226,14 @@ static int mkdir_all(const char *path, mode_t mode) {
     char curr_path[PATH_MAX] = {0};
     curr_path_len = slash ? (int)(slash - path) : path_len;
     snprintf(curr_path, sizeof(curr_path), "%.*s", curr_path_len, path);
+    struct stat st = {0};
+    if (0 == stat(curr_path, &st)) {
+      DEBUG("mkdir_all: path '%s' already exists\n", curr_path);
+      continue;
+    }
     if (mkdir(curr_path, mode) != 0) {
-      if (errno != EEXIST) {
-        ERROR(MSG_MKDIR_ERR, curr_path, strerror(errno));
-        return -1;
-      }
+      ERROR(MSG_MKDIR_ERR, curr_path, strerror(errno));
+      return -1;
     }
   } while (curr_path_len < path_len - 1);
   return 0;

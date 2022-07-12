@@ -48,6 +48,10 @@ extern char ** environ;
 
 #define MIN_UPTIME_SECS 90
 
+#define SHUTDOWN_GRACEFUL_PERIOD (20 * 1000)
+
+#define SHUTDOWN_POLLING_INTERVAL 300
+
 #define COMP_LIST_SIZE 1024
 
 #ifndef PATH_MAX
@@ -555,6 +559,8 @@ static void *handle_comp_comm(void *args) {
         } else {
           ERROR(MSG_MAX_RETRIES_REACHED, comp->name);
         }
+      }else{
+        INFO(MSG_COMP_STOPPED, comp->name);
       }
 
       break;
@@ -710,17 +716,26 @@ static int stop_component(zl_comp_t *comp) {
         comp->name, comp->pid);
 
   pid_t pgid = -comp->pid;
-  if (!kill(pgid, SIGTERM)) {
+  if (kill(pgid, SIGTERM)) {
+    ERROR("kill() failed for %s - %s\n", comp->name, strerror(errno));
+    return -1;
+  }
 
-    if (pthread_join(comp->comm_thid, NULL) != 0) {
-      DEBUG("pthread_join() failed for %s comm thread - %s\n",
-            comp->name, strerror(errno));
+  int wait_time = 0;
+  while (comp->pid > 0 && wait_time < SHUTDOWN_GRACEFUL_PERIOD) {
+    usleep(SHUTDOWN_POLLING_INTERVAL * 1000);
+    wait_time += SHUTDOWN_POLLING_INTERVAL;
+  }
+  
+  if (comp->pid > 0) {
+    DEBUG("Component %s(%d) is not shutting down within %d milliseconds\n", 
+          comp->name, comp->pid, SHUTDOWN_GRACEFUL_PERIOD);
+    WARN(MSG_NOT_SIGTERM_STOPPED, comp->name, comp->pid);
+    pid_t pgid = -comp->pid;
+    if (kill(pgid, SIGKILL)) {
+      ERROR("kill() failed for %s - %s\n", comp->name, strerror(errno));
       return -1;
     }
-
-  } else {
-    DEBUG("kill() failed for %s - %s\n", comp->name, strerror(errno));
-    return -1;
   }
 
   comp->pid = -1;
@@ -736,9 +751,43 @@ static int stop_components(void) {
   int rc = 0;
 
   for (size_t i = 0; i < zl_context.child_count; i++) {
-    if (stop_component(&zl_context.children[i])) {
-      rc = -1;
+    zl_comp_t *comp = &zl_context.children[i];
+    comp->clean_stop = true;
+    if (comp->pid != -1) {
+      DEBUG("about to send SIGTERM to component %s(%d)\n", comp->name, comp->pid); 
+      pid_t pgid = -comp->pid;
+      if (kill(pgid, SIGTERM)) {
+        WARN("kill() failed for %s - %s\n", comp->name, strerror(errno));
+      }
     }
+  }
+
+  int wait_time = 0;
+  bool all_exit = false;
+  while (!all_exit  && wait_time < SHUTDOWN_GRACEFUL_PERIOD) {
+    all_exit = true;
+    for (size_t i = 0; i < zl_context.child_count; i++) {
+      zl_comp_t *comptout = &zl_context.children[i];
+      if (comptout->pid > 0) {
+        all_exit = false;
+      }
+    }
+    usleep(SHUTDOWN_POLLING_INTERVAL * 1000);
+    wait_time += SHUTDOWN_POLLING_INTERVAL;
+  }
+  
+  for (size_t i = 0; i < zl_context.child_count; i++) {
+    zl_comp_t *compkill = &zl_context.children[i];
+    if (compkill->pid > 0) {
+      pid_t pgid = -compkill->pid;
+      DEBUG("Component %s(%d) is not shutting down within %d milliseconds\n", 
+            compkill->name, compkill->pid, SHUTDOWN_GRACEFUL_PERIOD);
+      WARN(MSG_NOT_SIGTERM_STOPPED, compkill->name, compkill->pid);
+      if (kill(pgid, SIGKILL)) {
+        WARN("kill() failed for %s - %s\n", compkill->name, strerror(errno));
+      }
+      rc = -1;
+    }  
   }
 
   if (rc) {
@@ -746,7 +795,7 @@ static int stop_components(void) {
   } else {
     INFO(MSG_COMPS_STOPPED);
   }
-
+  
   return 0;
 }
 

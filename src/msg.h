@@ -77,6 +77,9 @@
 #define MSG_FILE_ERR            MSG_PREFIX "0061E" " failed to find %s='%s', check if the file exists\n"
 #define MSG_MKDIR_ERR           MSG_PREFIX "0062E" " failed to create dir '%s' - %s\n"
 #define MSG_NOT_SIGTERM_STOPPED MSG_PREFIX "0063W" " Component %s(%d) will be terminated using SIGKILL\n"        
+#define MSG_CMD_RUN_ERR         MSG_PREFIX "0064E" " failed to run command %s - %s\n"
+#define MSG_CMD_OUT_ERR         MSG_PREFIX "0065E" " error reading output from command '%s' - %s\n"
+#define MSG_CMD_RCP_WARN        MSG_PREFIX "0066W" " command '%s' ended with code %d\n"
 
 #endif // MSG_H
 

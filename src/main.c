@@ -257,27 +257,6 @@ static int check_if_file_exists(const char *file, const char *name) {
   return 0;
 }
 
-static int mkdir_all(const char *path, mode_t mode) {
-  int path_len = strlen(path);
-  int curr_path_len = 0;
-  do {
-    const char *slash = strchr(path + curr_path_len + 1, '/');
-    char curr_path[PATH_MAX] = {0};
-    curr_path_len = slash ? (int)(slash - path) : path_len;
-    snprintf(curr_path, sizeof(curr_path), "%.*s", curr_path_len, path);
-    struct stat st = {0};
-    if (0 == stat(curr_path, &st)) {
-      DEBUG("mkdir_all: path '%s' already exists\n", curr_path);
-      continue;
-    }
-    if (mkdir(curr_path, mode) != 0) {
-      ERROR(MSG_MKDIR_ERR, curr_path, strerror(errno));
-      return -1;
-    }
-  } while (curr_path_len < path_len - 1);
-  return 0;
-}
-
 static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
 
   if (get_env("CONFIG", zl_context.yaml_file, sizeof(zl_context.yaml_file))) {
@@ -1299,35 +1278,23 @@ static int process_root_dir() {
  We invoke 'zwe internal config get' because as a byproduct it
  Creates workspace/.env/.zowe-merged.yaml which we can use from then on.
  */
-static int get_and_create_workspace(char *buf, size_t buf_size) {
+static int get_and_create_workspace() {
   char command[4*PATH_MAX];
-  snprintf (command, sizeof(command), "%s/bin/zwe internal config get --configmgr --config %s --ha-instance %s --path .zowe.workspaceDirectory",
+  snprintf(command, sizeof(command), "%s/bin/zwe internal config get --configmgr --config %s --ha-instance %s --path .zowe.workspaceDirectory",
             zl_context.root_dir, zl_context.yaml_file, zl_context.ha_instance_id);
   DEBUG("about to get workspace directory path\n");
   char workspace_path[PATH_MAX] = {0};
   if (run_command(command, handle_get_component_line, (void*)workspace_path)) {
-    ERROR(MSG_WORKSPACE_PATH_ERR);
+    ERROR(MSG_WKSP_DIR_ERR);
   }
-  if (strlen(workspace_path) == 0) {
-    ERROR(MSG_COMP_LIST_EMPTY);
-    return -1;
-  }
-  snprintf(buf, buf_size, "%s", workspace_path);
-  INFO(MSG_START_COMP_LIST, buf);
+  snprintf(zl_context.workspace_dir, sizeof(zl_context.workspace_dir), "%s", workspace_path);
   return 0;
 }
 
 static int process_workspace_dir() {
-  bool found = false;
   DEBUG("about to get workspace dir\n");
-  char workspace_buf[PATH_MAX];
+  get_and_create_workspace();
 
-  get_and_create_workspace(workspace_buf, sizeof(workspace_buf));
-  zl_context.workspace_dir = workspace_buf;
-
-  if (zl_context.workspace_dir == NULL) {
-    ERROR(MSG_WKSP_DIR_ERR);
-  }
   if (strlen(zl_context.workspace_dir) == 0) {
     ERROR(MSG_WKSP_DIR_EMPTY);
     return -1;

@@ -1125,7 +1125,7 @@ static int run_command(const char *command, handle_line_callback_t handle_line, 
   DEBUG("about to run command '%s'\n", command);
   FILE *fp = popen(command, "r");
   if (!fp) {
-    DEBUG("failed to run command %s - %s\n", command, strerror(errno));
+    ERROR("failed to run command %s - %s\n", command, strerror(errno));
     return -1;
   }
   char *line;
@@ -1136,14 +1136,14 @@ static int run_command(const char *command, handle_line_callback_t handle_line, 
   }
   if (ferror(fp)) {
     pclose(fp);
-    DEBUG("error reading output from command '%s' - %s\n", command, strerror(errno));
+    ERROR("error reading output from command '%s' - %s\n", command, strerror(errno));
     return -1;
   }
   int rc = pclose(fp);
   if (rc == -1) {
-    DEBUG("failed to run command '%s' - %s\n", command, strerror(errno));
+    ERROR("failed to run command '%s' - %s\n", command, strerror(errno));
   } else if (rc > 0) {
-    DEBUG("command '%s' ended with code %d\n", command, rc);
+    ERROR("command '%s' ended with code %d\n", command, rc);
     return -1;
   }
   DEBUG("command '%s' ran successfully\n", command);
@@ -1164,7 +1164,7 @@ static void handle_get_component_line(void *data, const char *line) {
 
 static int get_component_list(char *buf, size_t buf_size) {
   char command[4*PATH_MAX];
-  snprintf (command, sizeof(command), "%s/bin/zwe internal get-launch-components --config %s --ha-instance %s",
+  snprintf (command, sizeof(command), "%s/bin/zwe internal get-launch-components --config \"%s\" --ha-instance %s",
             zl_context.root_dir, zl_context.yaml_file, zl_context.ha_instance_id);
   DEBUG("about to get component list\n");
   char comp_list[COMP_LIST_SIZE] = {0};
@@ -1280,7 +1280,7 @@ static int process_root_dir() {
  */
 static int get_and_create_workspace() {
   char command[4*PATH_MAX];
-  snprintf(command, sizeof(command), "%s/bin/zwe internal config get --configmgr --config %s --ha-instance %s --path .zowe.workspaceDirectory",
+  snprintf(command, sizeof(command), "%s/bin/zwe internal config get --configmgr --config \"%s\" --ha-instance %s --path .zowe.workspaceDirectory",
             zl_context.root_dir, zl_context.yaml_file, zl_context.ha_instance_id);
   DEBUG("about to get workspace directory path\n");
   char workspace_path[PATH_MAX] = {0};
@@ -1334,7 +1334,7 @@ static void print_line(void *data, const char *line) {
 static int prepare_instance() {
   char command[4*PATH_MAX];
   DEBUG("about to prepare Zowe instance\n");
-  snprintf(command, sizeof(command), "%s/bin/zwe internal start prepare --config %s --ha-instance %s 2>&1",
+  snprintf(command, sizeof(command), "%s/bin/zwe internal start prepare --config \"%s\" --ha-instance %s 2>&1",
            zl_context.root_dir, zl_context.yaml_file, zl_context.ha_instance_id);
   if (run_command(command, print_line, NULL)) {
     ERROR(MSG_INST_PREP_ERR);

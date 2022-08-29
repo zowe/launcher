@@ -1086,7 +1086,7 @@ static int run_command(const char *command, handle_line_callback_t handle_line, 
   DEBUG("about to run command '%s'\n", command);
   FILE *fp = popen(command, "r");
   if (!fp) {
-    DEBUG("failed to run command %s - %s\n", command, strerror(errno));
+    ERROR(MSG_CMD_RUN_ERR, command, strerror(errno));
     return -1;
   }
   char *line;
@@ -1097,14 +1097,14 @@ static int run_command(const char *command, handle_line_callback_t handle_line, 
   }
   if (ferror(fp)) {
     pclose(fp);
-    DEBUG("error reading output from command '%s' - %s\n", command, strerror(errno));
+    ERROR(MSG_CMD_OUT_ERR, command, strerror(errno));
     return -1;
   }
   int rc = pclose(fp);
   if (rc == -1) {
-    DEBUG("failed to run command '%s' - %s\n", command, strerror(errno));
+    ERROR(MSG_CMD_RUN_ERR, command, strerror(errno));
   } else if (rc > 0) {
-    DEBUG("command '%s' ended with code %d\n", command, rc);
+    WARN(MSG_CMD_RCP_WARN, command, rc);
     return -1;
   }
   DEBUG("command '%s' ran successfully\n", command);

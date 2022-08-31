@@ -15,7 +15,7 @@
 //*                                                                  */
 //* NOTE: this procedure is a template, you will need to modify      */
 //*       #zowe_yaml variable to point to your Zowe YAML config      */
-//*       file.                                                 */
+//*       file.                                                      */
 //*                                                                  */
 //* Check https://docs.zowe.org for more details.                    */
 //*                                                                  */
@@ -26,6 +26,21 @@
 //SYSIN    DD   DUMMY
 //SYSPRINT DD   SYSOUT=*,LRECL=1600
 //SYSERR   DD   SYSOUT=*
+//********************************************************************/
+//*
+//* CONFIG= can be either a single path ex.
+//*   CONFIG=/my/zowe.yaml
+//* Or a list of FILE() and colon : separated paths in the form of
+//*   CONFIG=FILE(/my/long/path/to/1.yaml)\
+//*   :FILE(/my/long/path/to/2.yaml)
+//*
+//* In the above case, the \ is used as a line continuation.
+//*
+//* When using a list, files on left override properties
+//* From files to their right.
+//* Typically the right-most file should be the Zowe default yaml.
+//*
+//********************************************************************/
 //STDENV   DD  *
 _CEE_ENVFILE_CONTINUATION=\
 CONFIG=#zowe_yaml

@@ -13,7 +13,7 @@ WORKING_DIR=$(cd $(dirname "$0") && pwd)
 # set -v
 
 # Loads project info like name and version
-. $WORKING_DIR/configmgr.proj.env
+. $WORKING_DIR/launcher.proj.env
 
 echo "********************************************************************************"
 echo "Building $PROJECT..."
@@ -22,7 +22,7 @@ COMMON="$WORKING_DIR/.."
 
 # Checks for and possibly downloads dependencies from env vars from above file
 . $WORKING_DIR/dependencies.sh
-check_dependencies "${WORKING_DIR}/.." "$WORKING_DIR/configmgr.proj.env"
+check_dependencies "${WORKING_DIR}/.." "$WORKING_DIR/launcher.proj.env"
 DEPS_DESTINATION=$(get_destination "${WORKING_DIR}/.." "${PROJECT}")
 
 # These paths assume that the build is run from /launcher/builds
@@ -50,7 +50,7 @@ IFS=$OLDIFS
 
 VERSION="\"${VERSION}\""
 
-rm -f "${WORKING_DIR}/../bin/configmgr"
+rm -f "${WORKING_DIR}/../bin/zowe_launcher"
 
 GSKDIR=/usr/lpp/gskssl
 GSKINC="${GSKDIR}/include"
@@ -159,17 +159,6 @@ xlclang \
   ${DEPS_DESTINATION}/${COMMON}/c/zosfile.c \
   ${GSKDIR}/lib/GSKSSL64.x \
   ${GSKDIR}/lib/GSKCMS64.x
-#then
-#  echo "Build successful"
-#  ls -l "${DEPS_DESTINATION}/${COMMON}/bin"
-#  exit 0
-#else
-#  # remove configmgr in case the linker had RC=4 and produced the binary
-#  rm -f "${DEPS_DESTINATION}/${COMMON}/bin/configmgr"
-#  echo "Build failed"
-#  exit 8
-#fi
-
 rm -rf "${TMP_DIR}"
 
 

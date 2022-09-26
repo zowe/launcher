@@ -24,10 +24,10 @@ export _C89_CCMODE=1
 
 # build
 echo "$SCRIPT_NAME build zowe launcher ..."
-cd "$SCRIPT_DIR/content"
-make -f zosMakefile
+cd "$SCRIPT_DIR/content/build"
+./build.sh
 
 # clean up content folder
 echo "$SCRIPT_NAME cleaning up pax folder ..."
 cd "$SCRIPT_DIR/content"
-rm -fr Jenkinsfile Makefile zosMakefile src deps *.o *.lst .git*
+rm -fr Jenkinsfile Makefile build src deps *.o *.lst .git*

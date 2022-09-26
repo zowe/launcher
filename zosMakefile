@@ -24,6 +24,8 @@ CFLAGS = -O -D_OPEN_THREADS -D_XOPEN_SOURCE=600 \
          "-Wc,langlvl(EXTC99),float(HEX),agg,list(),so(),search(),lp64,xplink" \
          "-Wc,goff,xref,gonum,roconst,gonum,asm,asmlib('SYS1.MACLIB'),asmlib('CEE.SCEEMAC')" \
          -I . \
+         -I ./deps/zowe-common-c/h
+         -I ./deps/zowe-common-c/platform/posix/h
          -I ./deps/libyaml/include
 
 LDFLAGS = -Ldeps/libyaml/lib

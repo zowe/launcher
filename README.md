@@ -23,15 +23,15 @@ This is a POC project with the goal to provide an advanced launcher for Zowe com
 ## Building
 
 ```
-cd zowe-launcher
-make
+cd zowe-launcher/bin
+./build.sh
 ```
 
 The launcher binary will be saved into the bin directory.
 
 ## Prerequisites
 
-* Zowe 1.11.0
+* Zowe 2.3.0
 
 ## Deployment
 

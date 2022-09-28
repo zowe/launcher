@@ -29,8 +29,12 @@
 #include <sys/stat.h>
 #include <sys/__messag.h>
 #include <unistd.h>
-#include "yaml.h"
 #include "msg.h"
+
+#include "collections.h"
+#include "alloc.h"
+#include "utils.h"
+#include "configmgr.h"
 
 extern char ** environ;
 /*
@@ -252,77 +256,6 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
   return 0;
 }
 
-static void get_yaml_pair_key(yaml_document_t *document, yaml_node_pair_t *pair, char *buf, size_t buf_size) {
-  yaml_node_t *node = yaml_document_get_node(document, pair->key);
-  if (node) {
-    snprintf(buf, buf_size, "%.*s", (int)node->data.scalar.length, (const char *)node->data.scalar.value);
-#ifdef __MVS__
-    __atoe(buf);
-#endif
-  } else {
-    snprintf(buf, buf_size, "");
-    DEBUG ("key node not found\n");
-  }
-}
-
-static void get_yaml_item(yaml_document_t *document, yaml_node_item_t item, char *buf, size_t buf_size) {
-  yaml_node_t *node = yaml_document_get_node(document, item);
-  if (node) {
-    snprintf(buf, buf_size, "%.*s", (int)node->data.scalar.length, (const char *)node->data.scalar.value);
-#ifdef __MVS__
-    __atoe(buf);
-#endif
-  } else {
-    snprintf(buf, buf_size, "");
-    DEBUG ("no node for item %d\n", item);
-  }
-}
-
-static yaml_node_t *get_child_node(yaml_document_t *doc, yaml_node_t *node, const char *name) {
-  char key[ZL_YAML_KEY_LEN + 1];
-  yaml_node_t *value_node = NULL;
-  for (yaml_node_pair_t *pair = node->data.mapping.pairs.start; pair != node->data.mapping.pairs.top; pair++) {
-    get_yaml_pair_key(doc, pair, key, sizeof(key));
-    if (0 == strcmp(key, name)) {
-      value_node = yaml_document_get_node(doc, pair->value);
-      break;
-    }
-  }
-  return value_node;
-}
-
-static void get_int_array_from_yaml_sequence(yaml_document_t *doc, yaml_node_t *node, zl_int_array_t *data) {
-  char buf[ZL_YAML_KEY_LEN + 1];
-  for (yaml_node_item_t *item = node->data.sequence.items.start; item != node->data.sequence.items.top; item++) {
-    get_yaml_item(doc, *item, buf, sizeof(buf));
-    if (data->count < ZL_INT_ARRAY_CAPACITY) {
-      data->data[data->count++] = atoi(buf);
-    } else {
-      WARN ("yaml sequence is too large\n");
-      break;
-    }
-  }
-}
-
-static yaml_node_t *get_node_by_path(yaml_document_t *doc, yaml_node_t *node, const char **path, size_t path_len) {
-  for (size_t i = 0; i < path_len; i++) {
-    node = get_child_node(doc, node, path[i]);
-    if (!node) {
-      break;
-    }
-  }
-  return node;
-}
-
-static int get_int_array_by_path(yaml_document_t *doc, yaml_node_t *root, const char **path, size_t path_len, zl_int_array_t *arr) {
-  yaml_node_t *node = get_node_by_path(doc, root, path, path_len);
-  if (node && node->type == YAML_SEQUENCE_NODE) {
-    get_int_array_from_yaml_sequence(doc, node, arr);
-    return 0;
-  }
-  return -1;
-}
-
 static void snprint_int_array(zl_int_array_t *array, char *buf, size_t buf_size) {
   int pos = 0;
   for (int i = 0; i < array->count; i++) {
@@ -332,34 +265,34 @@ static void snprint_int_array(zl_int_array_t *array, char *buf, size_t buf_size)
 
 static void init_component_restart_intervals(zl_comp_t *comp, ConfigManager *configmgr) {
   DEBUG ("loading restart intervals for component '%s'\n", comp->name);
-  const char *zowe_path[] = {"zowe", "launcher", "restartIntervals"};
-  const char *component_path[] = {"components", comp->name, "launcher", "restartIntervals"};
-  const char *instance_path[] = {"haInstances", zl_context.ha_instance_id, "components", comp->name, "launcher", "restartIntervals"};
-  bool found = false;
-  if (root) {
-    if (!found && get_int_array_by_path(document, root, instance_path, sizeof(instance_path)/sizeof(instance_path[0]), &comp->restart_intervals) == 0) {
-      found = true;
-    }
-    if (!found && get_int_array_by_path(document, root, component_path, sizeof(component_path)/sizeof(component_path[0]), &comp->restart_intervals) == 0) {
-      found = true;
-    }
-    if (!found && get_int_array_by_path(document, root, zowe_path, sizeof(zowe_path)/sizeof(zowe_path[0]), &comp->restart_intervals) == 0) {
-      found = true;
+  Json *restartIntArray;
+  int getStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &restartIntArray, 6, "haInstances", zl_context.ha_instance_id, "components", comp->name, "launcher", "restartIntervals");
+  if (getStatus != ZCFG_SUCCESS) {
+    getStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &restartIntArray, 4, "components", comp->name, "launcher", "restartIntervals");
+    if (getStatus != ZCFG_SUCCESS) {
+      getStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &restartIntArray, 3, "zowe", "launcher", "restartIntervals");
+    } else {
+      memcpy(&comp->restart_intervals.data, restart_intervals_default, sizeof(restart_intervals_default));
+      comp->restart_intervals.count = sizeof(restart_intervals_default)/sizeof(restart_intervals_default[0]);      
+      return;
     }
   }
-  if (!found) {
-    memcpy(&comp->restart_intervals.data, restart_intervals_default, sizeof(restart_intervals_default));
-    comp->restart_intervals.count = sizeof(restart_intervals_default)/sizeof(restart_intervals_default[0]);
+
+  JsonArray *intArray = jsonAsArray(restartIntArray);
+  int count = jsonArrayGetCount(intArray);
+  comp->restart_intervals.count = count;
+  for (int i = 0; i < count; i++) {
+    comp->restart_intervals.data[i] = jsonArrayGetNumber(intArray, i);
   }
 }
 
 static void init_component_min_uptime(zl_comp_t *comp, ConfigManager *configmgr) {
   int minUptime = MIN_UPTIME_SECS;
-  int getStatus = cfgGetIntC(configmgr, ZOWE_CONFIG_NAME, &minUptime, 3, "zowe", "launcher", "minUptime");
+  int getStatus = cfgGetIntC(configmgr, ZOWE_CONFIG_NAME, &minUptime, 6, "haInstances", zl_context.ha_instance_id, "components", comp->name, "launcher", "minUptime");
   if (getStatus != ZCFG_SUCCESS) {
     getStatus = cfgGetIntC(configmgr, ZOWE_CONFIG_NAME, &minUptime, 4, "components", comp->name, "launcher", "minUptime");
     if (getStatus != ZCFG_SUCCESS) {
-      getStatus = cfgGetIntC(configmgr, ZOWE_CONFIG_NAME, &minUptime, 6, "haInstances", zl_context.ha_instance_id, "components", comp->name, "launcher", "minUptime");
+      getStatus = cfgGetIntC(configmgr, ZOWE_CONFIG_NAME, &minUptime, 3, "zowe", "launcher", "minUptime");
       if (getStatus != ZCFG_SUCCESS) {
         comp->min_uptime = MIN_UPTIME_SECS;
       } else {
@@ -375,11 +308,11 @@ static void init_component_min_uptime(zl_comp_t *comp, ConfigManager *configmgr)
 
 static void init_component_shareas(zl_comp_t *comp, ConfigManager *configmgr) {
   char share_as[128] = {0};
-  int getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &share_as, 3, "zowe", "launcher", "shareAs");
+  int getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &share_as, 6, "haInstances", zl_context.ha_instance_id, "components", comp->name, "launcher", "shareAs");
   if (getStatus != ZCFG_SUCCESS) {
     getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &share_as, 4, "components", comp->name, "launcher", "shareAs");
     if (getStatus != ZCFG_SUCCESS) {
-      getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &share_as, 6, "haInstances", zl_context.ha_instance_id, "components", comp->name, "launcher", "shareAs");
+      getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &share_as, 3, "zowe", "launcher", "shareAs");
       if (getStatus != ZCFG_SUCCESS) {
         share_as = "yes";
       }
@@ -1100,8 +1033,7 @@ static int check_root_dir() {
   TODO: allow parmlib to be the one that has runtimeDirectory. right now a FILE must be found prior to encountering a LIB entry, or the code will attempt an fopen() and fail.
 */
 static int process_root_dir(ConfigManager *configmgr) {
-  char *rootDir = NULL;
-  int getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &rootDir, 2, "zowe", "runtimeDirectory");
+  int getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &zl_context.root_dir, 2, "zowe", "runtimeDirectory");
   if (getStatus) {
     ERROR(MSG_ROOT_DIR_ERR);
     return -1;
@@ -1293,10 +1225,20 @@ int main(int argc, char **argv) {
     zssStatus = ZSS_STATUS_ERROR;
     goto out_term_stcbase;
   }
-
   
+  if (setup_signal_handlers()) {
+    ERROR(MSG_SIGNAL_ERR);
+    exit(EXIT_FAILURE);
+  }
 
-  int schemaLoadStatus = cfgLoadSchemas(configmgr,ZOWE_CONFIG_NAME,schemas);
+  if (process_root_dir(configmgr)) {
+    exit(EXIT_FAILURE);
+  }
+
+  //got root dir, can now load up the schemas from it
+  char schemaList[PATH_MAX*2 + 4] = {0};
+  snprintf(schemaList, PATH_MAX*2 + 1, "%s/schemas/zowe-yaml-schema.json:%s/schemas/server-common.json", zl_context.root_dir, zl_context.root_dir);  
+  int schemaLoadStatus = cfgLoadSchemas(configmgr,ZOWE_CONFIG_NAME,schemaList);
   if (schemaLoadStatus){
     zowelog(NULL, LOG_COMP_ID_MVD_SERVER, ZOWE_LOG_INFO, "ZSS Could not load schemas, status=%d\n", schemaLoadStatus);
     zssStatus = ZSS_STATUS_ERROR;
@@ -1309,17 +1251,6 @@ int main(int argc, char **argv) {
     goto out_term_stcbase;
   }
 
-
-
-  
-  if (setup_signal_handlers()) {
-    ERROR(MSG_SIGNAL_ERR);
-    exit(EXIT_FAILURE);
-  }
-
-  if (process_root_dir(configmgr)) {
-    exit(EXIT_FAILURE);
-  }
 
   if (process_workspace_dir(configmgr)) {
     exit(EXIT_FAILURE);

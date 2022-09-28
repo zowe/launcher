@@ -93,14 +93,14 @@ xlclang \
 #fi
 
 xlclang \
-  -O \
+  -q64 \
   "-Wa,goff" \
   -Wall -Wextra -Werror -pedantic \
-  -Wno-gnu-zero-variadic-macro-arguments \
-  -Wno-missing-braces \
-  -Wno-missing-field-initializers \
-  -Wno-unused-parameter \
-  "-Wc,float(HEX),langlvl(extc99),agg,list(),so(),search(),lp64,xplink" \
+#  -Wno-gnu-zero-variadic-macro-arguments \
+#  -Wno-missing-braces \
+#  -Wno-missing-field-initializers \
+#  -Wno-unused-parameter \
+  "-Wc,float(ieee),langlvl(extc99),agg,list()" \
   "-Wc,gonum,goff,xref,roconst,ASM,asmlib('CEE.SCEEMAC','SYS1.MACLIB','SYS1.MODGEN')" \
   -D_OPEN_SYS_FILE_EXT=1 \
   -D_XOPEN_SOURCE=600 \

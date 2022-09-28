@@ -55,6 +55,8 @@ rm -f "${WORKING_DIR}/../bin/zowe_launcher"
 GSKDIR=/usr/lpp/gskssl
 GSKINC="${GSKDIR}/include"
 
+echo "Compiling qascii libyaml and quickjs"
+
 xlclang \
   -c \
   -q64 \
@@ -85,21 +87,17 @@ xlclang \
   ${DEPS_DESTINATION}/${QUICKJS}/libunicode.c \
   ${DEPS_DESTINATION}/${QUICKJS}/libregexp.c \
   ${DEPS_DESTINATION}/${QUICKJS}/porting/polyfill.c
-#then
-#  echo "Done with qascii-compiled open-source parts"
-#else
-#  echo "Build failed"
-#  exit 8
-#fi
+rc=$?
+if [ $rc -ne 0 ]; then
+  echo "Build failed"
+  exit 8
+fi
+
+echo "Compiling zowe_launcher"
 
 xlclang \
   -q64 \
   "-Wa,goff" \
-  -Wall -Wextra -Werror -pedantic \
-#  -Wno-gnu-zero-variadic-macro-arguments \
-#  -Wno-missing-braces \
-#  -Wno-missing-field-initializers \
-#  -Wno-unused-parameter \
   "-Wc,float(ieee),langlvl(extc99),agg,list()" \
   "-Wc,gonum,goff,xref,roconst,ASM,asmlib('CEE.SCEEMAC','SYS1.MACLIB','SYS1.MODGEN')" \
   -D_OPEN_SYS_FILE_EXT=1 \
@@ -159,7 +157,14 @@ xlclang \
   ${DEPS_DESTINATION}/${COMMON}/c/zosfile.c \
   ${GSKDIR}/lib/GSKSSL64.x \
   ${GSKDIR}/lib/GSKCMS64.x
+rc=$?
 rm -rf "${TMP_DIR}"
+if [ $rc -ne 0 ]; then
+  echo "Build failed"
+  exit 8
+fi
+
+
 
 
 # This program and the accompanying materials are

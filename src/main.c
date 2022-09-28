@@ -34,6 +34,7 @@
 #include "collections.h"
 #include "alloc.h"
 #include "utils.h"
+#include "json.h"
 #include "configmgr.h"
 
 extern char ** environ;

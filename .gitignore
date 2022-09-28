@@ -1,6 +1,10 @@
 # Prerequisites
 *.d
 
+# Build
+deps/launcher
+build/tmp*
+
 # Executables
 bin/zowe_launcher
 

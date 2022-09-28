@@ -27,9 +27,28 @@ jobs:
     needs: check-permission
     steps: 
       - name: '[Prep 1] Checkout'
-        uses: actions/checkout@v2
-        with: 
-            submodules: true
+        uses: actions/checkout@v3
+            
+      - name: '[Dep 1] Libyaml'
+        uses: actions/checkout@v3
+        with:
+          repository: yaml/libyaml
+          path: deps/launcher/libyaml
+          ref: '0.2.5'
+
+      - name: '[Dep 2] Quickjs'
+        uses: actions/checkout@v3
+        with:
+          repository: joenemo/quickjs-portable
+          path: deps/launcher/quickjs
+          ref: 'main'
+          
+      - name: '[Dep 3] Zowe common'
+        uses: actions/checkout@v3
+        with:
+          repository: zowe/zowe-common-c
+          path: deps/launcher/common
+          ref: 'v2.x/master'
 
       - name: '[Prep 2] Setup jFrog CLI'
         uses: jfrog/setup-jfrog-cli@v2

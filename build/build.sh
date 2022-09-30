@@ -106,6 +106,7 @@ xlclang \
   -D_OPEN_THREADS=1 \
   -DNOIBMHTTP=1 \
   -DUSE_ZOWE_TLS=1 \
+  -I "${LAUNCHER}/src/msg.h" \
   -I "${DEPS_DESTINATION}/${COMMON}/h" \
   -I "${DEPS_DESTINATION}/${COMMON}/platform/posix" \
   -I ${GSKINC} \
@@ -126,6 +127,7 @@ xlclang \
   libunicode.o \
   libregexp.o \
   polyfill.o \
+  ${LAUNCHER}/src/main.c \
   ${DEPS_DESTINATION}/${COMMON}/c/alloc.c \
   ${DEPS_DESTINATION}/${COMMON}/c/bpxskt.c \
   ${DEPS_DESTINATION}/${COMMON}/c/charsets.c \

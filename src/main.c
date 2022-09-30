@@ -174,9 +174,6 @@ struct {
   printf("%s <%s:%d> %s DEBUG "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 #define ERROR(fmt, ...) printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 
-static int read_zowe_yaml_config(char *file_path);
-
-
 static int get_env(const char *name, char *buf, size_t buf_size) {
   const char *value = getenv(name);
   if (value == NULL) {
@@ -1180,69 +1177,27 @@ static int setup_signal_handlers() {
   return 0;
 }
 
-static int yaml_read_handler(void *data, unsigned char *buffer, size_t size, size_t *size_read) {
-  FILE *fp = data;
-  int rc = 1;
-  size_t bytes_read = fread(buffer, 1, size, fp);
-  if (bytes_read > 0) {
-#ifdef __MVS__
-    if (__etoa_l((char *)buffer, bytes_read) == -1) {
-      ERROR(MSG_YAML_CONV_ERR, strerror(errno));
-      rc = 0;
-    }
-#endif
-  }
-  if (ferror(fp)) {
-    ERROR(MSG_YAML_READ_ERR, strerror(errno));
-    rc = 0;
-  }
-  *size_read = bytes_read;
-  return rc;
-}
+static bool validateConfiguration(ConfigManager *cmgr, FILE *out){
+  bool ok = false;
+  JsonValidator *validator = makeJsonValidator();
+  validator->traceLevel = cmgr->traceLevel;
+  int validateStatus = cfgValidate(cmgr,validator,ZOWE_CONFIG_NAME);
 
-static int read_zowe_yaml_config(char *file_path) {
-  zl_yaml_config_t *config = &zl_context.yaml_config;
-  FILE *fp = NULL;
-  yaml_parser_t parser;
-  yaml_document_t *document = &config->document;
-  int rc;
-  
-  INFO(MSG_LOADING_YAML, file_path);
-
-  fp = fopen(file_path, "r");
-  if (!fp) {
-    ERROR(MSG_YAML_OPEN_ERR, file_path, strerror(errno));
-    return -1;
+  switch (validateStatus){
+  case JSON_VALIDATOR_NO_EXCEPTIONS:
+    INFO("Configuration is Valid\n");
+    ok = true;
+    break;
+  case JSON_VALIDATOR_HAS_EXCEPTIONS:
+    INFO("Configuration has validity exceptions:\n");
+    displayValidityException(out,0,validator->topValidityException);
+  break;
+  case JSON_VALIDATOR_INTERNAL_FAILURE:
+    ERROR("Internal failure during validation, please contact support\n");
+    break;
   }
-  if (!yaml_parser_initialize(&parser)) {
-    DEBUG("failed to init YAML parser\n");
-    fclose(fp);
-    return -1;
-  };
-  yaml_parser_set_input(&parser, yaml_read_handler, fp);
-  if (!yaml_parser_load(&parser, document)) {
-    ERROR(MSG_YAML_PARSE_ERR, file_path);
-    yaml_parser_delete(&parser);
-    fclose(fp);
-    return -1;
-  }
-  yaml_node_t *root = yaml_document_get_root_node(document);
-  do {
-    if (!root) {
-      DEBUG("failed to get root node in zowe.yaml %s\n", file_path);
-      rc = -1;
-      break;
-    }
-    if (root->type != YAML_MAPPING_NODE) {
-      DEBUG("failed to find mapping node in zowe.yaml %s\n", file_path);
-      rc = -1;
-      break;
-    }
-    config->root = root; 
-  } while(0);
-  yaml_parser_delete(&parser);
-  fclose(fp);
-  return 0;
+  freeJsonValidator(validator);
+  return ok;
 }
 
 int main(int argc, char **argv) {
@@ -1269,9 +1224,8 @@ int main(int argc, char **argv) {
   }
 
   if (cfgLoadConfiguration(configmgr, ZOWE_CONFIG_NAME) != 0){
-    zowelog(NULL, LOG_COMP_ID_MVD_SERVER, ZOWE_LOG_INFO, "ZSS Could not load configurations\n");
-    zssStatus = ZSS_STATUS_ERROR;
-    goto out_term_stcbase;
+    ERROR("Launcher Could not load configurations\n");
+    exit(EXIT_FAILURE);
   }
   
   if (setup_signal_handlers()) {
@@ -1288,15 +1242,14 @@ int main(int argc, char **argv) {
   snprintf(schemaList, PATH_MAX*2 + 1, "%s/schemas/zowe-yaml-schema.json:%s/schemas/server-common.json", zl_context.root_dir, zl_context.root_dir);  
   int schemaLoadStatus = cfgLoadSchemas(configmgr, ZOWE_CONFIG_NAME, schemaList);
   if (schemaLoadStatus){
-    zowelog(NULL, LOG_COMP_ID_MVD_SERVER, ZOWE_LOG_INFO, "ZSS Could not load schemas, status=%d\n", schemaLoadStatus);
-    zssStatus = ZSS_STATUS_ERROR;
-    goto out_term_stcbase;
+    ERROR("Launcher Could not load schemas, status=%d\n", schemaLoadStatus);
+    exit(EXIT_FAILURE);
   }
 
 
   if (!validateConfiguration(configmgr, stdout)){
-    zssStatus = ZSS_STATUS_ERROR;
-    goto out_term_stcbase;
+    ERROR("Validation failed");
+    exit(EXIT_FAILURE);
   }
 
 

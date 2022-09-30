@@ -85,12 +85,6 @@ static zl_time_t gettime(void) {
 
   return result;
 }
-
-typedef struct zl_yaml_config_t {
-  yaml_document_t document;
-  yaml_node_t *root;
-} zl_yaml_config_t;
-
 typedef struct zl_int_array_t {
   int count;
 #define ZL_INT_ARRAY_CAPACITY 100
@@ -161,10 +155,8 @@ struct {
   
   pid_t pid;
   char userid[9];
-
-  zl_yaml_config_t yaml_config;
   
-} zl_context = {.config = {.debug_mode = true}, .userid = "(NONE)", .yaml_config = {0}} ;
+} zl_context = {.config = {.debug_mode = true}, .userid = "(NONE)"} ;
 
 
 
@@ -173,6 +165,24 @@ struct {
 #define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
   printf("%s <%s:%d> %s DEBUG "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 #define ERROR(fmt, ...) printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+
+static int mkdir_all(const char *path, mode_t mode) {
+  int path_len = strlen(path);
+  int curr_path_len = 0;
+  do {
+    const char *slash = strchr(path + curr_path_len + 1, '/');
+    char curr_path[PATH_MAX] = {0};
+    curr_path_len = slash ? (int)(slash - path) : path_len;
+    snprintf(curr_path, sizeof(curr_path), "%.*s", curr_path_len, path);
+    if (mkdir(curr_path, mode) != 0) {
+      if (errno != EEXIST) {
+        ERROR(MSG_MKDIR_ERR, curr_path, strerror(errno));
+        return -1;
+      }
+    }
+  } while (curr_path_len < path_len - 1);
+  return 0;
+}
 
 static int get_env(const char *name, char *buf, size_t buf_size) {
   const char *value = getenv(name);
@@ -217,7 +227,7 @@ static int check_if_dir_exists(const char *dir, const char *name) {
   return 0;
 }
 
-static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
+static int init_context(int argc, char **argv, const struct zl_config_t *cfg, ConfigManager *configmgr) {
 
   if (get_env("CONFIG", zl_context.yaml_file, sizeof(zl_context.yaml_file))) {
     return -1;
@@ -228,9 +238,7 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
   char member[9] = {0};
   char config_line[PATH_MAX*17] = {0};
   if (zl_context.yaml_file[0] == '/') { // simple file case, must be absolute path.
-    char *wrappedFile = (void *)safeMalloc(config_len+7);
-    snprintf(wrappedFile, config_len+7, "FILE(%s)", zl_context.yaml_file);
-    zl_context.yaml_file = wrappedFile;
+    snprintf(zl_context.yaml_file, config_len+7, "FILE(%s)", zl_context.yaml_file);
   } else { //HERE loop over input to construct new string for configmgr use.
     // It needs to strip out the (member) within each occurrence of PARMLIB()
     int parmIndex = indexOfString(zl_context.yaml_file, config_len, "PARMLIB(", 0);
@@ -244,7 +252,7 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
       if (parenStartIndex != -1 && parenEndIndex != -1 && (parenStartIndex < parenEndIndex)) {
         memcpy(zl_context.parm_member, zl_context.yaml_file+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
         if (hasMember && strcmp(zl_context.parm_member, member) != 0) {
-          ERROR(TODO);
+          ERROR("PARMLIB() entries must all have the same member name\n");
           return -1;
         }
         hasMember = true;
@@ -259,7 +267,7 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
         srcPos=parmIndex-1;
       }
       INFO("config_line now=%s\n", config_line);
-      INFO("src=%d, dst=%d, pNext=%d\n",srcPos,destPos,parenIndex);
+      INFO("src=%d, dst=%d, pNext=%d\n",srcPos,destPos,parmIndex);
     }
     int configLen = strlen(config_line);
     memcpy(zl_context.yaml_file, config_line, configLen);
@@ -1211,7 +1219,7 @@ int main(int argc, char **argv) {
   ConfigManager *configmgr = makeConfigManager(); /* configs,schemas,1,stderr); */
   CFGConfig *theConfig = addConfig(configmgr,ZOWE_CONFIG_NAME);
   cfgSetTraceStream(configmgr,stderr);
-  cfgSetTraceLevel(configmgr, configmgrTraceLevel);
+  cfgSetTraceLevel(configmgr, zl_context.config.debug_mode ? 2 : 0);
   
   if (init_context(argc, argv, &config, configmgr)) {
     ERROR(MSG_CTX_INIT_FAILED);

@@ -50,7 +50,8 @@ IFS=$OLDIFS
 
 VERSION="\"${VERSION}\""
 
-rm -f "${WORKING_DIR}/../bin/zowe_launcher"
+rm -f "${LAUNCHER}/bin/zowe_launcher"
+mkdir -p "${LAUNCHER}/bin"
 
 GSKDIR=/usr/lpp/gskssl
 GSKINC="${GSKDIR}/include"

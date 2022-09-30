@@ -151,7 +151,9 @@ struct {
   pthread_cond_t event_cv;
   pthread_mutex_t event_lock;
 
-  char yaml_file[PATH_MAX + 1];
+  //Room for at least 16 paths
+  char yaml_file[PATH_MAX*17];
+  char parm_member[8+1];
   char root_dir[PATH_MAX+1];
   char workspace_dir[PATH_MAX+1];
   
@@ -224,12 +226,54 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg) {
     return -1;
   }
 
+  int config_len = strlen(zl_context.yaml_file);
+  bool hasMember = false;
+  char member[9] = {0};
+  char config_line[PATH_MAX*17] = {0};
   if (zl_context.yaml_file[0] == '/') { // simple file case, must be absolute path.
-    int config_len = strlen(zl_context.yaml_file);
     char *wrappedFile = (void *)safeMalloc(config_len+7);
-    snprintf(wrappedFile, config_len+6, "FILE(%s)", zl_context.yaml_file);
+    snprintf(wrappedFile, config_len+7, "FILE(%s)", zl_context.yaml_file);
     zl_context.yaml_file = wrappedFile;
-  }  
+  } else { //HERE loop over input to construct new string for configmgr use.
+    // It needs to strip out the (member) within each occurrence of PARMLIB()
+    int parmIndex = indexOfString(zl_context.yaml_file, config_len, "PARMLIB(", 0);
+    int destPos = 0;
+    int srcPos = 0;
+    INFO("Handling config=%s\n",zl_context.yaml_file);
+    while (parmIndex != -1) {
+      int parenStartIndex = indexOf(zl_context.yaml_file, config_len, '(', parmIndex+9);
+      int parenEndIndex = indexOf(zl_context.yaml_file, config_len, ')', parmIndex+9);
+      INFO("pStart=%d, pEnd=%d\n", parenStartIndex, parenEndIndex);
+      if (parenStartIndex != -1 && parenEndIndex != -1 && (parenStartIndex < parenEndIndex)) {
+        memcpy(zl_context.parm_member, zl_context.yaml_file+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
+        if (hasMember && strcmp(zl_context.parm_member, member) != 0) {
+          ERROR(TODO);
+          return -1;
+        }
+        hasMember = true;
+        memcpy(member, zl_context.yaml_file+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
+        INFO("Found member=%s\n",member);
+        parmIndex = indexOfString(zl_context.yaml_file, config_len, "PARMLIB(", parenEndIndex+2);
+        memcpy(config_line, zl_context.yaml_file+srcPos, parenStartIndex-1-srcPos);
+        srcPos=parenEndIndex+1;
+      } else {
+        parmIndex = indexOfString(zl_context.yaml_file, config_len, "PARMLIB(", parmIndex+9);
+        memcpy(config_line, zl_context.yaml_file+srcPos, parmIndex-1-srcPos);
+        srcPos=parmIndex-1;
+      }
+      INFO("config_line now=%s\n", config_line);
+      INFO("src=%d, dst=%d, pNext=%d\n",srcPos,destPos,parenIndex);
+    }
+    int configLen = strlen(config_line);
+    memcpy(zl_context.yaml_file, config_line, configLen);
+    zl_context.yaml_file[configLen]='\0';
+    INFO("config result=%s\n",zl_context.yaml_file);
+      
+    
+  }
+  if (!hasMember) {
+    zl_context.parm_member = NULL;
+  }
 
   setenv("CONFIG", zl_context.yaml_file, 1);
   INFO(MSG_YAML_FILE, zl_context.yaml_file);
@@ -1219,9 +1263,12 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  cfgSetConfigPath(configmgr,ZOWE_CONFIG_NAME,zl_context.yaml_file);
+  cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.yaml_file);
+  if (zl_context.parm_member != NULL) {
+    cfgSetParmlibMemberName(configmgr, ZOWE_CONFIG_NAME, zl_context.parm_member);
+  }
 
-  if (cfgLoadConfiguration(configmgr,ZOWE_CONFIG_NAME) != 0){
+  if (cfgLoadConfiguration(configmgr, ZOWE_CONFIG_NAME) != 0){
     zowelog(NULL, LOG_COMP_ID_MVD_SERVER, ZOWE_LOG_INFO, "ZSS Could not load configurations\n");
     zssStatus = ZSS_STATUS_ERROR;
     goto out_term_stcbase;
@@ -1239,7 +1286,7 @@ int main(int argc, char **argv) {
   //got root dir, can now load up the schemas from it
   char schemaList[PATH_MAX*2 + 4] = {0};
   snprintf(schemaList, PATH_MAX*2 + 1, "%s/schemas/zowe-yaml-schema.json:%s/schemas/server-common.json", zl_context.root_dir, zl_context.root_dir);  
-  int schemaLoadStatus = cfgLoadSchemas(configmgr,ZOWE_CONFIG_NAME,schemaList);
+  int schemaLoadStatus = cfgLoadSchemas(configmgr, ZOWE_CONFIG_NAME, schemaList);
   if (schemaLoadStatus){
     zowelog(NULL, LOG_COMP_ID_MVD_SERVER, ZOWE_LOG_INFO, "ZSS Could not load schemas, status=%d\n", schemaLoadStatus);
     zssStatus = ZSS_STATUS_ERROR;
@@ -1247,7 +1294,7 @@ int main(int argc, char **argv) {
   }
 
 
-  if (!validateConfiguration(configmgr,stdout)){
+  if (!validateConfiguration(configmgr, stdout)){
     zssStatus = ZSS_STATUS_ERROR;
     goto out_term_stcbase;
   }

@@ -23,7 +23,7 @@ This is a POC project with the goal to provide an advanced launcher for Zowe com
 ## Building
 
 ```
-cd zowe-launcher/bin
+cd zowe-launcher/build
 ./build.sh
 ```
 
@@ -31,7 +31,7 @@ The launcher binary will be saved into the bin directory.
 
 ## Prerequisites
 
-* Zowe 2.3.0
+* Zowe 2.4.0
 
 ## Deployment
 

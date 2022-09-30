@@ -18,7 +18,7 @@ WORKING_DIR=$(cd $(dirname "$0") && pwd)
 echo "********************************************************************************"
 echo "Building $PROJECT..."
 
-COMMON="$WORKING_DIR/.."
+LAUNCHER="$WORKING_DIR/.."
 
 # Checks for and possibly downloads dependencies from env vars from above file
 . $WORKING_DIR/dependencies.sh
@@ -110,7 +110,7 @@ xlclang \
   -I ${GSKINC} \
   -I "${DEPS_DESTINATION}/${LIBYAML}/include" \
   -I "${DEPS_DESTINATION}/${QUICKJS}" \
-  -o "${DEPS_DESTINATION}/${COMMON}/bin/zowe_launcher" \
+  -o "${LAUNCHER}/bin/zowe_launcher" \
   api.o \
   reader.o \
   scanner.o \

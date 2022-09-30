@@ -26,6 +26,8 @@ export _C89_CCMODE=1
 echo "$SCRIPT_NAME build zowe launcher ..."
 cd "$SCRIPT_DIR/content/build"
 ./build.sh
+echo "After build..."
+ls -ltr ../bin
 
 # clean up content folder
 echo "$SCRIPT_NAME cleaning up pax folder ..."

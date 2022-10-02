@@ -148,8 +148,8 @@ struct {
   //Room for at least 16 paths
   char yaml_file[PATH_MAX*17];
   char parm_member[8+1];
-  char root_dir[PATH_MAX+1];
-  char workspace_dir[PATH_MAX+1];
+  char *root_dir;
+  char *workspace_dir;
   
   char ha_instance_id[64];
   
@@ -277,7 +277,7 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
     
   }
   if (!hasMember) {
-    zl_context.parm_member = NULL;
+    zl_context.parm_member[0] = '\0';
   }
 
   setenv("CONFIG", zl_context.yaml_file, 1);
@@ -357,7 +357,7 @@ static void init_component_min_uptime(zl_comp_t *comp, ConfigManager *configmgr)
 }
 
 static void init_component_shareas(zl_comp_t *comp, ConfigManager *configmgr) {
-  char share_as[128] = {0};
+  char *share_as = NULL;
   int getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &share_as, 6, "haInstances", zl_context.ha_instance_id, "components", comp->name, "launcher", "shareAs");
   if (getStatus != ZCFG_SUCCESS) {
     getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &share_as, 4, "components", comp->name, "launcher", "shareAs");
@@ -378,6 +378,7 @@ static void init_component_shareas(zl_comp_t *comp, ConfigManager *configmgr) {
   } else {
     comp->share_as = ZL_COMP_AS_SHARE_YES;
   }
+  safeFree(share_as, strlen(share_as));
 }
 
 static const char *get_shareas_label(const zl_comp_t *comp) {
@@ -1185,6 +1186,19 @@ static int setup_signal_handlers() {
   return 0;
 }
 
+static void displayValidityException(FILE *out, int depth, ValidityException *exception){
+  for (int i=0; i<depth; i++){
+    fprintf(out,"  ");
+  }
+  fprintf(out,"%s\n",exception->message);
+  ValidityException *child = exception->firstChild;
+  while (child){
+    displayValidityException(out,depth+1,child);
+    child = child->nextSibling;
+  }
+}
+
+
 static bool validateConfiguration(ConfigManager *cmgr, FILE *out){
   bool ok = false;
   JsonValidator *validator = makeJsonValidator();
@@ -1227,7 +1241,8 @@ int main(int argc, char **argv) {
   }
 
   cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.yaml_file);
-  if (zl_context.parm_member != NULL) {
+  int parm_member_len = strlen(zl_context.parm_member);
+  if (parm_member_len > 0 && parm_member_len < 9) {
     cfgSetParmlibMemberName(configmgr, ZOWE_CONFIG_NAME, zl_context.parm_member);
   }
 

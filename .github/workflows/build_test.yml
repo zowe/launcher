@@ -84,6 +84,7 @@ jobs:
         with:
           pax-name: 'launcher'
           pax-options: '-x os390'
+          pax-ssh-host: 'zzow03.zowe.marist.cloud'
           pax-ssh-username: ${{ secrets.SSH_MARIST_USERNAME }}
           pax-ssh-password: ${{ secrets.SSH_MARIST_RACF_PASSWORD }}
 

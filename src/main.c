@@ -37,6 +37,7 @@
 #include "json.h"
 #include "configmgr.h"
 #include "logging.h"
+#include "stcbase.h"
 
 extern char ** environ;
 /*
@@ -1233,6 +1234,9 @@ int main(int argc, char **argv) {
   zl_config_t config = read_config(argc, argv);
 
   //TODO this shouldnt be needed but jsci.c is called from configmgr and it has zowelog in it?!  
+  STCBase *base = (STCBase*) safeMalloc31(sizeof(STCBase), "stcbase");
+  memset(base, 0x00, sizeof(STCBase));
+  stcBaseInit(base); /* inits RLEAnchor, workQueue, socketSet, logContext */
   logConfigureComponent(NULL, LOG_COMP_RESTDATASET, "Zowe Dataset REST", LOG_DEST_PRINTF_STDOUT, ZOWE_LOG_INFO);
 
   ConfigManager *configmgr = makeConfigManager(); /* configs,schemas,1,stderr); */

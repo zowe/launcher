@@ -79,6 +79,7 @@ jobs:
         uses: zowe-actions/shared-actions/prepare-workflow@main
 
       - name: '[Packaging] Make pax'
+        timeout-minutes: 15
         uses: zowe-actions/shared-actions/make-pax@main
         with:
           pax-name: 'launcher'

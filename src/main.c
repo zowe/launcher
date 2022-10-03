@@ -255,7 +255,7 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
       if (parenStartIndex != -1 && parenEndIndex != -1 && (parenStartIndex < parenEndIndex)) {
         memcpy(zl_context.parm_member, zl_context.yaml_file+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
         if (hasMember && strcmp(zl_context.parm_member, member) != 0) {
-          ERROR(MSG_PARMLIB_NAME_BAD);
+          ERROR(MSG_MEMBER_NAME_BAD);
           return -1;
         }
         hasMember = true;
@@ -275,7 +275,7 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
 
     if (destPos > 0) {
       memcpy(config_line+destPos, zl_context.yaml_file+srcPos, config_len - srcPos);
-      desPos+= config_len - srcPos;
+      destPos+= config_len - srcPos;
       memcpy(zl_context.yaml_file, config_line, destPos);
       zl_context.yaml_file[destPos]='\0';
     } else {

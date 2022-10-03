@@ -80,6 +80,13 @@
 #define MSG_CMD_RUN_ERR         MSG_PREFIX "0064E" " failed to run command %s - %s\n"
 #define MSG_CMD_OUT_ERR         MSG_PREFIX "0065E" " error reading output from command '%s' - %s\n"
 #define MSG_CMD_RCP_WARN        MSG_PREFIX "0066W" " command '%s' ended with code %d\n"
+#define MSG_MEMBER_NAME_BAD     MSG_PREFIX "0067E" " PARMLIB() entries must all have the same member name\n"
+#define MSG_MEMBER_MISSING      MSG_PREFIX "0068E" " PARMLIB() entries must have a member name\n"
+#define MSG_CFG_VALID           MSG_PREFIX "0069I" " Configuration is valid\n"
+#define MSG_CFG_INVALID         MSG_PREFIX "0070E" " Configuration has validity exceptions:\n"
+#define MSG_CFG_INTERNAL_FAIL   MSG_PREFIX "0071E" " Internal failure during validation, please contact support\n"
+#define MSG_CFG_LOAD_FAIL       MSG_PREFIX "0072E" " Launcher Could not load configurations\n"
+#define MSG_CFG_SCHEMA_FAIL     MSG_PREFIX "0073E" " Launcher Could not load schemas, status=%d\n"
 
 #endif // MSG_H
 

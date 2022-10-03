@@ -240,47 +240,50 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
   char member[9] = {0};
   char config_line[PATH_MAX*17] = {0};
   if (zl_context.yaml_file[0] == '/') { // simple file case, must be absolute path.
-    snprintf(zl_context.yaml_file, config_len+7, "FILE(%s)", zl_context.yaml_file);
+    snprintf(config_line, config_len+7, "FILE(%s)", zl_context.yaml_file);
+    snprintf(zl_context.yaml_file, config_len+7, "%s", config_line);
   } else { //HERE loop over input to construct new string for configmgr use.
     // It needs to strip out the (member) within each occurrence of PARMLIB()
     int parmIndex = indexOfString(zl_context.yaml_file, config_len, "PARMLIB(", 0);
     int destPos = 0;
     int srcPos = 0;
-    INFO("Handling config=%s\n",zl_context.yaml_file);
+    DEBUG("Handling config=%s\n",zl_context.yaml_file);
     while (parmIndex != -1) {
       int parenStartIndex = indexOf(zl_context.yaml_file, config_len, '(', parmIndex+9);
       int parenEndIndex = indexOf(zl_context.yaml_file, config_len, ')', parmIndex+9);
-      INFO("pStart=%d, pEnd=%d\n", parenStartIndex, parenEndIndex);
+      DEBUG("pStart=%d, pEnd=%d\n", parenStartIndex, parenEndIndex);
       if (parenStartIndex != -1 && parenEndIndex != -1 && (parenStartIndex < parenEndIndex)) {
         memcpy(zl_context.parm_member, zl_context.yaml_file+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
         if (hasMember && strcmp(zl_context.parm_member, member) != 0) {
-          ERROR("PARMLIB() entries must all have the same member name\n");
+          ERROR(MSG_PARMLIB_NAME_BAD);
           return -1;
         }
         hasMember = true;
         memcpy(member, zl_context.yaml_file+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
-        INFO("Found member=%s\n",member);
-        parmIndex = indexOfString(zl_context.yaml_file, config_len, "PARMLIB(", parenEndIndex+2);
-        memcpy(config_line, zl_context.yaml_file+srcPos, parenStartIndex-1-srcPos);
+        DEBUG("Found member=%s\n",member);
+        memcpy(config_line+destPos, zl_context.yaml_file+srcPos, parenStartIndex-srcPos);
+        destPos+= parenStartIndex-srcPos;
         srcPos=parenEndIndex+1;
+        parmIndex = indexOfString(zl_context.yaml_file, config_len, "PARMLIB(", parenEndIndex+2);
       } else {
-        parmIndex = indexOfString(zl_context.yaml_file, config_len, "PARMLIB(", parmIndex+9);
-        memcpy(config_line, zl_context.yaml_file+srcPos, parmIndex-1-srcPos);
-        srcPos=parmIndex-1;
+        ERROR(MSG_MEMBER_MISSING);
+        return -1;
       }
-      INFO("config_line now=%s\n", config_line);
-      INFO("src=%d, dst=%d, pNext=%d\n",srcPos,destPos,parmIndex);
+      DEBUG("config_line now=%s\n", config_line);
+      DEBUG("src=%d, dst=%d, pNext=%d\n",srcPos,destPos,parmIndex);
     }
-    int configLen = strlen(config_line);
-    memcpy(zl_context.yaml_file, config_line, configLen);
-    zl_context.yaml_file[configLen]='\0';
-    INFO("config result=%s\n",zl_context.yaml_file);
-      
-    
+
+    if (destPos > 0) {
+      memcpy(config_line+destPos, zl_context.yaml_file+srcPos, config_len - srcPos);
+      desPos+= config_len - srcPos;
+      memcpy(zl_context.yaml_file, config_line, destPos);
+      zl_context.yaml_file[destPos]='\0';
+    } else {
+      zl_context.parm_member[0] = '\0';
+    }
+  
   }
-  if (!hasMember) {
-    zl_context.parm_member[0] = '\0';
-  }
+
 
   setenv("CONFIG", zl_context.yaml_file, 1);
   INFO(MSG_YAML_FILE, zl_context.yaml_file);
@@ -1209,15 +1212,15 @@ static bool validateConfiguration(ConfigManager *cmgr, FILE *out){
 
   switch (validateStatus){
   case JSON_VALIDATOR_NO_EXCEPTIONS:
-    INFO("Configuration is Valid\n");
+    INFO(MSG_CFG_VALID);
     ok = true;
     break;
   case JSON_VALIDATOR_HAS_EXCEPTIONS:
-    INFO("Configuration has validity exceptions:\n");
+    ERROR(MSG_CFG_INVALID);
     displayValidityException(out,0,validator->topValidityException);
-  break;
+    break;
   case JSON_VALIDATOR_INTERNAL_FAILURE:
-    ERROR("Internal failure during validation, please contact support\n");
+    ERROR(MSG_CFG_INTERNAL_FAIL);
     break;
   }
   freeJsonValidator(validator);
@@ -1256,7 +1259,7 @@ int main(int argc, char **argv) {
   }
 
   if (cfgLoadConfiguration(configmgr, ZOWE_CONFIG_NAME) != 0){
-    ERROR("Launcher Could not load configurations\n");
+    ERROR(MSG_CFG_LOAD_FAIL);
     exit(EXIT_FAILURE);
   }
   
@@ -1274,13 +1277,12 @@ int main(int argc, char **argv) {
   snprintf(schemaList, PATH_MAX*2 + 1, "%s/schemas/zowe-yaml-schema.json:%s/schemas/server-common.json", zl_context.root_dir, zl_context.root_dir);  
   int schemaLoadStatus = cfgLoadSchemas(configmgr, ZOWE_CONFIG_NAME, schemaList);
   if (schemaLoadStatus){
-    ERROR("Launcher Could not load schemas, status=%d\n", schemaLoadStatus);
+    ERROR(MSG_CFG_SCHEMA_FAIL, schemaLoadStatus);
     exit(EXIT_FAILURE);
   }
 
 
   if (!validateConfiguration(configmgr, stdout)){
-    ERROR("Validation failed");
     exit(EXIT_FAILURE);
   }
 

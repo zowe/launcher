@@ -36,6 +36,7 @@
 #include "utils.h"
 #include "json.h"
 #include "configmgr.h"
+#include "logging.h"
 
 extern char ** environ;
 /*
@@ -1230,6 +1231,10 @@ int main(int argc, char **argv) {
   INFO(MSG_LAUNCHER_START);
 
   zl_config_t config = read_config(argc, argv);
+
+  //TODO this shouldnt be needed but jsci.c is called from configmgr and it has zowelog in it?!  
+  logConfigureComponent(NULL, LOG_COMP_RESTDATASET, "Zowe Dataset REST", LOG_DEST_PRINTF_STDOUT, ZOWE_LOG_INFO);
+
   ConfigManager *configmgr = makeConfigManager(); /* configs,schemas,1,stderr); */
   CFGConfig *theConfig = addConfig(configmgr,ZOWE_CONFIG_NAME);
   cfgSetTraceStream(configmgr,stderr);

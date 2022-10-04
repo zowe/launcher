@@ -29,6 +29,7 @@ rm -fr "${PAX_WORKSPACE_DIR}/ascii" && mkdir -p "${PAX_WORKSPACE_DIR}/ascii"
 rm -fr "${PAX_WORKSPACE_DIR}/content" && mkdir -p "${PAX_WORKSPACE_DIR}/content"
 
 echo "[${SCRIPT_NAME}] copying files ..."
+ls -ltr
 cp -R * "${PAX_WORKSPACE_DIR}/ascii"
 
 # update build information

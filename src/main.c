@@ -158,7 +158,7 @@ struct {
   pid_t pid;
   char userid[9];
   
-} zl_context = {.config = {.debug_mode = true}, .userid = "(NONE)"} ;
+} zl_context = {.config = {.debug_mode = false}, .userid = "(NONE)"} ;
 
 
 

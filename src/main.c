@@ -69,6 +69,9 @@ extern char ** environ;
 // Progressive restart internals in seconds
 static int restart_intervals_default[] = {1, 1, 1, 5, 5, 10, 20, 60, 120, 240};
 
+// Prevents components from being restarted. Used for example when shutting down.
+static bool prevent_restart = false;
+
 typedef struct zl_time_t {
   char value[32];
 } zl_time_t;
@@ -668,6 +671,7 @@ static int stop_component(zl_comp_t *comp) {
 static int stop_components(void) {
 
   INFO(MSG_STOPING_COMPS);
+  prevent_restart=true;
 
   int rc = 0;
 
@@ -920,12 +924,10 @@ static zl_config_t read_config(int argc, char **argv) {
 }
 
 static int restart_component(zl_comp_t *comp) {
-
   int stop_rc = stop_component(comp);
   if (stop_rc) {
     return stop_rc;
   }
-
   return start_component(comp);
 }
 
@@ -950,6 +952,8 @@ static void monitor_events(void) {
           zl_context.event_type, zl_context.event_data);
 
     if (zl_context.event_type == ZL_EVENT_TERM) {
+      break;
+    } else if (prevent_restart == true) {
       break;
     } else if (zl_context.event_type == ZL_EVENT_COMP_RESTART) {
       zl_comp_t* comp = zl_context.event_data;

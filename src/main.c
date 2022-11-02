@@ -161,7 +161,7 @@ struct {
   pid_t pid;
   char userid[9];
   
-} zl_context = {.config = {.debug_mode = true}, .userid = "(NONE)"} ;
+} zl_context = {.config = {.debug_mode = false}, .userid = "(NONE)"} ;
 
 
 
@@ -1116,8 +1116,7 @@ static int process_workspace_dir(ConfigManager *configmgr) {
   }
 
   // create folder if it doesn't exist
-  // FIXME: what's the proper permission?
-  if (mkdir_all(zl_context.workspace_dir, 0750) != 0) {
+  if (mkdir_all(zl_context.workspace_dir, 0770) != 0) {
     ERROR(MSG_WORKSPACE_ERROR, zl_context.workspace_dir);
     return -1;
   }

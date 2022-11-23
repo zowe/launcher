@@ -621,7 +621,10 @@ static int start_components(zl_config_t *config) {
   int rc = 0;
 
   for (size_t i = 0; i < zl_context.child_count; i++) {
-    sleep(config.sleep_time);
+    if (config.sleep_time) {
+      INFO(MSG_COMP_SLEEP, config.sleep_time);
+      sleep(config.sleep_time);
+    }
     if (start_component(&zl_context.children[i])) {
       ERROR(MSG_COMP_START_FAILED, zl_context.children[i].name);
       rc = -1;
@@ -1255,13 +1258,17 @@ int main(int argc, char **argv) {
 
   zl_config_t config = read_config(argc, argv);
 
+  if (config.sleep_time) {
+    INFO(MSG_CONFIG_SLEEP);
+  }
+
   LoggingContext *logContext = makeLoggingContext();
   logConfigureStandardDestinations(logContext);
 
   ConfigManager *configmgr = makeConfigManager(); /* configs,schemas,1,stderr); */
   CFGConfig *theConfig = addConfig(configmgr,ZOWE_CONFIG_NAME);
   cfgSetTraceStream(configmgr,stderr);
-  cfgSetTraceLevel(configmgr, zl_context.config.debug_mode ? 2 : 0);
+  cfgSetTraceLevel(configmgr, config.debug_mode ? 2 : 0);
   
   if (init_context(argc, argv, &config, configmgr)) {
     ERROR(MSG_CTX_INIT_FAILED);
@@ -1322,7 +1329,7 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  start_components();
+  start_components(&config);
 
   if (start_console_tread()) {
     ERROR(MSG_CONS_START_ERR);

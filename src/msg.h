@@ -87,6 +87,8 @@
 #define MSG_CFG_INTERNAL_FAIL   MSG_PREFIX "0071E" " Internal failure during validation, please contact support\n"
 #define MSG_CFG_LOAD_FAIL       MSG_PREFIX "0072E" " Launcher Could not load configurations\n"
 #define MSG_CFG_SCHEMA_FAIL     MSG_PREFIX "0073E" " Launcher Could not load schemas, status=%d\n"
+#define MSG_CONFIG_SLEEP        MSG_PREFIX "0074I" " Launcher configured to stagger initial component start by %s seconds\n"
+#define MSG_COMP_SLEEP          MSG_PREFIX "0075I" " Waiting %d seconds before component start\n"
 
 #endif // MSG_H
 

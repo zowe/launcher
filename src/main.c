@@ -621,9 +621,9 @@ static int start_components(zl_config_t *config) {
   int rc = 0;
 
   for (size_t i = 0; i < zl_context.child_count; i++) {
-    if (*config.sleep_time) {
-      INFO(MSG_COMP_SLEEP, *config.sleep_time);
-      sleep(*config.sleep_time);
+    if (config->sleep_time) {
+      INFO(MSG_COMP_SLEEP, config->sleep_time);
+      sleep(config->sleep_time);
     }
     if (start_component(&zl_context.children[i])) {
       ERROR(MSG_COMP_START_FAILED, zl_context.children[i].name);
@@ -935,7 +935,7 @@ static zl_config_t read_config(int argc, char **argv) {
   char *sleep_value = getenv(CONFIG_SLEEP_TIME_KEY);
   if (sleep_value) {
     char *end;
-    long int sleep_number = strtol(sleep_value, end, 10);
+    long int sleep_number = strtol(sleep_value, &end, 10);
     result.sleep_time = sleep_number;
   }
 

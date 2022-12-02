@@ -1260,6 +1260,8 @@ int main(int argc, char **argv) {
 
   if (config.sleep_time) {
     INFO(MSG_CONFIG_SLEEP, config.sleep_time);
+  } else {
+    INFO("Launcher is not using sleeps\n");
   }
 
   LoggingContext *logContext = makeLoggingContext();

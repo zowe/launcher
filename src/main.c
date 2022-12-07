@@ -932,11 +932,14 @@ static zl_config_t read_config(int argc, char **argv) {
     result.debug_mode = true;
   }
 
+  INFO("sleep_time default is %d\n",result.sleep_time);
+
   char *sleep_value = getenv(CONFIG_SLEEP_TIME_KEY);
   if (sleep_value) {
     char *end;
     long int sleep_number = strtol(sleep_value, &end, 10);
     result.sleep_time = sleep_number;
+    INFO("sleep_time changed to %d\n",sleep_number);
   }
 
   return result;
@@ -1258,12 +1261,6 @@ int main(int argc, char **argv) {
 
   zl_config_t config = read_config(argc, argv);
 
-  if (config.sleep_time) {
-    INFO(MSG_CONFIG_SLEEP, config.sleep_time);
-  } else {
-    INFO("Launcher is not using sleeps\n");
-  }
-
   LoggingContext *logContext = makeLoggingContext();
   logConfigureStandardDestinations(logContext);
 
@@ -1275,6 +1272,12 @@ int main(int argc, char **argv) {
   if (init_context(argc, argv, &config, configmgr)) {
     ERROR(MSG_CTX_INIT_FAILED);
     exit(EXIT_FAILURE);
+  }
+  
+  if (config.sleep_time) {
+    INFO(MSG_CONFIG_SLEEP, config.sleep_time);
+  } else {
+    INFO("Launcher is not using sleeps\n");
   }
 
   cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.yaml_file);

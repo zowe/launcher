@@ -51,6 +51,7 @@ extern char ** environ;
 #define CONFIG_DEBUG_MODE_KEY     "ZLDEBUG"
 /* delay between starting each component, in seconds */
 #define CONFIG_SLEEP_TIME_KEY     "ZLDELAYS"
+#define DEFAULT_SLEEP_TIME_SEC    5
 #define ZOWE_CONFIG_NAME          "ZOWEYAML"
 #define CONFIG_DEBUG_MODE_VALUE   "ON"
 
@@ -168,7 +169,7 @@ struct {
      is to temporarily workaround parallelism performance issues on z/OS
      If the situation improves in the future, we can reduce this.
   */
-} zl_context = {.config = {.debug_mode = false, .sleep_time = 5}, .userid = "(NONE)"} ;
+} zl_context = {.config = {.debug_mode = false}, .userid = "(NONE)"} ;
 
 
 
@@ -932,14 +933,15 @@ static zl_config_t read_config(int argc, char **argv) {
     result.debug_mode = true;
   }
 
-  INFO("sleep_time default is %d\n",result.sleep_time);
-
   char *sleep_value = getenv(CONFIG_SLEEP_TIME_KEY);
   if (sleep_value) {
     char *end;
     long int sleep_number = strtol(sleep_value, &end, 10);
     result.sleep_time = sleep_number;
     INFO("sleep_time changed to %d\n",sleep_number);
+  } else {
+    result.sleep_time = DEFAULT_SLEEP_TIME_SEC;
+    INFO("Using sleep_time default of %d\n",result.sleep_time);
   }
 
   return result;
@@ -1267,6 +1269,8 @@ int main(int argc, char **argv) {
   ConfigManager *configmgr = makeConfigManager(); /* configs,schemas,1,stderr); */
   CFGConfig *theConfig = addConfig(configmgr,ZOWE_CONFIG_NAME);
   cfgSetTraceStream(configmgr,stderr);
+
+  INFO("configmgr debug=%d\n",config.debug_mode);
   cfgSetTraceLevel(configmgr, config.debug_mode ? 2 : 0);
   
   if (init_context(argc, argv, &config, configmgr)) {

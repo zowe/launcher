@@ -151,7 +151,10 @@ struct {
   pthread_mutex_t event_lock;
 
   //Room for at least 16 paths
-  char yaml_file[PATH_MAX*17];
+  //config_path is what the user types in
+  char config_path[PATH_MAX*17];
+  //configmgr_path is the path in a form configmgr consumes
+  char configmgr_path[PATH_MAX*17];
   char parm_member[8+1];
   char *root_dir;
   char *workspace_dir;
@@ -234,40 +237,40 @@ static int check_if_dir_exists(const char *dir, const char *name) {
 
 static int init_context(int argc, char **argv, const struct zl_config_t *cfg, ConfigManager *configmgr) {
 
-  if (get_env("CONFIG", zl_context.yaml_file, sizeof(zl_context.yaml_file))) {
+  if (get_env("CONFIG", zl_context.config_path, sizeof(zl_context.config_path))) {
     return -1;
   }
 
-  int config_len = strlen(zl_context.yaml_file);
+  int config_len = strlen(zl_context.config_path);
   bool hasMember = false;
   char member[9] = {0};
   char config_line[PATH_MAX*17] = {0};
-  if (zl_context.yaml_file[0] == '/') { // simple file case, must be absolute path.
-    snprintf(config_line, config_len+7, "FILE(%s)", zl_context.yaml_file);
-    snprintf(zl_context.yaml_file, config_len+7, "%s", config_line);
+  if (zl_context.config_path[0] == '/') { // simple file case, must be absolute path.
+    snprintf(config_line, config_len+7, "FILE(%s)", zl_context.config_path);
+    snprintf(zl_context.configmgr_path, config_len+7, "%s", config_line);
   } else { //HERE loop over input to construct new string for configmgr use.
     // It needs to strip out the (member) within each occurrence of PARMLIB()
-    int parmIndex = indexOfString(zl_context.yaml_file, config_len, "PARMLIB(", 0);
+    int parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", 0);
     int destPos = 0;
     int srcPos = 0;
-    DEBUG("Handling config=%s\n",zl_context.yaml_file);
+    DEBUG("Handling config=%s\n",zl_context.config_path);
     while (parmIndex != -1) {
-      int parenStartIndex = indexOf(zl_context.yaml_file, config_len, '(', parmIndex+9);
-      int parenEndIndex = indexOf(zl_context.yaml_file, config_len, ')', parmIndex+9);
+      int parenStartIndex = indexOf(zl_context.config_path, config_len, '(', parmIndex+9);
+      int parenEndIndex = indexOf(zl_context.config_path, config_len, ')', parmIndex+9);
       DEBUG("pStart=%d, pEnd=%d\n", parenStartIndex, parenEndIndex);
       if (parenStartIndex != -1 && parenEndIndex != -1 && (parenStartIndex < parenEndIndex)) {
-        memcpy(zl_context.parm_member, zl_context.yaml_file+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
+        memcpy(zl_context.parm_member, zl_context.config_path+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
         if (hasMember && strcmp(zl_context.parm_member, member) != 0) {
           ERROR(MSG_MEMBER_NAME_BAD);
           return -1;
         }
         hasMember = true;
-        memcpy(member, zl_context.yaml_file+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
+        memcpy(member, zl_context.config_path+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
         DEBUG("Found member=%s\n",member);
-        memcpy(config_line+destPos, zl_context.yaml_file+srcPos, parenStartIndex-srcPos);
+        memcpy(config_line+destPos, zl_context.config_path+srcPos, parenStartIndex-srcPos);
         destPos+= parenStartIndex-srcPos;
         srcPos=parenEndIndex+1;
-        parmIndex = indexOfString(zl_context.yaml_file, config_len, "PARMLIB(", parenEndIndex+2);
+        parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", parenEndIndex+2);
       } else {
         ERROR(MSG_MEMBER_MISSING);
         return -1;
@@ -277,10 +280,10 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
     }
 
     if (destPos > 0) {
-      memcpy(config_line+destPos, zl_context.yaml_file+srcPos, config_len - srcPos);
+      memcpy(config_line+destPos, zl_context.config_path+srcPos, config_len - srcPos);
       destPos+= config_len - srcPos;
-      memcpy(zl_context.yaml_file, config_line, destPos);
-      zl_context.yaml_file[destPos]='\0';
+      memcpy(zl_context.configmgr_path, config_line, destPos);
+      zl_context.configmgr_path[destPos]='\0';
     } else {
       zl_context.parm_member[0] = '\0';
     }
@@ -288,8 +291,8 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
   }
 
 
-  setenv("CONFIG", zl_context.yaml_file, 1);
-  INFO(MSG_YAML_FILE, zl_context.yaml_file);
+  setenv("CONFIG", zl_context.config_path, 1);
+  INFO(MSG_YAML_FILE, zl_context.configmgr_path);
 
   zl_context.config = *cfg;
 
@@ -579,7 +582,7 @@ static int start_component(zl_comp_t *comp) {
     "internal",
     "start",
     "component",
-    "--config", zl_context.yaml_file,
+    "--config", zl_context.config_path,
     "--ha-instance", zl_context.ha_instance_id,
     "--component", comp->name, 
     NULL
@@ -1051,7 +1054,7 @@ static void handle_get_component_line(void *data, const char *line) {
 static int get_component_list(char *buf, size_t buf_size) {
   char command[4*PATH_MAX];
   snprintf (command, sizeof(command), "%s/bin/zwe internal get-launch-components --config \"%s\" --ha-instance %s",
-            zl_context.root_dir, zl_context.yaml_file, zl_context.ha_instance_id);
+            zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
   DEBUG("about to get component list\n");
   char comp_list[COMP_LIST_SIZE] = {0};
   if (run_command(command, handle_get_component_line, (void*)comp_list)) {
@@ -1156,7 +1159,7 @@ static int prepare_instance() {
   char command[4*PATH_MAX];
   DEBUG("about to prepare Zowe instance\n");
   snprintf(command, sizeof(command), "%s/bin/zwe internal start prepare --config \"%s\" --ha-instance %s 2>&1",
-           zl_context.root_dir, zl_context.yaml_file, zl_context.ha_instance_id);
+           zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
   if (run_command(command, print_line, NULL)) {
     ERROR(MSG_INST_PREP_ERR);
     return -1;
@@ -1252,7 +1255,7 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.yaml_file);
+  cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.configmgr_path);
   int parm_member_len = strlen(zl_context.parm_member);
   if (parm_member_len > 0 && parm_member_len < 9) {
     cfgSetParmlibMemberName(configmgr, ZOWE_CONFIG_NAME, zl_context.parm_member);

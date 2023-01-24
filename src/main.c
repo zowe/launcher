@@ -72,6 +72,8 @@ static int restart_intervals_default[] = {1, 1, 1, 5, 5, 10, 20, 60, 120, 240};
 // Prevents components from being restarted. Used for example when shutting down.
 static bool prevent_restart = false;
 
+static char** shared_uss_env = NULL;
+
 typedef struct zl_time_t {
   char value[32];
 } zl_time_t;
@@ -233,6 +235,101 @@ static int check_if_dir_exists(const char *dir, const char *name) {
     return -1;
   }
   return 0;
+}
+
+static bool arrayListContains(ArrayList *list, char *element) {
+  for (int i=0; i<list->size; i++) {
+    if (strcmp((char*) list->array[i], element) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static void set_shared_uss_env(ConfigManager *configmgr) {
+  Json *env = NULL;
+  int cfgGetStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &env, 2, "zowe", "environments");
+  JsonObject *object = NULL;
+  ArrayList *list = makeArrayList();
+
+  printf("cfgGetStatus is %d, pointer: %p\n", cfgGetStatus, env);
+  if (cfgGetStatus == ZCFG_SUCCESS) {
+    object = jsonAsObject(env);
+  }
+
+  printf("object ptr is %p\n", object);
+
+  int maxRecords = 2;
+
+  for (char **env = environ; *env != 0; env++) {
+    maxRecords++;
+  }
+
+  printf("maxRecords: %d\n", maxRecords);
+
+  // _BPX_SHAREAS is set on component level
+  int idx = 1;
+
+  arrayListAdd(list, "_BPX_SHAREAS");
+
+  if (object) { // environments block is defined in zowe.yaml
+	  JsonProperty *property;
+	  for (property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
+		  maxRecords++;
+	  }
+
+    shared_uss_env = malloc(maxRecords * sizeof(char*));
+    memset(shared_uss_env, 0, maxRecords * sizeof(char*));
+
+    // Get all environment variables defined in zowe.yaml and put them in the output as they are
+    for (property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
+      char *key = jsonPropertyGetKey(property);
+      printf("Got key from yaml %s\n", key);
+
+		  if (!arrayListContains(list, key)) {
+        arrayListAdd(list, key);
+
+        Json *valueJ = jsonPropertyGetValue(property);
+        char *value = jsonAsString(valueJ);
+
+        printf("Got value for key %s: %s\n", key, value);
+
+        char *entry = malloc(strlen(key) + strlen(value) + 2);
+        sprintf(entry, "%s=%s", key, value);
+        printf("entry of yaml is %s\n", entry);
+        shared_uss_env[idx++] = entry;
+      }
+	  }
+  } else {
+    shared_uss_env = malloc(maxRecords * sizeof(char*));
+    memset(shared_uss_env, 0, maxRecords * sizeof(char*));
+  }
+
+  // Get all environment variables defined in the system and put them in output if they were not already defined in zowe.yaml
+  for (char **env = environ; *env != 0; env++) { 
+    char *thisEnv = *env;
+    char *index = strchr(thisEnv, '=');
+    if (!index) {
+      continue;
+    }
+
+    int length = index - thisEnv;
+    char *key = malloc(length + 1);
+    strncpy(key, thisEnv, length);
+    printf("Got key from env %s\n", key);
+    
+    if (!arrayListContains(list, key)) {
+      printf("%s not set\n", key);
+      arrayListAdd(list, key);
+      shared_uss_env[idx++] = thisEnv;
+    }
+  }
+  arrayListFree(list);
+
+  for (char **env = shared_uss_env + 1; *env != 0; env++) { 
+    char *thisEnv = *env;
+    printf("env entry: %s\n", thisEnv);
+  }
 }
 
 static int init_context(int argc, char **argv, const struct zl_config_t *cfg, ConfigManager *configmgr) {
@@ -576,7 +673,6 @@ static int start_component(zl_comp_t *comp) {
   DEBUG("%s fd_map[0]=%d, fd_map[1]=%d, fd_map[2]=%d\n",
         comp->name, fd_map[0], fd_map[1], fd_map[2]);
 
-  const char *c_envp[2] = {get_shareas_env(comp), NULL};
   const char *c_args[] = {
     bin,
     "internal",
@@ -587,7 +683,9 @@ static int start_component(zl_comp_t *comp) {
     "--component", comp->name, 
     NULL
   };
-  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_envp);
+
+  shared_uss_env[0] = (char *)get_shareas_env(comp);
+  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, (const char **)shared_uss_env);
   if (comp->pid == -1) {
     DEBUG("spawn() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;
@@ -1249,7 +1347,7 @@ int main(int argc, char **argv) {
   CFGConfig *theConfig = addConfig(configmgr,ZOWE_CONFIG_NAME);
   cfgSetTraceStream(configmgr,stderr);
   cfgSetTraceLevel(configmgr, zl_context.config.debug_mode ? 2 : 0);
-  
+
   if (init_context(argc, argv, &config, configmgr)) {
     ERROR(MSG_CTX_INIT_FAILED);
     exit(EXIT_FAILURE);
@@ -1284,11 +1382,11 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-
   if (!validateConfiguration(configmgr, stdout)){
     exit(EXIT_FAILURE);
   }
 
+  set_shared_uss_env(configmgr);
 
   if (process_workspace_dir(configmgr)) {
     exit(EXIT_FAILURE);

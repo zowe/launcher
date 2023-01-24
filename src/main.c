@@ -13,6 +13,7 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -246,18 +247,36 @@ static bool arrayListContains(ArrayList *list, char *element) {
   return false;
 }
 
+static char* jsonToString(Json *json) {
+  char *output = NULL;
+  switch (json->type) {
+    case JSON_TYPE_STRING:
+      return jsonAsString(json);
+    case JSON_TYPE_BOOLEAN:
+      return jsonAsBoolean(json) ? "true" : "false";
+    case JSON_TYPE_NUMBER:
+    case JSON_TYPE_INT64:
+      output = malloc(21); // Longest string possible -9223372036854775807
+      snprintf(output, 21, "%ld", jsonAsInt64(json));
+      return output;
+    case JSON_TYPE_DOUBLE:
+      output = malloc(32);
+      snprintf(output, 32, "%lf", jsonAsDouble(json), DBL_DIG, output);
+      return output;
+    default:
+      return NULL;
+  }
+}
+
 static void set_shared_uss_env(ConfigManager *configmgr) {
   Json *env = NULL;
   int cfgGetStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &env, 2, "zowe", "environments");
   JsonObject *object = NULL;
   ArrayList *list = makeArrayList();
 
-  printf("cfgGetStatus is %d, pointer: %p\n", cfgGetStatus, env);
   if (cfgGetStatus == ZCFG_SUCCESS) {
     object = jsonAsObject(env);
   }
-
-  printf("object ptr is %p\n", object);
 
   int maxRecords = 2;
 
@@ -265,11 +284,9 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     maxRecords++;
   }
 
-  printf("maxRecords: %d\n", maxRecords);
-
-  // _BPX_SHAREAS is set on component level
   int idx = 1;
 
+  // _BPX_SHAREAS is set on component level
   arrayListAdd(list, "_BPX_SHAREAS");
 
   if (object) { // environments block is defined in zowe.yaml
@@ -284,19 +301,19 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     // Get all environment variables defined in zowe.yaml and put them in the output as they are
     for (property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
       char *key = jsonPropertyGetKey(property);
-      printf("Got key from yaml %s\n", key);
 
 		  if (!arrayListContains(list, key)) {
         arrayListAdd(list, key);
 
         Json *valueJ = jsonPropertyGetValue(property);
-        char *value = jsonAsString(valueJ);
+        char *value = jsonToString(valueJ);
 
-        printf("Got value for key %s: %s\n", key, value);
+        if (!value) {
+          continue;
+        }
 
         char *entry = malloc(strlen(key) + strlen(value) + 2);
         sprintf(entry, "%s=%s", key, value);
-        printf("entry of yaml is %s\n", entry);
         shared_uss_env[idx++] = entry;
       }
 	  }
@@ -316,20 +333,13 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     int length = index - thisEnv;
     char *key = malloc(length + 1);
     strncpy(key, thisEnv, length);
-    printf("Got key from env %s\n", key);
     
     if (!arrayListContains(list, key)) {
-      printf("%s not set\n", key);
       arrayListAdd(list, key);
       shared_uss_env[idx++] = thisEnv;
     }
   }
   arrayListFree(list);
-
-  for (char **env = shared_uss_env + 1; *env != 0; env++) { 
-    char *thisEnv = *env;
-    printf("env entry: %s\n", thisEnv);
-  }
 }
 
 static int init_context(int argc, char **argv, const struct zl_config_t *cfg, ConfigManager *configmgr) {
@@ -1411,6 +1421,7 @@ int main(int argc, char **argv) {
 
   if (start_console_tread()) {
     ERROR(MSG_CONS_START_ERR);
+    free(shared_uss_env);
     exit(EXIT_FAILURE);
   }
 
@@ -1418,6 +1429,7 @@ int main(int argc, char **argv) {
 
   if (stop_console_thread()) {
     ERROR(MSG_CONS_STOP_ERR);
+    free(shared_uss_env);
     exit(EXIT_FAILURE);
   }
 
@@ -1425,6 +1437,7 @@ int main(int argc, char **argv) {
 
   INFO(MSG_LAUNCHER_STOPPED);
 
+  free(shared_uss_env);
   exit(EXIT_SUCCESS);
 }
 

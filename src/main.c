@@ -49,6 +49,9 @@ extern char ** environ;
  */
 
 #define CONFIG_DEBUG_MODE_KEY     "ZLDEBUG"
+/* delay between starting each component, in seconds */
+#define CONFIG_SLEEP_TIME_KEY     "ZLDELAYS"
+#define DEFAULT_SLEEP_TIME_SEC    5
 #define ZOWE_CONFIG_NAME          "ZOWEYAML"
 #define CONFIG_DEBUG_MODE_VALUE   "ON"
 
@@ -100,6 +103,7 @@ typedef struct zl_int_array_t {
 
 typedef struct zl_config_t {
   bool debug_mode;
+  int sleep_time;
 } zl_config_t;
 
 typedef struct zl_comp_t {
@@ -163,7 +167,11 @@ struct {
   
   pid_t pid;
   char userid[9];
-  
+
+  /* Sleep time of 5 seconds during startup of components
+     is to temporarily workaround parallelism performance issues on z/OS
+     If the situation improves in the future, we can reduce this.
+  */
 } zl_context = {.config = {.debug_mode = false}, .userid = "(NONE)"} ;
 
 
@@ -587,6 +595,7 @@ static int start_component(zl_comp_t *comp) {
     "--component", comp->name, 
     NULL
   };
+  
   comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_envp);
   if (comp->pid == -1) {
     DEBUG("spawn() failed for %s - %s\n", comp->name, strerror(errno));
@@ -609,13 +618,17 @@ static int start_component(zl_comp_t *comp) {
   return 0;
 }
 
-static int start_components(void) {
+static int start_components(zl_config_t *config) {
 
   INFO(MSG_STARTING_COMPS);
 
   int rc = 0;
 
   for (size_t i = 0; i < zl_context.child_count; i++) {
+    if (config->sleep_time) {
+      INFO(MSG_COMP_SLEEP, config->sleep_time);
+      sleep(config->sleep_time);
+    }
     if (start_component(&zl_context.children[i])) {
       ERROR(MSG_COMP_START_FAILED, zl_context.children[i].name);
       rc = -1;
@@ -921,6 +934,17 @@ static zl_config_t read_config(int argc, char **argv) {
 
   if (debug_value && !strcmp_pad(debug_value, CONFIG_DEBUG_MODE_VALUE)) {
     result.debug_mode = true;
+  }
+
+  char *sleep_value = getenv(CONFIG_SLEEP_TIME_KEY);
+  if (sleep_value) {
+    char *end;
+    long int sleep_number = strtol(sleep_value, &end, 10);
+    result.sleep_time = sleep_number;
+    INFO("sleep_time changed to %d\n",sleep_number);
+  } else {
+    result.sleep_time = DEFAULT_SLEEP_TIME_SEC;
+    INFO("Using sleep_time default of %d\n",result.sleep_time);
   }
 
   return result;
@@ -1248,11 +1272,19 @@ int main(int argc, char **argv) {
   ConfigManager *configmgr = makeConfigManager(); /* configs,schemas,1,stderr); */
   CFGConfig *theConfig = addConfig(configmgr,ZOWE_CONFIG_NAME);
   cfgSetTraceStream(configmgr,stderr);
-  cfgSetTraceLevel(configmgr, zl_context.config.debug_mode ? 2 : 0);
+
+  INFO("configmgr debug=%d\n",config.debug_mode);
+  cfgSetTraceLevel(configmgr, config.debug_mode ? 2 : 0);
   
   if (init_context(argc, argv, &config, configmgr)) {
     ERROR(MSG_CTX_INIT_FAILED);
     exit(EXIT_FAILURE);
+  }
+  
+  if (config.sleep_time) {
+    INFO(MSG_CONFIG_SLEEP, config.sleep_time);
+  } else {
+    INFO("Launcher is not using sleeps\n");
   }
 
   cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.configmgr_path);
@@ -1309,7 +1341,7 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  start_components();
+  start_components(&config);
 
   if (start_console_tread()) {
     ERROR(MSG_CONS_START_ERR);

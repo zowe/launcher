@@ -1264,10 +1264,23 @@ static void print_line(void *data, const char *line) {
 }
 
 static int prepare_instance() {
-  char command[4*PATH_MAX];
+  char command[5*PATH_MAX];
+  char sharedenv[1*PATH_MAX];
+  
+  for (char **env = environ; *env != 0; env++) {
+    char *thisEnv = *env;
+    char *aux = malloc(strlen(thisEnv) + 2);
+    strcpy(aux, thisEnv);
+    trimRight(aux, strlen(aux));
+    strcat(sharedenv, strcat(aux, " "));
+    free(aux);
+  }
+
+  trimRight(sharedenv, strlen(sharedenv));
+
   DEBUG("about to prepare Zowe instance\n");
-  snprintf(command, sizeof(command), "%s/bin/zwe internal start prepare --config \"%s\" --ha-instance %s 2>&1",
-           zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
+  snprintf(command, sizeof(command), "%s %s/bin/zwe internal start prepare --config \"%s\" --ha-instance %s 2>&1",
+           sharedenv, zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
   if (run_command(command, print_line, NULL)) {
     ERROR(MSG_INST_PREP_ERR);
     return -1;

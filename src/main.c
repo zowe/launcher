@@ -1263,24 +1263,47 @@ static void print_line(void *data, const char *line) {
   printf("%s", line);
 }
 
-static int prepare_instance() {
-  char command[5*PATH_MAX];
-  char sharedenv[1*PATH_MAX];
-  
-  for (char **env = environ; *env != 0; env++) {
+static char* get_sharedenv(void) {
+  char *output = NULL;
+
+  int required = 0;
+  for (char **env = shared_uss_env + 1; *env != 0; env++) {
     char *thisEnv = *env;
-    char *aux = malloc(strlen(thisEnv) + 2);
-    strcpy(aux, thisEnv);
-    trimRight(aux, strlen(aux));
-    strcat(sharedenv, strcat(aux, " "));
-    free(aux);
+    required += (strlen(thisEnv) + 1);
   }
 
-  trimRight(sharedenv, strlen(sharedenv));
+  required++;
+  output = malloc(required);
+  for (char **env = shared_uss_env + 1; *env != 0; env++) {
+    char *thisEnv = *env;
+    strcat(output, thisEnv);
+    trimRight(output, strlen(output));
+    strcat(output, " ");
+  }
+  trimRight(output, strlen(output));
+
+  return output;
+}
+
+static char* get_start_prepare_cmd(char *sharedenv) {
+  const char basecmd[] = "%s %s/bin/zwe internal start prepare --config \"%s\" --ha-instance %s 2>&1";
+  int size = strlen(zl_context.root_dir) + strlen(zl_context.config_path) + strlen(zl_context.ha_instance_id) + strlen(sharedenv) + sizeof(basecmd) + 1;
+  char *command = malloc(size);
+
+  snprintf(command, size, basecmd,
+           sharedenv, zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
+  
+  return command;
+}
+
+
+static int prepare_instance() {
+  char *sharedenv = get_sharedenv();
+  char *command = get_start_prepare_cmd(sharedenv);
+
+  free(sharedenv);
 
   DEBUG("about to prepare Zowe instance\n");
-  snprintf(command, sizeof(command), "%s %s/bin/zwe internal start prepare --config \"%s\" --ha-instance %s 2>&1",
-           sharedenv, zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
   if (run_command(command, print_line, NULL)) {
     ERROR(MSG_INST_PREP_ERR);
     return -1;

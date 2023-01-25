@@ -13,7 +13,6 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -290,19 +289,21 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
   arrayListAdd(list, "_BPX_SHAREAS");
 
   if (object) { // environments block is defined in zowe.yaml
-	  JsonProperty *property;
-	  for (property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
-		  maxRecords++;
-	  }
+    JsonProperty *property;
+    for (property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
+      maxRecords++;
+    }
+  }
 
-    shared_uss_env = malloc(maxRecords * sizeof(char*));
-    memset(shared_uss_env, 0, maxRecords * sizeof(char*));
+  shared_uss_env = malloc(maxRecords * sizeof(char*));
+  memset(shared_uss_env, 0, maxRecords * sizeof(char*));
 
+  if (object) {
     // Get all environment variables defined in zowe.yaml and put them in the output as they are
     for (property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
       char *key = jsonPropertyGetKey(property);
 
-		  if (!arrayListContains(list, key)) {
+      if (!arrayListContains(list, key)) {
         arrayListAdd(list, key);
 
         Json *valueJ = jsonPropertyGetValue(property);
@@ -316,10 +317,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
         sprintf(entry, "%s=%s", key, value);
         shared_uss_env[idx++] = entry;
       }
-	  }
-  } else {
-    shared_uss_env = malloc(maxRecords * sizeof(char*));
-    memset(shared_uss_env, 0, maxRecords * sizeof(char*));
+    }
   }
 
   // Get all environment variables defined in the system and put them in output if they were not already defined in zowe.yaml
@@ -559,7 +557,7 @@ static int init_components(char *components, ConfigManager *configmgr) {
       break;
     }
     name = strtok(NULL, ",");
-	}
+  }
   return 0;
 }
 
@@ -1267,14 +1265,14 @@ static char* get_sharedenv(void) {
   char *output = NULL;
 
   int required = 0;
-  for (char **env = shared_uss_env + 1; *env != 0; env++) {
+  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
     char *thisEnv = *env;
     required += (strlen(thisEnv) + 1);
   }
 
   required++;
   output = malloc(required);
-  for (char **env = shared_uss_env + 1; *env != 0; env++) {
+  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
     char *thisEnv = *env;
     strcat(output, thisEnv);
     trimRight(output, strlen(output));
@@ -1393,7 +1391,6 @@ int main(int argc, char **argv) {
   CFGConfig *theConfig = addConfig(configmgr,ZOWE_CONFIG_NAME);
   cfgSetTraceStream(configmgr,stderr);
   cfgSetTraceLevel(configmgr, zl_context.config.debug_mode ? 2 : 0);
-
   if (init_context(argc, argv, &config, configmgr)) {
     ERROR(MSG_CTX_INIT_FAILED);
     exit(EXIT_FAILURE);

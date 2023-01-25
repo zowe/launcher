@@ -289,8 +289,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
   arrayListAdd(list, "_BPX_SHAREAS");
 
   if (object) { // environments block is defined in zowe.yaml
-    JsonProperty *property;
-    for (property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
+    for (JsonProperty *property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
       maxRecords++;
     }
   }
@@ -300,7 +299,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
 
   if (object) {
     // Get all environment variables defined in zowe.yaml and put them in the output as they are
-    for (property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
+    for (JsonProperty *property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
       char *key = jsonPropertyGetKey(property);
 
       if (!arrayListContains(list, key)) {

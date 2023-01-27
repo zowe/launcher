@@ -334,7 +334,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     for (JsonProperty *property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
       char *key = jsonPropertyGetKey(property);
       if (!is_valid_key(key)) {
-        WARN("Key `zowe.environments.%s` is invalid and it will be ignored", key);
+        WARN("Key in zowe.yaml `zowe.environments.%s` is invalid and it will be ignored\n", key);
         continue;
       }
 

@@ -255,7 +255,8 @@ static char* escape_string(char *input) {
 
     char *output = malloc(length + quotes + 2 + 1); // add quote on first and the last position and escape quotes inside
     output[0] = '\"';
-    for (int i = 0, j = 1; i < length; i++) {
+    int j = 1;
+    for (int i = 0; i < length; i++) {
         if (input[i] == '\"') {
             output[j++] = '\\';
         }

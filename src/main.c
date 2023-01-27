@@ -246,11 +246,32 @@ static bool arrayListContains(ArrayList *list, char *element) {
   return false;
 }
 
+static char* escape_string(char *input) {
+    int length = strlen(input);
+    int quotes = 0;
+    for (int i = 0; i < length; i++) {
+        if (input[i] == '\"') quotes++;
+    }
+
+    char *output = malloc(length + quotes + 2 + 1); // add quote on first and the last position and escape quotes inside
+    output[0] = '\"';
+    for (int i = 0, j = 1; i < length; i++) {
+        if (input[i] == '\"') {
+            output[j++] = '\\';
+        }
+        output[j++] = input[i];
+    }
+    output[j++] = '\"';
+    output[j++] = 0;
+
+    return output;
+}
+
 static char* jsonToString(Json *json) {
   char *output = NULL;
   switch (json->type) {
     case JSON_TYPE_STRING:
-      return jsonAsString(json);
+      return escape_string(jsonAsString(json));
     case JSON_TYPE_BOOLEAN:
       return jsonAsBoolean(json) ? "true" : "false";
     case JSON_TYPE_NUMBER:
@@ -265,6 +286,16 @@ static char* jsonToString(Json *json) {
     default:
       return NULL;
   }
+}
+
+static bool is_valid_key(char *key) {
+    int length = strlen(key);
+    for (int i = 0; i < length; i++) {
+        if (isalnum(key[i])) continue;
+        if (strchr("_-", key[i])) continue;
+        return false;
+    }
+    return true;
 }
 
 static void set_shared_uss_env(ConfigManager *configmgr) {
@@ -301,6 +332,10 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     // Get all environment variables defined in zowe.yaml and put them in the output as they are
     for (JsonProperty *property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
       char *key = jsonPropertyGetKey(property);
+      if (!is_valid_key(key)) {
+        WARN("Key `zowe.environments.%s` is invalid and it will be ignored", key);
+        continue;
+      }
 
       if (!arrayListContains(list, key)) {
         arrayListAdd(list, key);

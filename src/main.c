@@ -1298,23 +1298,40 @@ static void print_line(void *data, const char *line) {
 
 static char* get_sharedenv(void) {
   char *output = NULL;
+  char *aux = NULL;
 
   int required = 0;
   for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
     char *thisEnv = *env;
-    required += (strlen(thisEnv) + 1);
+    required += (strlen(thisEnv) + 3); // space + quotes
   }
 
   required++;
   output = malloc(required);
+  aux = malloc(required);
   for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
     char *thisEnv = *env;
-    strcat(output, thisEnv);
-    trimRight(output, strlen(output));
-    strcat(output, " ");
+    strcat(aux, thisEnv);
+    char *envName = strtok(aux, "=");
+    if (envName) {
+      strcat(output, envName);
+      char *envValue = &thisEnv[strlen(envName) + 1];
+      if (*envValue == '"') { // Env value is already enclosed in quotes
+        strcat(output, "=");
+        strcat(output, envValue);
+        trimRight(output, strlen(output));
+        strcat(output, " ");
+      } else {
+        strcat(output, "=\"");
+        strcat(output, envValue);
+        trimRight(output, strlen(output));
+        strcat(output, "\" ");
+      }
+    }
+    aux[0] = 0;
   }
   trimRight(output, strlen(output));
-
+  free(aux);
   return output;
 }
 

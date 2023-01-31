@@ -72,6 +72,8 @@ static int restart_intervals_default[] = {1, 1, 1, 5, 5, 10, 20, 60, 120, 240};
 // Prevents components from being restarted. Used for example when shutting down.
 static bool prevent_restart = false;
 
+static char** shared_uss_env = NULL;
+
 typedef struct zl_time_t {
   char value[32];
 } zl_time_t;
@@ -233,6 +235,144 @@ static int check_if_dir_exists(const char *dir, const char *name) {
     return -1;
   }
   return 0;
+}
+
+static bool arrayListContains(ArrayList *list, char *element) {
+  for (int i=0; i<list->size; i++) {
+    if (strcmp((char*) list->array[i], element) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static char* escape_string(char *input) {
+    int length = strlen(input);
+    int quotes = 0;
+    for (int i = 0; i < length; i++) {
+        if (input[i] == '\"') quotes++;
+    }
+
+    char *output = malloc(length + quotes + 2 + 1); // add quote on first and the last position and escape quotes inside
+    output[0] = '\"';
+    int j = 1;
+    for (int i = 0; i < length; i++) {
+        if (input[i] == '\"') {
+            output[j++] = '\\';
+        }
+        output[j++] = input[i];
+    }
+    output[j++] = '\"';
+    output[j++] = 0;
+
+    return output;
+}
+
+static char* jsonToString(Json *json) {
+  char *output = NULL;
+  switch (json->type) {
+    case JSON_TYPE_STRING:
+      return escape_string(jsonAsString(json));
+    case JSON_TYPE_BOOLEAN:
+      return jsonAsBoolean(json) ? "true" : "false";
+    case JSON_TYPE_NUMBER:
+    case JSON_TYPE_INT64:
+      output = malloc(21); // Longest string possible -9223372036854775807
+      snprintf(output, 21, "%ld", jsonAsInt64(json));
+      return output;
+    case JSON_TYPE_DOUBLE:
+      output = malloc(32);
+      snprintf(output, 32, "%lf", jsonAsDouble(json), DBL_DIG, output);
+      return output;
+    default:
+      return NULL;
+  }
+}
+
+static bool is_valid_key(char *key) {
+    int length = strlen(key);
+    for (int i = 0; i < length; i++) {
+        if (isalnum(key[i])) continue;
+        if (strchr("_-", key[i])) continue;
+        return false;
+    }
+    return true;
+}
+
+static void set_shared_uss_env(ConfigManager *configmgr) {
+  Json *env = NULL;
+  int cfgGetStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &env, 2, "zowe", "environments");
+  JsonObject *object = NULL;
+  ArrayList *list = makeArrayList();
+
+  if (cfgGetStatus == ZCFG_SUCCESS) {
+    object = jsonAsObject(env);
+  }
+
+  int maxRecords = 2;
+
+  for (char **env = environ; *env != 0; env++) {
+    maxRecords++;
+  }
+
+  int idx = 1;
+
+  // _BPX_SHAREAS is set on component level
+  arrayListAdd(list, "_BPX_SHAREAS");
+
+  if (object) { // environments block is defined in zowe.yaml
+    for (JsonProperty *property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
+      maxRecords++;
+    }
+  }
+
+  shared_uss_env = malloc(maxRecords * sizeof(char*));
+  memset(shared_uss_env, 0, maxRecords * sizeof(char*));
+
+  if (object) {
+    // Get all environment variables defined in zowe.yaml and put them in the output as they are
+    for (JsonProperty *property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
+      char *key = jsonPropertyGetKey(property);
+      if (!is_valid_key(key)) {
+        WARN("Key in zowe.yaml `zowe.environments.%s` is invalid and it will be ignored\n", key);
+        continue;
+      }
+
+      if (!arrayListContains(list, key)) {
+        arrayListAdd(list, key);
+
+        Json *valueJ = jsonPropertyGetValue(property);
+        char *value = jsonToString(valueJ);
+
+        if (!value) {
+          continue;
+        }
+
+        char *entry = malloc(strlen(key) + strlen(value) + 2);
+        sprintf(entry, "%s=%s", key, value);
+        shared_uss_env[idx++] = entry;
+      }
+    }
+  }
+
+  // Get all environment variables defined in the system and put them in output if they were not already defined in zowe.yaml
+  for (char **env = environ; *env != 0; env++) { 
+    char *thisEnv = *env;
+    char *index = strchr(thisEnv, '=');
+    if (!index) {
+      continue;
+    }
+
+    int length = index - thisEnv;
+    char *key = malloc(length + 1);
+    strncpy(key, thisEnv, length);
+    
+    if (!arrayListContains(list, key)) {
+      arrayListAdd(list, key);
+      shared_uss_env[idx++] = thisEnv;
+    }
+  }
+  arrayListFree(list);
 }
 
 static int init_context(int argc, char **argv, const struct zl_config_t *cfg, ConfigManager *configmgr) {
@@ -452,7 +592,7 @@ static int init_components(char *components, ConfigManager *configmgr) {
       break;
     }
     name = strtok(NULL, ",");
-	}
+  }
   return 0;
 }
 
@@ -576,7 +716,6 @@ static int start_component(zl_comp_t *comp) {
   DEBUG("%s fd_map[0]=%d, fd_map[1]=%d, fd_map[2]=%d\n",
         comp->name, fd_map[0], fd_map[1], fd_map[2]);
 
-  const char *c_envp[2] = {get_shareas_env(comp), NULL};
   const char *c_args[] = {
     bin,
     "internal",
@@ -587,7 +726,9 @@ static int start_component(zl_comp_t *comp) {
     "--component", comp->name, 
     NULL
   };
-  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_envp);
+
+  shared_uss_env[0] = (char *)get_shareas_env(comp);
+  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, (const char **)shared_uss_env);
   if (comp->pid == -1) {
     DEBUG("spawn() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;
@@ -1155,11 +1296,64 @@ static void print_line(void *data, const char *line) {
   printf("%s", line);
 }
 
+static char* get_sharedenv(void) {
+  char *output = NULL;
+  char *aux = NULL;
+
+  int required = 0;
+  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
+    char *thisEnv = *env;
+    required += (strlen(thisEnv) + 3); // space + quotes
+  }
+
+  required++;
+  output = malloc(required);
+  aux = malloc(required);
+  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
+    char *thisEnv = *env;
+    strcat(aux, thisEnv);
+    char *envName = strtok(aux, "=");
+    if (envName) {
+      strcat(output, envName);
+      char *envValue = &thisEnv[strlen(envName) + 1];
+      if (*envValue == '"') { // Env value is already enclosed in quotes
+        strcat(output, "=");
+        strcat(output, envValue);
+        trimRight(output, strlen(output));
+        strcat(output, " ");
+      } else {
+        strcat(output, "=\"");
+        strcat(output, envValue);
+        trimRight(output, strlen(output));
+        strcat(output, "\" ");
+      }
+    }
+    aux[0] = 0;
+  }
+  trimRight(output, strlen(output));
+  free(aux);
+  return output;
+}
+
+static char* get_start_prepare_cmd(char *sharedenv) {
+  const char basecmd[] = "%s %s/bin/zwe internal start prepare --config \"%s\" --ha-instance %s 2>&1";
+  int size = strlen(zl_context.root_dir) + strlen(zl_context.config_path) + strlen(zl_context.ha_instance_id) + strlen(sharedenv) + sizeof(basecmd) + 1;
+  char *command = malloc(size);
+
+  snprintf(command, size, basecmd,
+           sharedenv, zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
+  
+  return command;
+}
+
+
 static int prepare_instance() {
-  char command[4*PATH_MAX];
+  char *sharedenv = get_sharedenv();
+  char *command = get_start_prepare_cmd(sharedenv);
+
+  free(sharedenv);
+
   DEBUG("about to prepare Zowe instance\n");
-  snprintf(command, sizeof(command), "%s/bin/zwe internal start prepare --config \"%s\" --ha-instance %s 2>&1",
-           zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
   if (run_command(command, print_line, NULL)) {
     ERROR(MSG_INST_PREP_ERR);
     return -1;
@@ -1249,7 +1443,6 @@ int main(int argc, char **argv) {
   CFGConfig *theConfig = addConfig(configmgr,ZOWE_CONFIG_NAME);
   cfgSetTraceStream(configmgr,stderr);
   cfgSetTraceLevel(configmgr, zl_context.config.debug_mode ? 2 : 0);
-  
   if (init_context(argc, argv, &config, configmgr)) {
     ERROR(MSG_CTX_INIT_FAILED);
     exit(EXIT_FAILURE);
@@ -1284,11 +1477,11 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-
   if (!validateConfiguration(configmgr, stdout)){
     exit(EXIT_FAILURE);
   }
 
+  set_shared_uss_env(configmgr);
 
   if (process_workspace_dir(configmgr)) {
     exit(EXIT_FAILURE);
@@ -1313,6 +1506,7 @@ int main(int argc, char **argv) {
 
   if (start_console_tread()) {
     ERROR(MSG_CONS_START_ERR);
+    free(shared_uss_env);
     exit(EXIT_FAILURE);
   }
 
@@ -1320,6 +1514,7 @@ int main(int argc, char **argv) {
 
   if (stop_console_thread()) {
     ERROR(MSG_CONS_STOP_ERR);
+    free(shared_uss_env);
     exit(EXIT_FAILURE);
   }
 
@@ -1327,6 +1522,7 @@ int main(int argc, char **argv) {
 
   INFO(MSG_LAUNCHER_STOPPED);
 
+  free(shared_uss_env);
   exit(EXIT_SUCCESS);
 }
 
@@ -1335,7 +1531,7 @@ int main(int argc, char **argv) {
   This program and the accompanying materials are
   made available under the terms of the Eclipse Public License v2.0 which accompanies
   this distribution, and is available at https://www.eclipse.org/legal/epl-v20.html
-
+  
   SPDX-License-Identifier: EPL-2.0
 
   Copyright Contributors to the Zowe Project.

@@ -1435,6 +1435,7 @@ int main(int argc, char **argv) {
   INFO(MSG_LAUNCHER_START);
 
   zl_config_t config = read_config(argc, argv);
+  zl_context.config = config;
 
   LoggingContext *logContext = makeLoggingContext();
   logConfigureStandardDestinations(logContext);

@@ -177,21 +177,49 @@ struct {
 #define ERROR(fmt, ...) printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 
 static int mkdir_all(const char *path, mode_t mode) {
-  int path_len = strlen(path);
-  int curr_path_len = 0;
-  do {
-    const char *slash = strchr(path + curr_path_len + 1, '/');
-    char curr_path[PATH_MAX] = {0};
-    curr_path_len = slash ? (int)(slash - path) : path_len;
-    snprintf(curr_path, sizeof(curr_path), "%.*s", curr_path_len, path);
-    if (mkdir(curr_path, mode) != 0) {
-      if (errno != EEXIST) {
-        ERROR(MSG_MKDIR_ERR, curr_path, strerror(errno));
+    // test if path exists
+    struct stat info;
+    if (!stat(path, &info)) return 0;
+
+    // verify path length
+    int path_len = strlen(path);
+    if (path_len >= PATH_MAX) {
+        ERROR(MSG_MKDIR_ERR, path, "The path is too long to be processed");
         return -1;
-      }
     }
-  } while (curr_path_len < path_len - 1);
-  return 0;
+
+    char curr_path[PATH_MAX] = {0};
+    memcpy(curr_path, path, path_len);
+
+    // find the latest existing folder
+    int slashIndex = path_len;
+    for (int i = slashIndex; i > 0; i--) {
+        if (path[i] == '/') {
+            // remember the latest check slash
+            slashIndex = i;
+
+            // shortcut the string before the slash
+            curr_path[i] = 0;
+
+            // if path to this slash exist continue creating subdirectories
+            if (!stat(curr_path, &info)) break;
+        }
+    }
+
+    do {
+        // determine next path - folder to be created
+        const char *slash = strchr(path + slashIndex + 1, '/');
+        slashIndex = slash ? (int)(slash - path) : path_len;
+        snprintf(curr_path, sizeof(curr_path), "%.*s", slashIndex, path);
+
+        // create missing subfolder
+        if (mkdir(curr_path, mode) != 0) {
+            ERROR(MSG_MKDIR_ERR, curr_path, strerror(errno));
+            return -1;
+        }
+    } while (slashIndex < path_len - 1);
+
+    return 0;
 }
 
 static int get_env(const char *name, char *buf, size_t buf_size) {

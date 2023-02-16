@@ -179,7 +179,10 @@ struct {
 static int mkdir_all(const char *path, mode_t mode) {
     // test if path exists
     struct stat info;
-    if (!stat(path, &info)) return 0;
+    if (!stat(path, &info)) {
+        DEBUG("Directory '%s' exists\n", path);
+        return 0;
+    }
 
     // verify path length
     int path_len = strlen(path);
@@ -192,32 +195,35 @@ static int mkdir_all(const char *path, mode_t mode) {
     memcpy(curr_path, path, path_len);
 
     // find the latest existing folder
-    int slashIndex = path_len;
-    for (int i = slashIndex; i > 0; i--) {
+    int slash_index = path_len;
+    for (int i = slash_index; i > 0; i--) {
         if (path[i] == '/') {
             // remember the latest check slash
-            slashIndex = i;
+            slash_index = i;
 
             // shortcut the string before the slash
             curr_path[i] = 0;
 
             // if path to this slash exist continue creating subdirectories
+            DEBUG("Check if directory '%s' exists\n", curr_path);
             if (!stat(curr_path, &info)) break;
         }
     }
 
+    DEBUG("Starting creating subdirectories under '%s' exists\n", curr_path);
     do {
         // determine next path - folder to be created
-        const char *slash = strchr(path + slashIndex + 1, '/');
-        slashIndex = slash ? (int)(slash - path) : path_len;
-        snprintf(curr_path, sizeof(curr_path), "%.*s", slashIndex, path);
+        const char *slash = strchr(path + slash_index + 1, '/');
+        slash_index = slash ? (int)(slash - path) : path_len;
+        snprintf(curr_path, sizeof(curr_path), "%.*s", slash_index, path);
 
         // create missing subfolder
         if (mkdir(curr_path, mode) != 0) {
             ERROR(MSG_MKDIR_ERR, curr_path, strerror(errno));
             return -1;
         }
-    } while (slashIndex < path_len - 1);
+        DEBUG("Directory '%s' has been created\n", curr_path);
+    } while (slash_index < path_len - 1);
 
     return 0;
 }

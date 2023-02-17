@@ -177,21 +177,55 @@ struct {
 #define ERROR(fmt, ...) printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 
 static int mkdir_all(const char *path, mode_t mode) {
-  int path_len = strlen(path);
-  int curr_path_len = 0;
-  do {
-    const char *slash = strchr(path + curr_path_len + 1, '/');
-    char curr_path[PATH_MAX] = {0};
-    curr_path_len = slash ? (int)(slash - path) : path_len;
-    snprintf(curr_path, sizeof(curr_path), "%.*s", curr_path_len, path);
-    if (mkdir(curr_path, mode) != 0) {
-      if (errno != EEXIST) {
-        ERROR(MSG_MKDIR_ERR, curr_path, strerror(errno));
-        return -1;
-      }
+    // test if path exists
+    struct stat info;
+    if (!stat(path, &info)) {
+        DEBUG("Directory '%s' exists\n", path);
+        return 0;
     }
-  } while (curr_path_len < path_len - 1);
-  return 0;
+
+    // verify path length
+    int path_len = strlen(path);
+    if (path_len >= PATH_MAX) {
+        ERROR(MSG_MKDIR_ERR, path, "The path is too long to be processed");
+        return -1;
+    }
+
+    char curr_path[PATH_MAX] = {0};
+    memcpy(curr_path, path, path_len);
+
+    // find the latest existing folder
+    int slash_index = path_len;
+    for (int i = slash_index; i > 0; i--) {
+        if (path[i] == '/') {
+            // remember the latest check slash
+            slash_index = i;
+
+            // shortcut the string before the slash
+            curr_path[i] = 0;
+
+            // if path to this slash exist continue creating subdirectories
+            DEBUG("Check if directory '%s' exists\n", curr_path);
+            if (!stat(curr_path, &info)) break;
+        }
+    }
+
+    DEBUG("Starting creating subdirectories under '%s' exists\n", curr_path);
+    do {
+        // determine next path - folder to be created
+        const char *slash = strchr(path + slash_index + 1, '/');
+        slash_index = slash ? (int)(slash - path) : path_len;
+        snprintf(curr_path, sizeof(curr_path), "%.*s", slash_index, path);
+
+        // create missing subfolder
+        if (mkdir(curr_path, mode) != 0) {
+            ERROR(MSG_MKDIR_ERR, curr_path, strerror(errno));
+            return -1;
+        }
+        DEBUG("Directory '%s' has been created\n", curr_path);
+    } while (slash_index < path_len - 1);
+
+    return 0;
 }
 
 static int get_env(const char *name, char *buf, size_t buf_size) {

@@ -43,5 +43,6 @@
 //********************************************************************/
 //STDENV   DD  *
 _CEE_ENVFILE_CONTINUATION=\
+_CEE_RUNOPTS=HEAPPOOLS(ON)
 CONFIG=#zowe_yaml
 /*

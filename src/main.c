@@ -453,12 +453,13 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
       DEBUG("src=%d, dst=%d, pNext=%d\n",srcPos,destPos,parmIndex);
     }
 
-    if (destPos > 0) {
+    if (destPos >= 0) {
       memcpy(config_line+destPos, zl_context.config_path+srcPos, config_len - srcPos);
       destPos+= config_len - srcPos;
       memcpy(zl_context.configmgr_path, config_line, destPos);
       zl_context.configmgr_path[destPos]='\0';
-    } else {
+    }
+    if (!hasMember) {
       zl_context.parm_member[0] = '\0';
     }
   

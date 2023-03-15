@@ -87,6 +87,7 @@
 #define MSG_CFG_INTERNAL_FAIL   MSG_PREFIX "0071E" " Internal failure during validation, please contact support\n"
 #define MSG_CFG_LOAD_FAIL       MSG_PREFIX "0072E" " Launcher Could not load configurations\n"
 #define MSG_CFG_SCHEMA_FAIL     MSG_PREFIX "0073E" " Launcher Could not load schemas, status=%d\n"
+#define MSG_NO_LOG_CONTEXT      MSG_PREFIX "0074E" " Log context was not created\n"
 
 #endif // MSG_H
 

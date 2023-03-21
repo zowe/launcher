@@ -383,7 +383,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
         }
 
         char *entry = malloc(strlen(key) + strlen(value) + 2);
-        sprintf(entry, "%s=%s", key, value);
+        sprintf(entry, "%s=%s", key, trimRight(value));
         shared_uss_env[idx++] = entry;
       }
     }
@@ -1227,10 +1227,23 @@ static void handle_get_component_line(void *data, const char *line) {
   }
 }
 
+static char* get_get_launch_components_cmd(char* sharedenv) {
+  const char basecmd[] = "%s %s/bin/zwe internal get-launch-components --config \"%s\" --ha-instance %s";
+  int size = strlen(zl_context.root_dir) + strlen(zl_context.config_path) + strlen(zl_context.ha_instance_id) + strlen(sharedenv) + sizeof(basecmd) + 1;
+  char *command = malloc(size);
+
+  snprintf(command, size, basecmd,
+           sharedenv, zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
+  
+  return command;
+}
+
 static int get_component_list(char *buf, size_t buf_size) {
-  char command[4*PATH_MAX];
-  snprintf (command, sizeof(command), "%s/bin/zwe internal get-launch-components --config \"%s\" --ha-instance %s",
-            zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
+  char *sharedenv = get_sharedenv();
+  char *command = get_get_launch_components_cmd(sharedenv);
+
+  free(sharedenv);
+
   DEBUG("about to get component list\n");
   char comp_list[COMP_LIST_SIZE] = {0};
   if (run_command(command, handle_get_component_line, (void*)comp_list)) {
@@ -1331,6 +1344,11 @@ static void print_line(void *data, const char *line) {
   printf("%s", line);
 }
 
+/**
+ * @brief Get the sharedenv. The function contemplates enclosing in quotes the values of the variables.
+ * 
+ * @return char* string representation of the shared_uss_env variable, e.g. VAR1="sample" VAR2=12345
+ */
 static char* get_sharedenv(void) {
   char *output = NULL;
   char *aux = NULL;
@@ -1380,7 +1398,6 @@ static char* get_start_prepare_cmd(char *sharedenv) {
   
   return command;
 }
-
 
 static int prepare_instance() {
   char *sharedenv = get_sharedenv();

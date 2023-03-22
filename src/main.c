@@ -1473,6 +1473,10 @@ int main(int argc, char **argv) {
   zl_context.config = config;
 
   LoggingContext *logContext = makeLoggingContext();
+  if (!logContext) {
+    ERROR(MSG_NO_LOG_CONTEXT);
+    exit(EXIT_FAILURE);
+  }
   logConfigureStandardDestinations(logContext);
 
   ConfigManager *configmgr = makeConfigManager(); /* configs,schemas,1,stderr); */

@@ -343,7 +343,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     object = jsonAsObject(env);
   }
 
-  int maxRecords = 2;
+  int maxRecords = 3;
 
   for (char **env = environ; *env != 0; env++) {
     maxRecords++;
@@ -383,7 +383,20 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
         }
 
         char *entry = malloc(strlen(key) + strlen(value) + 2);
-        sprintf(entry, "%s=%s", key, trimRight(value));
+
+        // REMOVE?
+        if (value[0] == '"') {
+          value[strlen(value) - 1] = 0;
+          value = value + 1;
+        }
+        // REMOVE?
+
+        // REMOVE?
+        trimRight(value, strlen(value));
+        printf("setting \"%s\" (%lu) with value \"%s\" (%lu)\n", key, strlen(key), value, strlen(value));
+        // REMOVE?
+
+        sprintf(entry, "%s=%s", key, value);
         shared_uss_env[idx++] = entry;
       }
     }
@@ -406,6 +419,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
       shared_uss_env[idx++] = thisEnv;
     }
   }
+  shared_uss_env[idx] = NULL;
   arrayListFree(list);
 }
 
@@ -763,6 +777,14 @@ static int start_component(zl_comp_t *comp) {
   };
 
   shared_uss_env[0] = (char *)get_shareas_env(comp);
+
+  // REMOVE
+  for (char **env = shared_uss_env; *env != 0; env++) {
+    char *thisEnv = *env;
+    printf("Entry in shared_uss_env is '%s' with length %lu\n", thisEnv, strlen(thisEnv));
+  }
+  // REMOVE
+
   comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, (const char **)shared_uss_env);
   if (comp->pid == -1) {
     DEBUG("spawn() failed for %s - %s\n", comp->name, strerror(errno));
@@ -1238,6 +1260,50 @@ static char* get_get_launch_components_cmd(char* sharedenv) {
   return command;
 }
 
+/**
+ * @brief Get the sharedenv. The function contemplates enclosing in quotes the values of the variables.
+ * 
+ * @return char* string representation of the shared_uss_env variable, e.g. VAR1="sample" VAR2=12345
+ */
+static char* get_sharedenv(void) {
+  char *output = NULL;
+  char *aux = NULL;
+
+  int required = 0;
+  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
+    char *thisEnv = *env;
+    required += (strlen(thisEnv) + 3); // space + quotes
+  }
+
+  required++;
+  output = malloc(required);
+  aux = malloc(required);
+  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
+    char *thisEnv = *env;
+    strcat(aux, thisEnv);
+    char *envName = strtok(aux, "=");
+    if (envName) {
+      strcat(output, envName);
+      char *envValue = &thisEnv[strlen(envName) + 1];
+      if (*envValue == '"') { // Env value is already enclosed in quotes
+        strcat(output, "=");
+        strcat(output, envValue);
+        trimRight(output, strlen(output));
+        strcat(output, " ");
+      } else {
+        strcat(output, "=\"");
+        strcat(output, envValue);
+        trimRight(output, strlen(output));
+        strcat(output, "\" ");
+      }
+    }
+    aux[0] = 0;
+  }
+  trimRight(output, strlen(output));
+  free(aux);
+  return output;
+}
+
 static int get_component_list(char *buf, size_t buf_size) {
   char *sharedenv = get_sharedenv();
   char *command = get_get_launch_components_cmd(sharedenv);
@@ -1342,50 +1408,6 @@ static int process_workspace_dir(ConfigManager *configmgr) {
 
 static void print_line(void *data, const char *line) {
   printf("%s", line);
-}
-
-/**
- * @brief Get the sharedenv. The function contemplates enclosing in quotes the values of the variables.
- * 
- * @return char* string representation of the shared_uss_env variable, e.g. VAR1="sample" VAR2=12345
- */
-static char* get_sharedenv(void) {
-  char *output = NULL;
-  char *aux = NULL;
-
-  int required = 0;
-  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
-    char *thisEnv = *env;
-    required += (strlen(thisEnv) + 3); // space + quotes
-  }
-
-  required++;
-  output = malloc(required);
-  aux = malloc(required);
-  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
-    char *thisEnv = *env;
-    strcat(aux, thisEnv);
-    char *envName = strtok(aux, "=");
-    if (envName) {
-      strcat(output, envName);
-      char *envValue = &thisEnv[strlen(envName) + 1];
-      if (*envValue == '"') { // Env value is already enclosed in quotes
-        strcat(output, "=");
-        strcat(output, envValue);
-        trimRight(output, strlen(output));
-        strcat(output, " ");
-      } else {
-        strcat(output, "=\"");
-        strcat(output, envValue);
-        trimRight(output, strlen(output));
-        strcat(output, "\" ");
-      }
-    }
-    aux[0] = 0;
-  }
-  trimRight(output, strlen(output));
-  free(aux);
-  return output;
 }
 
 static char* get_start_prepare_cmd(char *sharedenv) {

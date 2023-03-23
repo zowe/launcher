@@ -54,6 +54,8 @@ extern char ** environ;
 
 #define COMP_ID "ZWELNCH"
 
+#define CEE_ENVFILE_PREFIX        "_CEE_ENVFILE"
+
 #define MIN_UPTIME_SECS 90
 
 #define SHUTDOWN_GRACEFUL_PERIOD (20 * 1000)
@@ -372,6 +374,11 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
         continue;
       }
 
+      if (strncmp(key, CEE_ENVFILE_PREFIX, strlen(CEE_ENVFILE_PREFIX)) == 0) {
+        DEBUG("Ignoring environment variable: %s, conflict\n", key);
+        continue;
+      }
+
       if (!arrayListContains(list, key)) {
         arrayListAdd(list, key);
 
@@ -384,18 +391,6 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
 
         char *entry = malloc(strlen(key) + strlen(value) + 2);
 
-        // REMOVE?
-        if (value[0] == '"') {
-          value[strlen(value) - 1] = 0;
-          value = value + 1;
-        }
-        // REMOVE?
-
-        // REMOVE?
-        trimRight(value, strlen(value));
-        printf("setting \"%s\" (%lu) with value \"%s\" (%lu)\n", key, strlen(key), value, strlen(value));
-        // REMOVE?
-
         sprintf(entry, "%s=%s", key, value);
         shared_uss_env[idx++] = entry;
       }
@@ -407,6 +402,10 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     char *thisEnv = *env;
     char *index = strchr(thisEnv, '=');
     if (!index) {
+      continue;
+    }
+    if (strncmp(thisEnv, CEE_ENVFILE_PREFIX, strlen(CEE_ENVFILE_PREFIX)) == 0) {
+      DEBUG("Ignoring environment variable: %s, conflict\n", thisEnv);
       continue;
     }
 
@@ -778,14 +777,49 @@ static int start_component(zl_comp_t *comp) {
 
   shared_uss_env[0] = (char *)get_shareas_env(comp);
 
-  // REMOVE
-  for (char **env = shared_uss_env; *env != 0; env++) {
-    char *thisEnv = *env;
-    printf("Entry in shared_uss_env is '%s' with length %lu\n", thisEnv, strlen(thisEnv));
-  }
-  // REMOVE
+  int env_count = 8;
+  
+  const char *c_env[10];
 
-  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, (const char **)shared_uss_env);
+  int i = 0;
+  char *aux = NULL;
+  char *output = NULL;
+  for (char **env = shared_uss_env; *env != 0 && i < env_count; env++) {
+    char *thisEnv = *env;
+    aux = malloc(strlen(thisEnv) + 1);
+    output = malloc(strlen(thisEnv) + 1);
+    strncpy(aux, thisEnv, strlen(thisEnv));
+    //printf("aux: %s\n", aux);
+    char *envName = strtok(aux, "=");
+    //printf("envName: %s\n", envName);
+    if (envName) {
+      if (strncmp(envName, "_CEE", 4) == 0) {
+        continue;
+      }
+      strcat(output, envName);
+      char *envValue = &aux[strlen(envName) + 1];
+      
+      setenv(envName, envValue, 0);
+
+      strcat(output, "=");
+      strcat(output, envValue);
+      output[strlen(thisEnv)] = 0;
+      trimRight(output, strlen(output));
+      printf("element %d is '%s'\n", i, output);
+    }
+    aux[0] = 0;
+    c_env[i] = output;
+    i++;
+  }
+  c_env[i] = NULL;
+  
+  for (int j = 0; j < i; j++) {
+    const char *str = c_env[j];
+    int str_length = strlen(str);
+    printf("last characters of '%s': 0x%08X, 0x%08X, 0x%08X, 0x%08X\n", str, str[str_length - 3], str[str_length - 2], str[str_length - 1], str[str_length]);
+  }
+
+  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_env);
   if (comp->pid == -1) {
     DEBUG("spawn() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;

@@ -735,12 +735,10 @@ static const char **env_comp(zl_comp_t *comp) {
   const char **env_comp = malloc(env_records + 1);
 
   int i = 0;
-  char *aux = NULL;
   for (char **env = shared_uss_env; *env != 0 && i < env_records; env++) {
     char *thisEnv = *env;
-    aux = malloc(strlen(thisEnv) + 1);
+    char *aux = malloc(strlen(thisEnv) + 1);
     strncpy(aux, thisEnv, strlen(thisEnv));
-    aux[strlen(thisEnv)] = 0;
     trimRight(aux, strlen(aux));
     env_comp[i] = aux;
     i++;
@@ -1272,7 +1270,7 @@ static void handle_get_component_line(void *data, const char *line) {
   }
 }
 
-static char* get_get_launch_components_cmd(char* sharedenv) {
+static char* get_launch_components_cmd(char* sharedenv) {
   const char basecmd[] = "%s %s/bin/zwe internal get-launch-components --config \"%s\" --ha-instance %s";
   int size = strlen(zl_context.root_dir) + strlen(zl_context.config_path) + strlen(zl_context.ha_instance_id) + strlen(sharedenv) + sizeof(basecmd) + 1;
   char *command = malloc(size);
@@ -1329,7 +1327,7 @@ static char* get_sharedenv(void) {
 
 static int get_component_list(char *buf, size_t buf_size) {
   char *sharedenv = get_sharedenv();
-  char *command = get_get_launch_components_cmd(sharedenv);
+  char *command = get_launch_components_cmd(sharedenv);
 
   free(sharedenv);
 

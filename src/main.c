@@ -718,6 +718,37 @@ static void *handle_comp_comm(void *args) {
   return NULL;
 }
 
+/**
+ * @brief Copy environment variables + _BPX_SHAREAS for the specified component
+ * 
+ * @param comp The component
+ * @return const char** environment strings list
+ */
+static const char **env_comp(zl_comp_t *comp) {
+  shared_uss_env[0] = (char *)get_shareas_env(comp);
+
+  int env_records = 0;
+  for (char **env = shared_uss_env; *env != 0; env++) {
+    env_records++;
+  }
+  
+  const char **env_comp = malloc(env_records + 1);
+
+  int i = 0;
+  char *aux = NULL;
+  for (char **env = shared_uss_env; *env != 0 && i < env_records; env++) {
+    char *thisEnv = *env;
+    aux = malloc(strlen(thisEnv) + 1);
+    strncpy(aux, thisEnv, strlen(thisEnv));
+    aux[strlen(thisEnv)] = 0;
+    trimRight(aux, strlen(aux));
+    env_comp[i] = aux;
+    i++;
+  }
+  env_comp[i] = NULL;
+  return env_comp;
+}
+
 static int start_component(zl_comp_t *comp) {
 
   if (comp->pid != -1) {
@@ -775,51 +806,9 @@ static int start_component(zl_comp_t *comp) {
     NULL
   };
 
-  shared_uss_env[0] = (char *)get_shareas_env(comp);
+  const char **c_envp = env_comp(comp);
 
-  int env_count = 8;
-  
-  const char *c_env[10];
-
-  int i = 0;
-  char *aux = NULL;
-  char *output = NULL;
-  for (char **env = shared_uss_env; *env != 0 && i < env_count; env++) {
-    char *thisEnv = *env;
-    aux = malloc(strlen(thisEnv) + 1);
-    output = malloc(strlen(thisEnv) + 1);
-    strncpy(aux, thisEnv, strlen(thisEnv));
-    //printf("aux: %s\n", aux);
-    char *envName = strtok(aux, "=");
-    //printf("envName: %s\n", envName);
-    if (envName) {
-      if (strncmp(envName, "_CEE", 4) == 0) {
-        continue;
-      }
-      strcat(output, envName);
-      char *envValue = &aux[strlen(envName) + 1];
-      
-      setenv(envName, envValue, 0);
-
-      strcat(output, "=");
-      strcat(output, envValue);
-      output[strlen(thisEnv)] = 0;
-      trimRight(output, strlen(output));
-      printf("element %d is '%s'\n", i, output);
-    }
-    aux[0] = 0;
-    c_env[i] = output;
-    i++;
-  }
-  c_env[i] = NULL;
-  
-  for (int j = 0; j < i; j++) {
-    const char *str = c_env[j];
-    int str_length = strlen(str);
-    printf("last characters of '%s': 0x%08X, 0x%08X, 0x%08X, 0x%08X\n", str, str[str_length - 3], str[str_length - 2], str[str_length - 1], str[str_length]);
-  }
-
-  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_env);
+  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_envp);
   if (comp->pid == -1) {
     DEBUG("spawn() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;

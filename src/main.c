@@ -515,18 +515,28 @@ static void snprint_int_array(zl_int_array_t *array, char *buf, size_t buf_size)
 static void init_component_restart_intervals(zl_comp_t *comp, ConfigManager *configmgr) {
   DEBUG ("loading restart intervals for component '%s'\n", comp->name);
   Json *restartIntArray;
+
+  // if haInstances.<haInstanceId>.components.<componentName>.launcher.restartIntervals is defined use it
   int getStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &restartIntArray, 6, "haInstances", zl_context.ha_instance_id, "components", comp->name, "launcher", "restartIntervals");
+
+  // if no restartIntervals configuration found, try to use components.<componentName>.launcher.restartIntervals
   if (getStatus != ZCFG_SUCCESS) {
     getStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &restartIntArray, 4, "components", comp->name, "launcher", "restartIntervals");
-    if (getStatus != ZCFG_SUCCESS) {
-      getStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &restartIntArray, 3, "zowe", "launcher", "restartIntervals");
-    } else {
-      memcpy(&comp->restart_intervals.data, restart_intervals_default, sizeof(restart_intervals_default));
-      comp->restart_intervals.count = sizeof(restart_intervals_default)/sizeof(restart_intervals_default[0]);      
-      return;
-    }
   }
 
+  // if no restartIntervals configuration found, try to use zowe.launcher.restartIntervals
+  if (getStatus != ZCFG_SUCCESS) {
+    getStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &restartIntArray, 3, "zowe", "launcher", "restartIntervals");
+  }
+
+  // if there is no configuration of restartIntervals, use the default (defined above)
+  if (getStatus != ZCFG_SUCCESS) {
+    memcpy(&comp->restart_intervals.data, restart_intervals_default, sizeof(restart_intervals_default));
+    comp->restart_intervals.count = sizeof(restart_intervals_default)/sizeof(restart_intervals_default[0]);
+    return;
+  }
+
+  // load restartIntervals from the configuration
   JsonArray *intArray = jsonAsArray(restartIntArray);
   int count = jsonArrayGetCount(intArray);
   comp->restart_intervals.count = count;

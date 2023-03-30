@@ -54,6 +54,8 @@ extern char ** environ;
 
 #define COMP_ID "ZWELNCH"
 
+#define CEE_ENVFILE_PREFIX        "_CEE_ENVFILE"
+
 #define MIN_UPTIME_SECS 90
 
 #define SHUTDOWN_GRACEFUL_PERIOD (20 * 1000)
@@ -343,7 +345,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     object = jsonAsObject(env);
   }
 
-  int maxRecords = 2;
+  int maxRecords = 3;
 
   for (char **env = environ; *env != 0; env++) {
     maxRecords++;
@@ -372,6 +374,11 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
         continue;
       }
 
+      if (strncmp(key, CEE_ENVFILE_PREFIX, strlen(CEE_ENVFILE_PREFIX)) == 0) {
+        DEBUG("Ignoring environment variable: %s, conflict\n", key);
+        continue;
+      }
+
       if (!arrayListContains(list, key)) {
         arrayListAdd(list, key);
 
@@ -383,6 +390,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
         }
 
         char *entry = malloc(strlen(key) + strlen(value) + 2);
+
         sprintf(entry, "%s=%s", key, value);
         shared_uss_env[idx++] = entry;
       }
@@ -396,6 +404,10 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     if (!index) {
       continue;
     }
+    if (strncmp(thisEnv, CEE_ENVFILE_PREFIX, strlen(CEE_ENVFILE_PREFIX)) == 0) {
+      DEBUG("Ignoring environment variable: %s, conflict\n", thisEnv);
+      continue;
+    }
 
     int length = index - thisEnv;
     char *key = malloc(length + 1);
@@ -406,6 +418,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
       shared_uss_env[idx++] = thisEnv;
     }
   }
+  shared_uss_env[idx] = NULL;
   arrayListFree(list);
 }
 
@@ -715,6 +728,35 @@ static void *handle_comp_comm(void *args) {
   return NULL;
 }
 
+/**
+ * @brief Copy environment variables + _BPX_SHAREAS for the specified component
+ * 
+ * @param comp The component
+ * @return const char** environment strings list
+ */
+static const char **env_comp(zl_comp_t *comp) {
+  shared_uss_env[0] = (char *)get_shareas_env(comp);
+
+  int env_records = 0;
+  for (char **env = shared_uss_env; *env != 0; env++) {
+    env_records++;
+  }
+  
+  const char **env_comp = malloc(env_records + 1);
+
+  int i = 0;
+  for (char **env = shared_uss_env; *env != 0 && i < env_records; env++) {
+    char *thisEnv = *env;
+    char *aux = malloc(strlen(thisEnv) + 1);
+    strncpy(aux, thisEnv, strlen(thisEnv));
+    trimRight(aux, strlen(aux));
+    env_comp[i] = aux;
+    i++;
+  }
+  env_comp[i] = NULL;
+  return env_comp;
+}
+
 static int start_component(zl_comp_t *comp) {
 
   if (comp->pid != -1) {
@@ -772,8 +814,9 @@ static int start_component(zl_comp_t *comp) {
     NULL
   };
 
-  shared_uss_env[0] = (char *)get_shareas_env(comp);
-  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, (const char **)shared_uss_env);
+  const char **c_envp = env_comp(comp);
+
+  comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_envp);
   if (comp->pid == -1) {
     DEBUG("spawn() failed for %s - %s\n", comp->name, strerror(errno));
     return -1;
@@ -1237,10 +1280,67 @@ static void handle_get_component_line(void *data, const char *line) {
   }
 }
 
+static char* get_launch_components_cmd(char* sharedenv) {
+  const char basecmd[] = "%s %s/bin/zwe internal get-launch-components --config \"%s\" --ha-instance %s";
+  int size = strlen(zl_context.root_dir) + strlen(zl_context.config_path) + strlen(zl_context.ha_instance_id) + strlen(sharedenv) + sizeof(basecmd) + 1;
+  char *command = malloc(size);
+
+  snprintf(command, size, basecmd,
+           sharedenv, zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
+  
+  return command;
+}
+
+/**
+ * @brief Get the sharedenv. The function contemplates enclosing in quotes the values of the variables.
+ * 
+ * @return char* string representation of the shared_uss_env variable, e.g. VAR1="sample" VAR2=12345
+ */
+static char* get_sharedenv(void) {
+  char *output = NULL;
+  char *aux = NULL;
+
+  int required = 0;
+  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
+    char *thisEnv = *env;
+    required += (strlen(thisEnv) + 3); // space + quotes
+  }
+
+  required++;
+  output = malloc(required);
+  aux = malloc(required);
+  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
+    char *thisEnv = *env;
+    strcat(aux, thisEnv);
+    char *envName = strtok(aux, "=");
+    if (envName) {
+      strcat(output, envName);
+      char *envValue = &thisEnv[strlen(envName) + 1];
+      if (*envValue == '"') { // Env value is already enclosed in quotes
+        strcat(output, "=");
+        strcat(output, envValue);
+        trimRight(output, strlen(output));
+        strcat(output, " ");
+      } else {
+        strcat(output, "=\"");
+        strcat(output, envValue);
+        trimRight(output, strlen(output));
+        strcat(output, "\" ");
+      }
+    }
+    aux[0] = 0;
+  }
+  trimRight(output, strlen(output));
+  free(aux);
+  return output;
+}
+
 static int get_component_list(char *buf, size_t buf_size) {
-  char command[4*PATH_MAX];
-  snprintf (command, sizeof(command), "%s/bin/zwe internal get-launch-components --config \"%s\" --ha-instance %s",
-            zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
+  char *sharedenv = get_sharedenv();
+  char *command = get_launch_components_cmd(sharedenv);
+
+  free(sharedenv);
+
   DEBUG("about to get component list\n");
   char comp_list[COMP_LIST_SIZE] = {0};
   if (run_command(command, handle_get_component_line, (void*)comp_list)) {
@@ -1341,45 +1441,6 @@ static void print_line(void *data, const char *line) {
   printf("%s", line);
 }
 
-static char* get_sharedenv(void) {
-  char *output = NULL;
-  char *aux = NULL;
-
-  int required = 0;
-  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
-    char *thisEnv = *env;
-    required += (strlen(thisEnv) + 3); // space + quotes
-  }
-
-  required++;
-  output = malloc(required);
-  aux = malloc(required);
-  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
-    char *thisEnv = *env;
-    strcat(aux, thisEnv);
-    char *envName = strtok(aux, "=");
-    if (envName) {
-      strcat(output, envName);
-      char *envValue = &thisEnv[strlen(envName) + 1];
-      if (*envValue == '"') { // Env value is already enclosed in quotes
-        strcat(output, "=");
-        strcat(output, envValue);
-        trimRight(output, strlen(output));
-        strcat(output, " ");
-      } else {
-        strcat(output, "=\"");
-        strcat(output, envValue);
-        trimRight(output, strlen(output));
-        strcat(output, "\" ");
-      }
-    }
-    aux[0] = 0;
-  }
-  trimRight(output, strlen(output));
-  free(aux);
-  return output;
-}
-
 static char* get_start_prepare_cmd(char *sharedenv) {
   const char basecmd[] = "%s %s/bin/zwe internal start prepare --config \"%s\" --ha-instance %s 2>&1";
   int size = strlen(zl_context.root_dir) + strlen(zl_context.config_path) + strlen(zl_context.ha_instance_id) + strlen(sharedenv) + sizeof(basecmd) + 1;
@@ -1390,7 +1451,6 @@ static char* get_start_prepare_cmd(char *sharedenv) {
   
   return command;
 }
-
 
 static int prepare_instance() {
   char *sharedenv = get_sharedenv();

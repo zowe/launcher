@@ -345,13 +345,13 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     object = jsonAsObject(env);
   }
 
-  int maxRecords = 3;
+  int maxRecords = 2;
 
   for (char **env = environ; *env != 0; env++) {
     maxRecords++;
   }
 
-  int idx = 1;
+  int idx = 0;
 
   // _BPX_SHAREAS is set on component level
   arrayListAdd(list, "_BPX_SHAREAS");
@@ -739,16 +739,17 @@ static void *handle_comp_comm(void *args) {
  * @return const char** environment strings list
  */
 static const char **env_comp(zl_comp_t *comp) {
-  shared_uss_env[0] = (char *)get_shareas_env(comp);
+  const char *shareas = get_shareas_env(comp);
 
   int env_records = 0;
   for (char **env = shared_uss_env; *env != 0; env++) {
     env_records++;
   }
-  
-  const char **env_comp = malloc(env_records + 1);
+
+  const char **env_comp = malloc((env_records + 2) * sizeof(char*));
 
   int i = 0;
+  env_comp[i++] = shareas;
   for (char **env = shared_uss_env; *env != 0 && i < env_records; env++) {
     char *thisEnv = *env;
     char *aux = malloc(strlen(thisEnv) + 1);

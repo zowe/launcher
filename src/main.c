@@ -392,6 +392,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
         char *entry = malloc(strlen(key) + strlen(value) + 2);
 
         sprintf(entry, "%s=%s", key, value);
+        DEBUG("shared env pos %d is %s\n", idx, entry);
         shared_uss_env[idx++] = entry;
       }
     }
@@ -415,7 +416,10 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     
     if (!arrayListContains(list, key)) {
       arrayListAdd(list, key);
-      shared_uss_env[idx++] = thisEnv;
+      char *new_env = malloc(strlen(thisEnv));
+      strncpy(new_env, thisEnv, strlen(thisEnv));
+      DEBUG("shared env pos %d is %s\n", idx, new_env);
+      shared_uss_env[idx++] = new_env;
     }
   }
   shared_uss_env[idx] = NULL;
@@ -815,6 +819,20 @@ static int start_component(zl_comp_t *comp) {
   };
 
   const char **c_envp = env_comp(comp);
+
+  if (zl_context.config.debug_mode) {
+    DEBUG("params for %s:\n", bin);
+    for (const char **parm = c_args; *parm != 0; parm++) {
+      const char *thisParm = *parm;
+      DEBUG("for %s, include param: %s\n", bin, thisParm);
+    }
+
+    DEBUG("environment for %s: \n", bin);
+    for (const char **env = c_envp; *env != 0; env++) {
+      const char *thisEnv = *env;
+      DEBUG("for %s, include env: %s\n", bin, thisEnv);
+    }
+  }
 
   comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_envp);
   if (comp->pid == -1) {

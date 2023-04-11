@@ -345,13 +345,13 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     object = jsonAsObject(env);
   }
 
-  int maxRecords = 3;
+  int maxRecords = 2;
 
   for (char **env = environ; *env != 0; env++) {
     maxRecords++;
   }
 
-  int idx = 1;
+  int idx = 0;
 
   // _BPX_SHAREAS is set on component level
   arrayListAdd(list, "_BPX_SHAREAS");
@@ -392,6 +392,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
         char *entry = malloc(strlen(key) + strlen(value) + 2);
 
         sprintf(entry, "%s=%s", key, value);
+        DEBUG("shared env pos %d is %s\n", idx, entry);
         shared_uss_env[idx++] = entry;
       }
     }
@@ -415,7 +416,10 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     
     if (!arrayListContains(list, key)) {
       arrayListAdd(list, key);
-      shared_uss_env[idx++] = thisEnv;
+      char *new_env = malloc(strlen(thisEnv));
+      strncpy(new_env, thisEnv, strlen(thisEnv));
+      DEBUG("shared env pos %d is %s\n", idx, new_env);
+      shared_uss_env[idx++] = new_env;
     }
   }
   shared_uss_env[idx] = NULL;
@@ -735,16 +739,17 @@ static void *handle_comp_comm(void *args) {
  * @return const char** environment strings list
  */
 static const char **env_comp(zl_comp_t *comp) {
-  shared_uss_env[0] = (char *)get_shareas_env(comp);
+  const char *shareas = get_shareas_env(comp);
 
   int env_records = 0;
   for (char **env = shared_uss_env; *env != 0; env++) {
     env_records++;
   }
-  
-  const char **env_comp = malloc(env_records + 1);
+
+  const char **env_comp = malloc((env_records + 2) * sizeof(char*));
 
   int i = 0;
+  env_comp[i++] = shareas;
   for (char **env = shared_uss_env; *env != 0 && i < env_records; env++) {
     char *thisEnv = *env;
     char *aux = malloc(strlen(thisEnv) + 1);
@@ -815,6 +820,20 @@ static int start_component(zl_comp_t *comp) {
   };
 
   const char **c_envp = env_comp(comp);
+
+  if (zl_context.config.debug_mode) {
+    DEBUG("params for %s:\n", bin);
+    for (const char **parm = c_args; *parm != 0; parm++) {
+      const char *thisParm = *parm;
+      DEBUG("for %s, include param: %s\n", bin, thisParm);
+    }
+
+    DEBUG("environment for %s: \n", bin);
+    for (const char **env = c_envp; *env != 0; env++) {
+      const char *thisEnv = *env;
+      DEBUG("for %s, include env: %s\n", bin, thisEnv);
+    }
+  }
 
   comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_envp);
   if (comp->pid == -1) {

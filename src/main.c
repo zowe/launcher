@@ -1300,7 +1300,7 @@ static void handle_get_component_line(void *data, const char *line) {
 }
 
 static char* get_launch_components_cmd(char* sharedenv) {
-  const char basecmd[] = "%s %s/bin/zwe internal get-launch-components --config \"%s\" --ha-instance %s";
+  const char basecmd[] = "%s %s/bin/zwe internal get-launch-components --config \"%s\" --ha-instance %s 2>&1";
   int size = strlen(zl_context.root_dir) + strlen(zl_context.config_path) + strlen(zl_context.ha_instance_id) + strlen(sharedenv) + sizeof(basecmd) + 1;
   char *command = malloc(size);
 

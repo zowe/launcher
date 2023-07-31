@@ -412,11 +412,14 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
 
     int length = index - thisEnv;
     char *key = malloc(length + 1);
+    memset(key, 0, length + 1);
     strncpy(key, thisEnv, length);
     
     if (!arrayListContains(list, key)) {
       arrayListAdd(list, key);
-      char *new_env = malloc(strlen(thisEnv));
+      int new_env_length = strlen(thisEnv);
+      char *new_env = malloc(new_env_length+1);
+      memset(new_env, 0, new_env_length+1);
       strncpy(new_env, thisEnv, strlen(thisEnv));
       DEBUG("shared env pos %d is %s\n", idx, new_env);
       shared_uss_env[idx++] = new_env;

@@ -335,6 +335,41 @@ static bool is_valid_key(char *key) {
     return true;
 }
 
+typedef struct WTOCommon31_tag{
+  char replyBufferLength; /* 31-bit WTOR only, else 0 */
+  char length; /* message length +4 */
+  char mcsFlags1;
+  char mcsFlags2;
+} WTOCommon31;
+
+void message(char *message){
+
+  ALLOC_STRUCT31(
+    STRUCT31_NAME(below2G),
+    STRUCT31_FIELDS(
+      WTOCommon31 common;
+      char text[126];          /* Maximum length of WTO text is 126 - ABEND D23-xxxx0005 if longer than 126 */
+    )
+  );
+
+  int len = strlen(message);
+  if (len>sizeof(below2G->text))
+    len=sizeof(below2G->text);
+
+  below2G->common.length = len+sizeof(below2G->common); /* +4 for header */
+  memcpy(below2G->text,message,len);
+
+  __asm(ASM_PREFIX
+        " WTO MF=(E,(%[wtobuf])) \n"
+        :
+        :[wtobuf]"NR:r1"(&below2G->common)
+        :"r0","r1","r15");
+
+  FREE_STRUCT31(
+    STRUCT31_NAME(below2G)
+  );
+}
+
 static void set_shared_uss_env(ConfigManager *configmgr) {
   Json *env = NULL;
   int cfgGetStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &env, 2, "zowe", "environments");
@@ -848,6 +883,8 @@ static int start_component(zl_comp_t *comp) {
   comp->clean_stop = false;
 
   INFO(MSG_COMP_STARTED, comp->name);
+  INFO("THIS IS A TEST AND SHOULD BE REMOVED!!!!!!!!!!!!!!!!!");
+  message("SYSLOG POSSIBLY????????????????????");
 
   if (pthread_create(&comp->comm_thid, NULL, handle_comp_comm, comp) != 0) {
     DEBUG("comm thread not started for %s - %s\n", comp->name, strerror(errno));

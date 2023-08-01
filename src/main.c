@@ -358,12 +358,20 @@ void message(char *message){
 
   below2G->common.length = len+sizeof(below2G->common); /* +4 for header */
   memcpy(below2G->text,message,len);
+  
+  
+  int *returnCode = (int*)safeMalloc31(1, "rc");
+
+  returnCode = 0;
 
   __asm(ASM_PREFIX
         " WTO MF=(E,(%[wtobuf])) \n"
-        :
+        " ST    15,%[rc]         \n"
+        :[rc]"=m"(*returnCode)
         :[wtobuf]"NR:r1"(&below2G->common)
         :"r0","r1","r15");
+
+  printf("WTO rc=0x%x\n", *returnCode);
 
   FREE_STRUCT31(
     STRUCT31_NAME(below2G)

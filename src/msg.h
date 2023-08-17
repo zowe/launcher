@@ -90,8 +90,8 @@
 //@Action:
 #define MSG_LOADING_YAML        MSG_PREFIX "0020I" " loading '%s'\n"    //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//@!Reason: Loading `<yaml-file>`
-//@!Action:
+//@!@Reason: Loading `<yaml-file>`
+//@!@Action:
 #define MSG_LAUNCHER_START      MSG_PREFIX "0021I" " Zowe Launcher starting\n"
 //@Reason: Zowe Launcher is starting.
 //@Action:
@@ -178,20 +178,20 @@
 //@Action: ?
 #define MSG_YAML_CONV_ERR       MSG_PREFIX "0045E" " error converting zowe.yaml file - %s\n"    //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//!@Reason: Error converting zowe.yaml file - `<path-to-zowe-yaml>`.
-//!@Action: ?
+//@!@Reason: Error converting zowe.yaml file - `<path-to-zowe-yaml>`.
+//@!@Action: ?
 #define MSG_YAML_READ_ERR       MSG_PREFIX "0046E" " error reading zowe.yaml file - %s\n"   //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//@!Reason: There is an error while reading zowe.yaml file - `<path-to-zowe.yaml>`
-//@!Action: ?
+//@!@Reason: There is an error while reading zowe.yaml file - `<path-to-zowe.yaml>`
+//@!@Action: ?
 #define MSG_YAML_PARSE_ERR      MSG_PREFIX "0047E" " failed to parse zowe.yaml - %s\n"    //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//@!Reason: Failed to parse the zowe.yaml - `<path-to-zowe-yaml>`.
-//@!Action: ?
+//@!@Reason: Failed to parse the zowe.yaml - `<path-to-zowe-yaml>`.
+//@!@Action: ?
 #define MSG_YAML_OPEN_ERR       MSG_PREFIX "0048E" " failed to open zowe.yaml - %s: %s\n"   //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//@!Reason: Failed to open zowe.yaml - `<path-to-zowe-yaml>`:?"
-//@!Action: ?
+//@!@Reason: Failed to open zowe.yaml - `<path-to-zowe-yaml>`:?"
+//@!@Action: ?
 #define MSG_COMP_RESTART_FAILED MSG_PREFIX "0049E" " failed to restart component %s\n"
 //@Reason: Failed to restart the component `<component-name>`."
 //@Action: ?
@@ -215,8 +215,8 @@
 //@Action: ?
 #define MSG_FILE_ERR            MSG_PREFIX "0061E" " failed to find %s='%s', check if the file exists\n"    //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//@!Reason: Failed to find ?=?, check if the file exists.
-//@!Action: ?
+//@!@Reason: Failed to find ?=?, check if the file exists.
+//@!@Action: ?
 #define MSG_MKDIR_ERR           MSG_PREFIX "0062E" " failed to create dir '%s' - %s\n"
 //@Reason: Failed to create the directory `<directory>` - `<error-text>`.
 //@Action: ?
@@ -254,8 +254,8 @@
 //@!-------------------------------------------------------------------
 #define MSG_USE_DEFAULTS        MSG_PREFIX "0051W" " failed to read zowe.yaml, launcher will use default settings\n"    //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//!@Reason: Failed to read zowe.yaml, launcher will use default settings.
-//!@Action: ?
+//@!@Reason: Failed to read zowe.yaml, launcher will use default settings.
+//@!@Action: ?
 #define MSG_NOT_ALL_STARTED     MSG_PREFIX "0052W" " not all components started\n"
 //@Reason: Not all components were started.
 //@Action:

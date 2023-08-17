@@ -14,7 +14,14 @@
 
 #define MSG_PREFIX "ZWEL"
 
-//Empty @Action = "No action required."
+// @DocStart, @DocEnd - start/end for documentation reader
+// @Action with no text => "No action required."
+// @Reason with no text = forbidden!
+// @! Comment, line is ignored by documentaion reader
+// Other lines are copied as it is, use markdown
+// Documentation guide lines:
+//  - messages are added in ascending order for each section
+//  - sections are informational, error and warning messages
 //@DocStart
 //@!-------------------------------------------------------------------
 //
@@ -106,30 +113,6 @@
 //@Action:
 #define MSG_CFG_VALID           MSG_PREFIX "0069I" " Configuration is valid\n"
 //@Reason: The configuration is valid.
-//@Action:
-//@!-------------------------------------------------------------------
-//
-//## Zowe Launcher warning messages
-//
-//@!-------------------------------------------------------------------
-#define MSG_USE_DEFAULTS        MSG_PREFIX "0051W" " failed to read zowe.yaml, launcher will use default settings\n"    //@!
-//@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//!@Reason: Failed to read zowe.yaml, launcher will use default settings.
-//!@Action: ?
-#define MSG_NOT_ALL_STARTED     MSG_PREFIX "0052W" " not all components started\n"
-//@Reason: Not all components were started.
-//@Action:
-#define MSG_NOT_ALL_STOPPED     MSG_PREFIX "0053W" " not all components stopped gracefully\n"
-//@Reason: Not all components were stopped gracefully.
-//@Action:
-#define MSG_COMP_NOT_FOUND      MSG_PREFIX "0054W" " component %s not found\n"
-//@Reason: The component `<component-name>` was not found.
-//@Action:
-#define MSG_NOT_SIGTERM_STOPPED MSG_PREFIX "0063W" " Component %s(%d) will be terminated using SIGKILL\n"        
-//@Reason: Component `<component-name>`(`<process-id>`) will be terminated using `SIGKILL`.
-//@Action:
-#define MSG_CMD_RCP_WARN        MSG_PREFIX "0066W" " command '%s' ended with code %d\n"
-//@Reason:  The command `<command>` ended with return code `<return-code>`."
 //@Action:
 //@!-------------------------------------------------------------------
 //
@@ -264,6 +247,30 @@
 #define MSG_NO_LOG_CONTEXT      MSG_PREFIX "0074E" " Log context was not created\n"
 //@Reason: The logging context was not created.
 //@Action: Contact support.
+//@!-------------------------------------------------------------------
+//
+//## Zowe Launcher warning messages
+//
+//@!-------------------------------------------------------------------
+#define MSG_USE_DEFAULTS        MSG_PREFIX "0051W" " failed to read zowe.yaml, launcher will use default settings\n"    //@!
+//@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//!@Reason: Failed to read zowe.yaml, launcher will use default settings.
+//!@Action: ?
+#define MSG_NOT_ALL_STARTED     MSG_PREFIX "0052W" " not all components started\n"
+//@Reason: Not all components were started.
+//@Action:
+#define MSG_NOT_ALL_STOPPED     MSG_PREFIX "0053W" " not all components stopped gracefully\n"
+//@Reason: Not all components were stopped gracefully.
+//@Action:
+#define MSG_COMP_NOT_FOUND      MSG_PREFIX "0054W" " component %s not found\n"
+//@Reason: The component `<component-name>` was not found.
+//@Action:
+#define MSG_NOT_SIGTERM_STOPPED MSG_PREFIX "0063W" " Component %s(%d) will be terminated using SIGKILL\n"        
+//@Reason: Component `<component-name>`(`<process-id>`) will be terminated using `SIGKILL`.
+//@Action:
+#define MSG_CMD_RCP_WARN        MSG_PREFIX "0066W" " command '%s' ended with code %d\n"
+//@Reason:  The command `<command>` ended with return code `<return-code>`."
+//@Action:
 //@DocEnd
 
 #endif // MSG_H

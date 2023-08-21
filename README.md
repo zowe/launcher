@@ -26,7 +26,7 @@ And in doing so it watches over such components for health (restarting them if t
 ## Building
 
 ```
-cd zowe-launcher/build
+cd zowe-launcher/build 
 ./build.sh
 ```
 

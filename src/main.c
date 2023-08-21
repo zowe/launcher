@@ -172,13 +172,19 @@ struct {
 } zl_context = {.config = {.debug_mode = false}, .userid = "(NONE)"} ;
 
 static void set_sys_messages(ConfigManager *configmgr) {
-  Json *env = NULL;
+  Json *env;
   int cfgGetStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &env, 2, "zowe", "sysMessages");
-  JsonArray *sys_messages = NULL;
-  ArrayList *list = makeArrayList();
 
-  if (cfgGetStatus == ZCFG_SUCCESS) {
-    sys_messages = jsonAsArray(env);
+  if (cfgGetStatus != ZCFG_SUCCESS) { // No sysMessages found in Zowe configuration
+    return;
+  }
+  JsonArray *sys_messages = jsonAsArray(env);
+
+  int count = jsonArrayGetCount(sys_messages);
+  printf("\nWHATS OUR SYSMSG COUNT %d?", count);
+  for (int i = 0; i < count; i++) {
+      char *sys_message = jsonArrayGetString(sys_messages, i);
+      printf("SYS MESSAGE HERE: %s\n", sys_message);
   }
   
   if (sys_messages) {
@@ -188,6 +194,10 @@ static void set_sys_messages(ConfigManager *configmgr) {
 
 static void check_for_and_print_sys_message(const char* fmt, ...) {
   
+  if (!zl_context.sys_messages) {
+    return;
+  }
+  
   char input_string[1024]; // buffer to store the formatted message
     
   va_list args;
@@ -195,40 +205,34 @@ static void check_for_and_print_sys_message(const char* fmt, ...) {
   vsnprintf(input_string, sizeof(input_string), fmt, args);
   va_end(args);
   
-  printf("IS THIS EVEN FORMATTED %s ????????", input_string);
+  printf("\nIS THIS EVEN FORMATTED %s ", input_string);
   
   // Extract the ID from input_string
-    char msg_id[256]; // assuming the ID will not exceed 255 characters
-    const char* spacePos = strchr(input_string, ' ');
-    if (spacePos) {
-        int length = spacePos - input_string;
-        strncpy(msg_id, input_string, length);
-        msg_id[length] = '\0';
-    } else {
-        // If no space found, use the whole input_string as the ID
-        //strncpy(msg_id, input_string, sizeof(msg_id) - 1);
-        //msg_id[sizeof(msg_id) - 1] = '\0'; // ensure null termination
-        
-        // If no space found, end
-        return;
-    }
-    
-  printf("AND WHAT IS ID?%s END", msg_id);
-  
-  if (!zl_context.sys_messages) {
-      return; // return if input_string or sys_messages is NULL
+  char msg_id[256]; // assuming the ID will not exceed 255 characters
+  const char* spacePos = strchr(input_string, ' ');
+  if (spacePos) {
+      int length = spacePos - input_string;
+      strncpy(msg_id, input_string, length);
+      msg_id[length] = '\0';
+  } else {
+      // If no space found, use the whole input_string as the ID
+      //strncpy(msg_id, input_string, sizeof(msg_id) - 1);
+      //msg_id[sizeof(msg_id) - 1] = '\0'; // ensure null termination
+      
+      // If no space found, end
+      return;
   }
     
-  
   int count = jsonArrayGetCount(zl_context.sys_messages);
   for (int i = 0; i < count; i++) {
-      const char *sys_message = jsonArrayGetString(zl_context.sys_messages, i);
-      if (sys_message && strstr(sys_message, msg_id) == 0) {
-          printf("%s\nAT LEAST ONE MATCH!", input_string);
-          wtoPrintfMetal(input_string);
-          break; // break out of loop once a match is found
+      const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
+      if (sys_message_id && strstr(msg_id, sys_message_id)) { // TODO: Maybe this should compare the whole formatted string?
+          printf("\nMATCH - SYS MESSAGE ID: |%s| MESSAGE ID FROM EXTRACTED OUTPUT |%s|", sys_message_id, msg_id);
+          wtoPrintfMetal(input_string); // Print our match to the syslog
+          break;
       }
   }
+  
 }
 
 #define INFO(fmt, ...)  check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
@@ -1640,9 +1644,6 @@ int main(int argc, char **argv) {
     ERROR(MSG_CTX_INIT_FAILED);
     exit(EXIT_FAILURE);
   }
-  /* TODO(?): sys_messages could be set earlier than this w/ known sysMessages w/o having 
-  config manager available to check zowe.yaml? */
-  set_sys_messages(configmgr);
 
   cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.configmgr_path);
   int parm_member_len = strlen(zl_context.parm_member);
@@ -1663,6 +1664,10 @@ int main(int argc, char **argv) {
   if (process_root_dir(configmgr)) {
     exit(EXIT_FAILURE);
   }
+  
+  /* TODO(?): sys_messages could be set earlier than this w/ known sysMessages w/o having 
+  config manager available to check zowe.yaml? */
+  set_sys_messages(configmgr);
 
   //got root dir, can now load up the schemas from it
   char schemaList[PATH_MAX*2 + 4] = {0};
@@ -1677,6 +1682,7 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
+  
   set_shared_uss_env(configmgr);
 
   if (process_workspace_dir(configmgr)) {

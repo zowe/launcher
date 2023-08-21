@@ -25,6 +25,10 @@
 //@DocStart
 //@!-------------------------------------------------------------------
 //
+//# Error Message Codes
+//
+//The following error message codes may appear on Zowe Launcher SYSPRINT. Use the following message code references and the corresponding reasons and actions to help troubleshoot issues.
+//
 //## Zowe Launcher informational messages
 //
 //@!-------------------------------------------------------------------
@@ -151,13 +155,13 @@
 //@Action: Review the command and provide `<HA_INSTANCE_ID>` as a first argument.
 #define MSG_CTX_INIT_FAILED     MSG_PREFIX "0036E" " failed to initialize launcher context\n"
 //@Reason: Failed to initialize launcher context.
-//@Action: ?
+//@Action: :x:
 #define MSG_MAX_COMP_REACHED    MSG_PREFIX "0037E" " max component number reached, ignoring the rest\n"
 //@Reason: Maximal number of components reached, ignoring the rest.
 //@Action: Review the components defined in configuration (identified by message `ZWEL0023I`).
 #define MSG_MAX_RETRIES_REACHED MSG_PREFIX "0038E" " failed to restart component %s, max retries reached\n"
 //@Reason: Failed to restart the component `<component-name>`, maximum number of retries reached.
-//@Action: ?
+//@Action: :x:
 #define MSG_COMP_ALREADY_RUN    MSG_PREFIX "0039E" " cannot start component %s - already running\n"
 //@Reason: Cannot start the component `<component-name>` because it is already running.
 //@Action:
@@ -172,60 +176,60 @@
 //@Action: Review the command.
 #define MSG_CONS_START_ERR      MSG_PREFIX "0043E" " failed to start console thread\n"
 //@Reason: Failed to start the console thread.
-//@Action: ?
+//@Action: :x:
 #define MSG_CONS_STOP_ERR       MSG_PREFIX "0044E" " failed to stop console thread\n"
 //@Reason: Failed to stop the console thread.
-//@Action: ?
+//@Action: :x:
 #define MSG_YAML_CONV_ERR       MSG_PREFIX "0045E" " error converting zowe.yaml file - %s\n"    //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //@!@Reason: Error converting zowe.yaml file - `<path-to-zowe-yaml>`.
-//@!@Action: ?
+//@!@Action: :x:
 #define MSG_YAML_READ_ERR       MSG_PREFIX "0046E" " error reading zowe.yaml file - %s\n"   //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //@!@Reason: There is an error while reading zowe.yaml file - `<path-to-zowe.yaml>`
-//@!@Action: ?
+//@!@Action: :x:
 #define MSG_YAML_PARSE_ERR      MSG_PREFIX "0047E" " failed to parse zowe.yaml - %s\n"    //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //@!@Reason: Failed to parse the zowe.yaml - `<path-to-zowe-yaml>`.
-//@!@Action: ?
+//@!@Action: :x:
 #define MSG_YAML_OPEN_ERR       MSG_PREFIX "0048E" " failed to open zowe.yaml - %s: %s\n"   //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //@!@Reason: Failed to open zowe.yaml - `<path-to-zowe-yaml>`:?"
-//@!@Action: ?
+//@!@Action: :x:
 #define MSG_COMP_RESTART_FAILED MSG_PREFIX "0049E" " failed to restart component %s\n"
 //@Reason: Failed to restart the component `<component-name>`."
-//@Action: ?
+//@Action: :x:
 #define MSG_COMP_OUTPUT_ERR     MSG_PREFIX "0050E" " cannot read output from comp %s(%d) - %s\n"
 //@Reason: Cannot read the output from component `<component-name>` (`<process-id>`) - `<error-text>`"
-//@Action: ?
+//@Action: :x:
 #define MSG_STDIN_CREATE_ERROR  MSG_PREFIX "0055E" " failed to create file for stdin(%s) - %s\n"
 //@Reason: Failed to create the file for stdin(`<file>`) - <error-text>."
-//@Action: ?
+//@Action: :x:
 #define MSG_STDIN_OPEN_ERROR    MSG_PREFIX "0056E" " failed to open file for stdin(%s) - %s\n"
 //@Reason: Failed to open the file for stdin(`<file>`) - <error-text>."
-//@Action: ?
+//@Action: :x:
 #define MSG_WORKSPACE_ERROR     MSG_PREFIX "0057E" " failed to create workspace dir '%s'\n"
 //@Reason: Failed to create the workspace directory `<path-to-workspace-dir>`.
-//@Action: ?
+//@Action: :x:
 #define MSG_WKSP_DIR_ERR        MSG_PREFIX "0059E" " failed to get WORKSPACE_DIR dir\n"
 //@Reason: Failed to get the WORKSPACE_DIR (`zowe.workspaceDirectory`) directory."
-//@Action: ?
+//@Action: :x:
 #define MSG_WKSP_DIR_EMPTY      MSG_PREFIX "0060E" " WORKSPACE_DIR is empty string\n"
 //@Reason: The WORKSPACE_DIR (`zowe.workspaceDirectory`) is empty string.
-//@Action: ?
+//@Action: :x:
 #define MSG_FILE_ERR            MSG_PREFIX "0061E" " failed to find %s='%s', check if the file exists\n"    //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //@!@Reason: Failed to find ?=?, check if the file exists.
-//@!@Action: ?
+//@!@Action: :x:
 #define MSG_MKDIR_ERR           MSG_PREFIX "0062E" " failed to create dir '%s' - %s\n"
 //@Reason: Failed to create the directory `<directory>` - `<error-text>`.
-//@Action: ?
+//@Action: :x:
 #define MSG_CMD_RUN_ERR         MSG_PREFIX "0064E" " failed to run command %s - %s\n"
 //@Reason: Failed to run the command `<command>` - `<error-text>`.
-//@Action: ?
+//@Action: :x:
 #define MSG_CMD_OUT_ERR         MSG_PREFIX "0065E" " error reading output from command '%s' - %s\n"
 //@Reason: There is an error reading the output from command `<command>` - `<error-text>`
-//@Action: ?
+//@Action: :x:
 #define MSG_MEMBER_NAME_BAD     MSG_PREFIX "0067E" " PARMLIB() entries must all have the same member name\n"
 //@Reason: PARMLIB() entries must all have the same member name.
 //@Action: Review the member names are identical for all PARMLIB() entries.
@@ -255,7 +259,7 @@
 #define MSG_USE_DEFAULTS        MSG_PREFIX "0051W" " failed to read zowe.yaml, launcher will use default settings\n"    //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //@!@Reason: Failed to read zowe.yaml, launcher will use default settings.
-//@!@Action: ?
+//@!@Action: :x:
 #define MSG_NOT_ALL_STARTED     MSG_PREFIX "0052W" " not all components started\n"
 //@Reason: Not all components were started.
 //@Action:

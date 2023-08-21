@@ -198,8 +198,9 @@ static void check_for_and_print_sys_message(const char* fmt, ...) {
     return;
   }
   
-  char input_string[1024]; // buffer to store the formatted message
-    
+  /* All of this stuff here is because I can't do 
+  #define INFO(fmt, ...)  check_for_and_print_sys_message(fmt, ...) so let's make a string */
+  char input_string[1024];
   va_list args;
   va_start(args, fmt);
   vsnprintf(input_string, sizeof(input_string), fmt, args);

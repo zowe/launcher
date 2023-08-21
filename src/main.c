@@ -38,6 +38,7 @@
 #include "configmgr.h"
 #include "logging.h"
 #include "stcbase.h"
+#include "zos.h"
 
 extern char ** environ;
 /*
@@ -162,7 +163,7 @@ struct {
   char parm_member[8+1];
   char *root_dir;
   char *workspace_dir;
-  
+  JsonArray *sys_messages;
   char ha_instance_id[64];
   
   pid_t pid;
@@ -170,13 +171,75 @@ struct {
   
 } zl_context = {.config = {.debug_mode = false}, .userid = "(NONE)"} ;
 
+static void set_sys_messages(ConfigManager *configmgr) {
+  Json *env = NULL;
+  int cfgGetStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &env, 2, "zowe", "sysMessages");
+  JsonArray *sys_messages = NULL;
+  ArrayList *list = makeArrayList();
 
+  if (cfgGetStatus == ZCFG_SUCCESS) {
+    sys_messages = jsonAsArray(env);
+  }
+  
+  if (sys_messages) {
+    zl_context.sys_messages = sys_messages;
+  }
+}
 
-#define INFO(fmt, ...)  printf("%s <%s:%d> %s INFO "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
-#define WARN(fmt, ...)  printf("%s <%s:%d> %s WARN "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
-#define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
+static void check_for_and_print_sys_message(const char* fmt, ...) {
+  
+  char input_string[1024]; // buffer to store the formatted message
+    
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(input_string, sizeof(input_string), fmt, args);
+  va_end(args);
+  
+  printf("IS THIS EVEN FORMATTED %s ????????", input_string);
+  
+  // Extract the ID from input_string
+    char msg_id[256]; // assuming the ID will not exceed 255 characters
+    const char* spacePos = strchr(input_string, ' ');
+    if (spacePos) {
+        int length = spacePos - input_string;
+        strncpy(msg_id, input_string, length);
+        msg_id[length] = '\0';
+    } else {
+        // If no space found, use the whole input_string as the ID
+        //strncpy(msg_id, input_string, sizeof(msg_id) - 1);
+        //msg_id[sizeof(msg_id) - 1] = '\0'; // ensure null termination
+        
+        // If no space found, end
+        return;
+    }
+    
+  printf("AND WHAT IS ID?%s END", msg_id);
+  
+  if (!zl_context.sys_messages) {
+      return; // return if input_string or sys_messages is NULL
+  }
+    
+  
+  int count = jsonArrayGetCount(zl_context.sys_messages);
+  for (int i = 0; i < count; i++) {
+      const char *sys_message = jsonArrayGetString(zl_context.sys_messages, i);
+      if (sys_message && strstr(sys_message, msg_id) == 0) {
+          printf("%s\nAT LEAST ONE MATCH!", input_string);
+          wtoPrintfMetal(input_string);
+          break; // break out of loop once a match is found
+      }
+  }
+}
+
+#define INFO(fmt, ...)  check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
+  printf("%s <%s:%d> %s INFO "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+#define WARN(fmt, ...)  check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
+  printf("%s <%s:%d> %s WARN "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+#define DEBUG(fmt, ...) check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
+  if (zl_context.config.debug_mode) \
   printf("%s <%s:%d> %s DEBUG "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
-#define ERROR(fmt, ...) printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+#define ERROR(fmt, ...) check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
+  printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 
 static int mkdir_all(const char *path, mode_t mode) {
     // test if path exists
@@ -333,82 +396,6 @@ static bool is_valid_key(char *key) {
         return false;
     }
     return true;
-}
-
-typedef struct WTOCommon31_tag{
-  char replyBufferLength; /* 31-bit WTOR only, else 0 */
-  char length; /* message length +4 */
-  char mcsFlags1;
-  char mcsFlags2;
-} WTOCommon31;
-
-void message(char *message){
-
-  ALLOC_STRUCT31(
-    STRUCT31_NAME(below2G),
-    STRUCT31_FIELDS(
-      WTOCommon31 common;
-      char text[126];          /* Maximum length of WTO text is 126 - ABEND D23-xxxx0005 if longer than 126 */
-    )
-  );
-
-  int len = strlen(message);
-  if (len>sizeof(below2G->text))
-    len=sizeof(below2G->text);
-
-  below2G->common.length = len+sizeof(below2G->common); /* +4 for header */
-  memcpy(below2G->text,message,len);
-
-  __asm(ASM_PREFIX
-        " WTO MF=(E,(%[wtobuf])) \n"
-        :
-        :[wtobuf]"NR:r1"(&below2G->common)
-        :"r0","r1","r15");
-
-  FREE_STRUCT31(
-    STRUCT31_NAME(below2G)
-  );
-}
-
-#define WTO_MAX_SIZE 126
-void wtoPrintf(char *formatString, ...){
-  char text[WTO_MAX_SIZE+1];       /* Allow for trailing null character */
-  va_list argPointer;
-  int cnt;
-
-  for (int pass=0; pass<2; pass++){
-
-    /* The resulting text string from vsnprintf is unpredictable if
-       there is an error in the format string or arguments.  In that
-       case we will set the output text area to null, repeat the
-       vsnprintf, and then find the length of the null terminated
-       string.  This avoids initializing the output text area prior
-       to every successful request.
-    */
-
-    va_start(argPointer,formatString);
-    cnt = vsnprintf(text,sizeof(text),formatString,argPointer);
-    va_end(argPointer);
-
-    if (cnt<0){
-      if (pass==0)
-        memset(text,0,sizeof(text));  /* Clear the text buffer before retrying the vsnprint request */
-      else {
-        text[WTO_MAX_SIZE] = 0;       /* Ensure strlen stops at the end of the text buffer */
-        cnt = strlen(text);           /* Find the end of the text string */
-      }
-    } else
-      break;                          /* vsnprintf did not return an error - cnt was set */
-  }
-  if (cnt>WTO_MAX_SIZE)               /* If more data to format than the text buffer length */
-    cnt = WTO_MAX_SIZE;               /* Truncate the formatted length to the text buffer length */
-
-  /* We never want to include a final \n character in the WTO text */
-
-  if (cnt>0 && text[cnt-1] == '\n')   /* If text ends with \n */
-    text[cnt-1] = 0;                  /* Change it into a null character */
-
-  message(text);
 }
 
 static void set_shared_uss_env(ConfigManager *configmgr) {
@@ -788,7 +775,7 @@ static void *handle_comp_comm(void *args) {
         char *next_line = strtok(msg, "\n");
 
         while (next_line) {
-          printf("%s\n", next_line);
+          printf("SHEESH%s\n", next_line);
           next_line = strtok(NULL, "\n");
         }
 
@@ -924,8 +911,7 @@ static int start_component(zl_comp_t *comp) {
   comp->clean_stop = false;
 
   INFO(MSG_COMP_STARTED, comp->name);
-  INFO("THIS IS A TEST AND SHOULD BE REMOVED!!!!!!!!!!!!!!!!!");
-  wtoPrintf("SYSLOG POSSIBLY????????????????????");
+  wtoPrintfMetal("SYSLOG POSSIBLY????????????????????");
 
   if (pthread_create(&comp->comm_thid, NULL, handle_comp_comm, comp) != 0) {
     DEBUG("comm thread not started for %s - %s\n", comp->name, strerror(errno));
@@ -1654,6 +1640,9 @@ int main(int argc, char **argv) {
     ERROR(MSG_CTX_INIT_FAILED);
     exit(EXIT_FAILURE);
   }
+  /* TODO(?): sys_messages could be set earlier than this w/ known sysMessages w/o having 
+  config manager available to check zowe.yaml? */
+  set_sys_messages(configmgr);
 
   cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.configmgr_path);
   int parm_member_len = strlen(zl_context.parm_member);

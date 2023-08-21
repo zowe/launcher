@@ -775,7 +775,7 @@ static void *handle_comp_comm(void *args) {
         char *next_line = strtok(msg, "\n");
 
         while (next_line) {
-          printf("SHEESH%s\n", next_line);
+          printf("%s\n", next_line);
           next_line = strtok(NULL, "\n");
         }
 

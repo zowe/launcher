@@ -206,8 +206,9 @@ static void check_for_and_print_sys_message(const char* fmt, ...) {
   vsnprintf(input_string, sizeof(input_string), fmt, args);
   va_end(args);
   
-  printf("\nIS THIS EVEN FORMATTED %s ", input_string);
+  //printf("\nIS THIS EVEN FORMATTED %s ", input_string);
   
+  /* Uncomment code to try to pull ID from input_string
   // Extract the ID from input_string
   char msg_id[256]; // assuming the ID will not exceed 255 characters
   const char* spacePos = strchr(input_string, ' ');
@@ -222,14 +223,14 @@ static void check_for_and_print_sys_message(const char* fmt, ...) {
       
       // If no space found, end
       return;
-  }
+  } */
     
   int count = jsonArrayGetCount(zl_context.sys_messages);
   for (int i = 0; i < count; i++) {
       const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
-      if (sys_message_id && strstr(msg_id, sys_message_id)) { // TODO: Maybe this should compare the whole formatted string?
-          printf("\nMATCH - SYS MESSAGE ID: |%s| MESSAGE ID FROM EXTRACTED OUTPUT |%s|", sys_message_id, msg_id);
-          wtoPrintfMetal(input_string); // Print our match to the syslog
+      if (sys_message_id && strstr(input_string, sys_message_id)) {
+          printf("\nMATCH - SYS MESSAGE ID: |%s| MESSAGE ID FROM EXTRACTED OUTPUT |%s|", sys_message_id, input_string);
+          wtoPrintf3(input_string); // Print our match to the syslog
           break;
       }
   }
@@ -916,7 +917,6 @@ static int start_component(zl_comp_t *comp) {
   comp->clean_stop = false;
 
   INFO(MSG_COMP_STARTED, comp->name);
-  wtoPrintfMetal("SYSLOG POSSIBLY????????????????????");
 
   if (pthread_create(&comp->comm_thid, NULL, handle_comp_comm, comp) != 0) {
     DEBUG("comm thread not started for %s - %s\n", comp->name, strerror(errno));
@@ -1526,7 +1526,8 @@ static int process_workspace_dir(ConfigManager *configmgr) {
 }
 
 static void print_line(void *data, const char *line) {
-  printf("%s", line);
+  printf("YEEEEET?%s", line);
+  check_for_and_print_sys_message(line);
 }
 
 static char* get_start_prepare_cmd(char *sharedenv) {

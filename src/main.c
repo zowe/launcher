@@ -179,13 +179,6 @@ static void set_sys_messages(ConfigManager *configmgr) {
     return;
   }
   JsonArray *sys_messages = jsonAsArray(env);
-
-  int count = jsonArrayGetCount(sys_messages);
-  printf("\nWHATS OUR SYSMSG COUNT %d?", count);
-  for (int i = 0; i < count; i++) {
-      char *sys_message = jsonArrayGetString(sys_messages, i);
-      printf("SYS MESSAGE HERE: %s\n", sys_message);
-  }
   
   if (sys_messages) {
     zl_context.sys_messages = sys_messages;
@@ -205,8 +198,6 @@ static void check_for_and_print_sys_message(const char* fmt, ...) {
   va_start(args, fmt);
   vsnprintf(input_string, sizeof(input_string), fmt, args);
   va_end(args);
-  
-  //printf("\nIS THIS EVEN FORMATTED %s ", input_string);
   
   /* Uncomment code to try to pull ID from input_string
   // Extract the ID from input_string
@@ -229,7 +220,6 @@ static void check_for_and_print_sys_message(const char* fmt, ...) {
   for (int i = 0; i < count; i++) {
       const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
       if (sys_message_id && strstr(input_string, sys_message_id)) {
-          printf("\nMATCH - SYS MESSAGE ID: |%s| MESSAGE ID FROM EXTRACTED OUTPUT |%s|", sys_message_id, input_string);
           wtoPrintf3(input_string); // Print our match to the syslog
           break;
       }
@@ -1529,7 +1519,7 @@ static int process_workspace_dir(ConfigManager *configmgr) {
 }
 
 static void print_line(void *data, const char *line) {
-  printf("YEEEEET?%s", line);
+  printf("%s", line);
   check_for_and_print_sys_message(line);
 }
 

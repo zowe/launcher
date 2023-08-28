@@ -1620,6 +1620,7 @@ int main(int argc, char **argv) {
   }
 
   INFO(MSG_LAUNCHER_START);
+  wtoPrintf3(MSG_LAUNCHER_START); // Manual sys log print (messages not set here yet)
 
   zl_config_t config = read_config(argc, argv);
   zl_context.config = config;
@@ -1627,6 +1628,7 @@ int main(int argc, char **argv) {
   LoggingContext *logContext = makeLoggingContext();
   if (!logContext) {
     ERROR(MSG_NO_LOG_CONTEXT);
+    wtoPrintf3(MSG_NO_LOG_CONTEXT); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
   logConfigureStandardDestinations(logContext);
@@ -1637,6 +1639,7 @@ int main(int argc, char **argv) {
   cfgSetTraceLevel(configmgr, zl_context.config.debug_mode ? 2 : 0);
   if (init_context(argc, argv, &config, configmgr)) {
     ERROR(MSG_CTX_INIT_FAILED);
+    wtoPrintf3(MSG_CTX_INIT_FAILED); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
 
@@ -1648,11 +1651,13 @@ int main(int argc, char **argv) {
 
   if (cfgLoadConfiguration(configmgr, ZOWE_CONFIG_NAME) != 0){
     ERROR(MSG_CFG_LOAD_FAIL);
+    wtoPrintf3(MSG_CFG_LOAD_FAIL); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
   
   if (setup_signal_handlers()) {
     ERROR(MSG_SIGNAL_ERR);
+    wtoPrintf3(MSG_SIGNAL_ERR); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
 
@@ -1660,8 +1665,6 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
   
-  /* TODO(?): sys_messages could be set earlier than this w/ known sysMessages w/o having 
-  config manager available to check zowe.yaml? */
   set_sys_messages(configmgr);
 
   //got root dir, can now load up the schemas from it

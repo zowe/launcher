@@ -231,8 +231,7 @@ static void check_for_and_print_sys_message(const char* fmt, ...) {
   printf("%s <%s:%d> %s INFO "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 #define WARN(fmt, ...)  check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
   printf("%s <%s:%d> %s WARN "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
-#define DEBUG(fmt, ...) check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
-  if (zl_context.config.debug_mode) \
+#define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
   printf("%s <%s:%d> %s DEBUG "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 #define ERROR(fmt, ...) check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
   printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)

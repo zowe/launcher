@@ -38,6 +38,7 @@
 #include "configmgr.h"
 #include "logging.h"
 #include "stcbase.h"
+#include "zos.h"
 
 extern char ** environ;
 /*
@@ -162,7 +163,7 @@ struct {
   char parm_member[8+1];
   char *root_dir;
   char *workspace_dir;
-  
+  JsonArray *sys_messages;
   char ha_instance_id[64];
   
   pid_t pid;
@@ -170,13 +171,70 @@ struct {
   
 } zl_context = {.config = {.debug_mode = false}, .userid = "(NONE)"} ;
 
+static void set_sys_messages(ConfigManager *configmgr) {
+  Json *env;
+  int cfgGetStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &env, 2, "zowe", "sysMessages");
 
+  if (cfgGetStatus != ZCFG_SUCCESS) { // No sysMessages found in Zowe configuration
+    return;
+  }
+  JsonArray *sys_messages = jsonAsArray(env);
+  
+  if (sys_messages) {
+    zl_context.sys_messages = sys_messages;
+  }
+}
 
-#define INFO(fmt, ...)  printf("%s <%s:%d> %s INFO "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
-#define WARN(fmt, ...)  printf("%s <%s:%d> %s WARN "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+static void check_for_and_print_sys_message(const char* fmt, ...) {
+  
+  if (!zl_context.sys_messages) {
+    return;
+  }
+  
+  /* All of this stuff here is because I can't do 
+  #define INFO(fmt, ...)  check_for_and_print_sys_message(fmt, ...) so let's make a string */
+  char input_string[1024];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(input_string, sizeof(input_string), fmt, args);
+  va_end(args);
+  
+  /* Uncomment code to try to pull ID from input_string
+  // Extract the ID from input_string
+  char msg_id[256]; // assuming the ID will not exceed 255 characters
+  const char* spacePos = strchr(input_string, ' ');
+  if (spacePos) {
+      int length = spacePos - input_string;
+      strncpy(msg_id, input_string, length);
+      msg_id[length] = '\0';
+  } else {
+      // If no space found, use the whole input_string as the ID
+      //strncpy(msg_id, input_string, sizeof(msg_id) - 1);
+      //msg_id[sizeof(msg_id) - 1] = '\0'; // ensure null termination
+      
+      // If no space found, end
+      return;
+  } */
+    
+  int count = jsonArrayGetCount(zl_context.sys_messages);
+  for (int i = 0; i < count; i++) {
+      const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
+      if (sys_message_id && strstr(input_string, sys_message_id)) {
+          wtoPrintf3(input_string); // Print our match to the syslog
+          break;
+      }
+  }
+  
+}
+
+#define INFO(fmt, ...)  check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
+  printf("%s <%s:%d> %s INFO "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+#define WARN(fmt, ...)  check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
+  printf("%s <%s:%d> %s WARN "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 #define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
   printf("%s <%s:%d> %s DEBUG "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
-#define ERROR(fmt, ...) printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+#define ERROR(fmt, ...) check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
+  printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 
 static int mkdir_all(const char *path, mode_t mode) {
     // test if path exists
@@ -1461,6 +1519,7 @@ static int process_workspace_dir(ConfigManager *configmgr) {
 
 static void print_line(void *data, const char *line) {
   printf("%s", line);
+  check_for_and_print_sys_message(line);
 }
 
 static char* get_start_prepare_cmd(char *sharedenv) {
@@ -1560,6 +1619,7 @@ int main(int argc, char **argv) {
   }
 
   INFO(MSG_LAUNCHER_START);
+  wtoPrintf3(MSG_LAUNCHER_START); // Manual sys log print (messages not set here yet)
 
   zl_config_t config = read_config(argc, argv);
   zl_context.config = config;
@@ -1567,6 +1627,7 @@ int main(int argc, char **argv) {
   LoggingContext *logContext = makeLoggingContext();
   if (!logContext) {
     ERROR(MSG_NO_LOG_CONTEXT);
+    wtoPrintf3(MSG_NO_LOG_CONTEXT); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
   logConfigureStandardDestinations(logContext);
@@ -1577,6 +1638,7 @@ int main(int argc, char **argv) {
   cfgSetTraceLevel(configmgr, zl_context.config.debug_mode ? 2 : 0);
   if (init_context(argc, argv, &config, configmgr)) {
     ERROR(MSG_CTX_INIT_FAILED);
+    wtoPrintf3(MSG_CTX_INIT_FAILED); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
 
@@ -1588,17 +1650,21 @@ int main(int argc, char **argv) {
 
   if (cfgLoadConfiguration(configmgr, ZOWE_CONFIG_NAME) != 0){
     ERROR(MSG_CFG_LOAD_FAIL);
+    wtoPrintf3(MSG_CFG_LOAD_FAIL); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
   
   if (setup_signal_handlers()) {
     ERROR(MSG_SIGNAL_ERR);
+    wtoPrintf3(MSG_SIGNAL_ERR); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
 
   if (process_root_dir(configmgr)) {
     exit(EXIT_FAILURE);
   }
+  
+  set_sys_messages(configmgr);
 
   //got root dir, can now load up the schemas from it
   char schemaList[PATH_MAX*2 + 4] = {0};
@@ -1613,6 +1679,7 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
+  
   set_shared_uss_env(configmgr);
 
   if (process_workspace_dir(configmgr)) {

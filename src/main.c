@@ -412,11 +412,14 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
 
     int length = index - thisEnv;
     char *key = malloc(length + 1);
+    memset(key, 0, length + 1);
     strncpy(key, thisEnv, length);
     
     if (!arrayListContains(list, key)) {
       arrayListAdd(list, key);
-      char *new_env = malloc(strlen(thisEnv));
+      int new_env_length = strlen(thisEnv);
+      char *new_env = malloc(new_env_length+1);
+      memset(new_env, 0, new_env_length+1);
       strncpy(new_env, thisEnv, strlen(thisEnv));
       DEBUG("shared env pos %d is %s\n", idx, new_env);
       shared_uss_env[idx++] = new_env;
@@ -1300,7 +1303,7 @@ static void handle_get_component_line(void *data, const char *line) {
 }
 
 static char* get_launch_components_cmd(char* sharedenv) {
-  const char basecmd[] = "%s %s/bin/zwe internal get-launch-components --config \"%s\" --ha-instance %s";
+  const char basecmd[] = "%s %s/bin/zwe internal get-launch-components --config \"%s\" --ha-instance %s 2>&1";
   int size = strlen(zl_context.root_dir) + strlen(zl_context.config_path) + strlen(zl_context.ha_instance_id) + strlen(sharedenv) + sizeof(basecmd) + 1;
   char *command = malloc(size);
 

@@ -30,19 +30,32 @@
 //*
 //* CONFIG= can be either a single path ex.
 //*   CONFIG=/my/zowe.yaml
-//* Or a list of FILE() and colon : separated paths in the form of
+//*
+//* Or a list of FILE() or PARMLIB() and colon : separated paths
+//*   in the form of
+//*
+//*    +------------ : ------------+
+//*    V                           |
+//* >--+--FILE(ussPath)------------+--><
+//*    |                           |
+//*    +--PARMLIB(dsname(member))--+
+//*
+//* Example:
 //*   CONFIG=FILE(/my/long/path/to/1.yaml)\
-//*   :FILE(/my/long/path/to/2.yaml)
+//*   :PARMLIB(ZOWE.PARMLIB(YAML))
 //*
 //* In the above case, the \ is used as a line continuation.
 //*
 //* When using a list, files on left override properties
-//* From files to their right.
+//* from files to their right.
 //* Typically the right-most file should be the Zowe default yaml.
+//*
+//* Note: All PARMLIB() entries must all have the same member name.
 //*
 //********************************************************************/
 //STDENV   DD  *
 _CEE_ENVFILE_CONTINUATION=\
 _CEE_RUNOPTS=HEAPPOOLS(OFF)
+_EDC_UMASK_DFLT=0002
 CONFIG=#zowe_yaml
 /*

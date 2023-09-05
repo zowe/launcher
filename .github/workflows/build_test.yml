@@ -140,7 +140,7 @@ jobs:
         with:
           repository: zowe/zowe-common-c
           path: deps/launcher/common
-          ref: 'v2.x/master'
+          ref: 'v2.x/staging'
 
       - name: '[Prep 2] Setup jFrog CLI'
         uses: jfrog/setup-jfrog-cli@v2

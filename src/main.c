@@ -171,6 +171,14 @@ struct {
   
 } zl_context = {.config = {.debug_mode = false}, .userid = "(NONE)"} ;
 
+// Wrapper for wtoPrintf3
+static void printf_wto(const char *formatString, ...) {
+  va_list argPointer;
+  va_start(argPointer, formatString);
+  wtoPrintf3(formatString, argPointer);
+  va_end(argPointer);
+}
+
 static void set_sys_messages(ConfigManager *configmgr) {
   Json *env;
   int cfgGetStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &env, 2, "zowe", "sysMessages");
@@ -220,7 +228,7 @@ static void check_for_and_print_sys_message(const char* fmt, ...) {
   for (int i = 0; i < count; i++) {
       const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
       if (sys_message_id && strstr(input_string, sys_message_id)) {
-          wtoPrintf3(input_string); // Print our match to the syslog
+          printf_wto(input_string); // Print our match to the syslog
           break;
       }
   }
@@ -1619,7 +1627,7 @@ int main(int argc, char **argv) {
   }
 
   INFO(MSG_LAUNCHER_START);
-  wtoPrintf3(MSG_LAUNCHER_START); // Manual sys log print (messages not set here yet)
+  printf_wto(MSG_LAUNCHER_START); // Manual sys log print (messages not set here yet)
 
   zl_config_t config = read_config(argc, argv);
   zl_context.config = config;
@@ -1627,7 +1635,7 @@ int main(int argc, char **argv) {
   LoggingContext *logContext = makeLoggingContext();
   if (!logContext) {
     ERROR(MSG_NO_LOG_CONTEXT);
-    wtoPrintf3(MSG_NO_LOG_CONTEXT); // Manual sys log print (messages not set here yet)
+    printf_wto(MSG_NO_LOG_CONTEXT); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
   logConfigureStandardDestinations(logContext);
@@ -1638,7 +1646,7 @@ int main(int argc, char **argv) {
   cfgSetTraceLevel(configmgr, zl_context.config.debug_mode ? 2 : 0);
   if (init_context(argc, argv, &config, configmgr)) {
     ERROR(MSG_CTX_INIT_FAILED);
-    wtoPrintf3(MSG_CTX_INIT_FAILED); // Manual sys log print (messages not set here yet)
+    printf_wto(MSG_CTX_INIT_FAILED); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
 
@@ -1650,13 +1658,13 @@ int main(int argc, char **argv) {
 
   if (cfgLoadConfiguration(configmgr, ZOWE_CONFIG_NAME) != 0){
     ERROR(MSG_CFG_LOAD_FAIL);
-    wtoPrintf3(MSG_CFG_LOAD_FAIL); // Manual sys log print (messages not set here yet)
+    printf_wto(MSG_CFG_LOAD_FAIL); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
   
   if (setup_signal_handlers()) {
     ERROR(MSG_SIGNAL_ERR);
-    wtoPrintf3(MSG_SIGNAL_ERR); // Manual sys log print (messages not set here yet)
+    printf_wto(MSG_SIGNAL_ERR); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
 

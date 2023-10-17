@@ -8,40 +8,40 @@ SPDX-License-Identifier: EPL-2.0
 Copyright Contributors to the Zowe Project.
 */
 
-const fs = require('fs');
+const fs=require('fs');
 
-// Must run with args: PR_NUMBER
+//Must run with args: PR_NUMBER
 const PR_NUMBER = process.argv[2];
+
 const description = fs.readFileSync('/tmp/pr_description.txt', 'utf8');
 let changelogMsg, version;
 
 if (description.includes('VERSION:') && description.includes('CHANGELOG:')) {
   let lines = description.split('\n');
-  lines.forEach((line) => {
+  lines.forEach((line)=> {
     if (line.startsWith('CHANGELOG:')) {
-      changelogMsg = line.substring('CHANGELOG:'.length).trim();
+      changelogMsg = line.substring('CHANGELOG:'.length+1).trim();
     } else if (line.startsWith('VERSION:')) {
-      version = line.substring('VERSION:'.length).trim();
+      version = line.substring('VERSION:'.length+1).trim();
     }
   });
-
   if (changelogMsg && version) {
     let changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
     let changelogLines = changelog.split('\n');
     let versionIndex = -1;
     let anchorIndex = 0;
     for (let i = 0; i < changelogLines.length; i++) {
-      if (changelogLines[i].includes('# Basic launcher Changelog')) {
+      if (changelogLines[i].includes('This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.')) {
         anchorIndex = i;
-      } else if (changelogLines[i].startsWith('## ' + version)) {  // Removed "v" prefix
+      } else if (changelogLines[i].startsWith('## v'+version)) {
         versionIndex = i;
         break;
       }
     }
     if (versionIndex != -1) {
-      changelogLines.splice(versionIndex + 2, 0, `- ${changelogMsg} (#${PR_NUMBER})`);
+      changelogLines.splice(versionIndex+2, 0, `- ${changelogMsg} (#${PR_NUMBER})`);
     } else {
-      changelogLines.splice(anchorIndex + 1, 0, `\n## \`${version}\`\n- ${changelogMsg} (#${PR_NUMBER})`);
+      changelogLines.splice(anchorIndex+1, 0, `\n## ${version}\n- ${changelogMsg} (#${PR_NUMBER})`);
     }
     const newChangelog = changelogLines.join('\n');
     fs.writeFileSync('CHANGELOG.md', newChangelog);

@@ -185,5 +185,7 @@ jobs:
       - name: '[Release 2] NPM bump version (if necessary)' 
         if: ${{ success() && github.event.inputs.PERFORM_RELEASE == 'true' && env.IS_RELEASE_BRANCH == 'true' && env.IS_FORMAL_RELEASE_BRANCH == 'true' && env.PRE_RELEASE_STRING == ''}}
         uses: zowe-actions/shared-actions/bump-version@main
+        with:
+          version: minor
         env: 
           GITHUB_TOKEN: ${{ secrets.ZOWE_ROBOT_TOKEN }}

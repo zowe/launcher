@@ -5,3 +5,4 @@ This repo is part of the app-server Zowe Component, and the change logs here may
 
 ## 2.13.0
 - Added a wrapper for wtoPrintf3
+- Bugfix: Fixed a gap in WTO syslog checking

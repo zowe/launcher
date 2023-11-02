@@ -223,7 +223,7 @@ static int index_of_string_limited(char *str, int len, char *search_string, int 
   int last_possible_start = len-search_limit;
   int pos = start_pos;
 
-  if (startPos > last_possible_start){
+  if (start_pos > last_possible_start){
     return -1;
   }
   while (pos <= last_possible_start){
@@ -235,7 +235,7 @@ static int index_of_string_limited(char *str, int len, char *search_string, int 
   return -1;
 }
 
-static void check_for_and_print_sys_message(const char* line) {
+static void check_for_and_print_sys_message(const char* input_string) {
   if (!zl_context.sys_messages) {
     return;
   }
@@ -247,7 +247,7 @@ static void check_for_and_print_sys_message(const char* line) {
     if (sys_message_id && (index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT) != -1)) {
       //truncate match for reasonable output
       char syslog_string[SYSLOG_MESSAGE_LENGTH_LIMIT+1] = {0};
-      int length = SYSLOG_MESSAGE_LENGTH_LIMIT < input_length ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_lenth;
+      int length = SYSLOG_MESSAGE_LENGTH_LIMIT < input_length ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_length;
       memcpy(syslog_string, input_string, length);
       syslog_string[length] = '\0';
 

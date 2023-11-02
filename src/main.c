@@ -65,6 +65,8 @@ extern char ** environ;
 
 #define COMP_LIST_SIZE 1024
 
+#define SYSLOG_MESSAGE_LENGTH_LIMIT 512
+
 #ifndef PATH_MAX
 #define PATH_MAX _POSIX_PATH_MAX
 #endif
@@ -193,36 +195,18 @@ static void set_sys_messages(ConfigManager *configmgr) {
   }
 }
 
-static void check_for_and_print_sys_message(const char* fmt, ...) {
-  
+static void launcher_syslog_on_match(const char* fmt, ...) {
   if (!zl_context.sys_messages) {
     return;
   }
   
   /* All of this stuff here is because I can't do 
   #define INFO(fmt, ...)  check_for_and_print_sys_message(fmt, ...) so let's make a string */
-  char input_string[1024];
+  char input_string[SYSLOG_MESSAGE_LENGTH_LIMIT+1];
   va_list args;
   va_start(args, fmt);
   vsnprintf(input_string, sizeof(input_string), fmt, args);
   va_end(args);
-  
-  /* Uncomment code to try to pull ID from input_string
-  // Extract the ID from input_string
-  char msg_id[256]; // assuming the ID will not exceed 255 characters
-  const char* spacePos = strchr(input_string, ' ');
-  if (spacePos) {
-      int length = spacePos - input_string;
-      strncpy(msg_id, input_string, length);
-      msg_id[length] = '\0';
-  } else {
-      // If no space found, use the whole input_string as the ID
-      //strncpy(msg_id, input_string, sizeof(msg_id) - 1);
-      //msg_id[sizeof(msg_id) - 1] = '\0'; // ensure null termination
-      
-      // If no space found, end
-      return;
-  } */
     
   int count = jsonArrayGetCount(zl_context.sys_messages);
   for (int i = 0; i < count; i++) {
@@ -235,13 +219,52 @@ static void check_for_and_print_sys_message(const char* fmt, ...) {
   
 }
 
-#define INFO(fmt, ...)  check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
+static int index_of_string_limited(char *str, int len, char *search_string, int start_pos, int search_limit){
+  int last_possible_start = len-search_limit;
+  int pos = start_pos;
+
+  if (startPos > last_possible_start){
+    return -1;
+  }
+  while (pos <= last_possible_start){
+    if (!memcmp(str+pos,search_string,search_limit)){
+      return pos;
+    }
+    pos++;
+  }
+  return -1;
+}
+
+static void check_for_and_print_sys_message(const char* line) {
+  if (!zl_context.sys_messages) {
+    return;
+  }
+
+  int count = jsonArrayGetCount(zl_context.sys_messages);
+  int input_length = strlen(input_string);
+  for (int i = 0; i < count; i++) {
+    const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
+    if (sys_message_id && (index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT) != -1)) {
+      //truncate match for reasonable output
+      char syslog_string[SYSLOG_MESSAGE_LENGTH_LIMIT+1] = {0};
+      int length = SYSLOG_MESSAGE_LENGTH_LIMIT < input_length ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_lenth;
+      memcpy(syslog_string, input_string, length);
+      syslog_string[length] = '\0';
+
+      printf_wto(syslog_string);// Print our match to the syslog
+      break;
+    }
+  }
+  
+}
+
+#define INFO(fmt, ...)  launcher_syslog_on_match(fmt, ##__VA_ARGS__); \
   printf("%s <%s:%d> %s INFO "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
-#define WARN(fmt, ...)  check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
+#define WARN(fmt, ...)  launcher_syslog_on_match(fmt, ##__VA_ARGS__); \
   printf("%s <%s:%d> %s WARN "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 #define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
   printf("%s <%s:%d> %s DEBUG "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
-#define ERROR(fmt, ...) check_for_and_print_sys_message(fmt, ##__VA_ARGS__); \
+#define ERROR(fmt, ...) launcher_syslog_on_match(fmt, ##__VA_ARGS__); \
   printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
 
 static int mkdir_all(const char *path, mode_t mode) {

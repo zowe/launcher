@@ -219,21 +219,25 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
   
 }
 
-static int index_of_string_limited(char *str, int len, char *search_string, int start_pos, int search_limit){
-  int last_possible_start = len-search_limit;
+static int index_of_string_limited(const char *str, int len, const char *search_string, int start_pos, int search_limit){
+  int search_len = strlen(search_string);
+  int last_possible_start = len < search_limit ? len - search_len : search_limit - search_len;
   int pos = start_pos;
 
   if (start_pos > last_possible_start){
     return -1;
   }
   while (pos <= last_possible_start){
-    if (!memcmp(str+pos,search_string,search_limit)){
+    if (!memcmp(str+pos,search_string,search_len)){
       return pos;
     }
     pos++;
   }
   return -1;
 }
+
+//size of "ZWE_zowe_sysMessages"
+#define ZWE_SYSMESSAGES_EXCLUDE_LEN 20
 
 static void check_for_and_print_sys_message(const char* input_string) {
   if (!zl_context.sys_messages) {
@@ -245,14 +249,16 @@ static void check_for_and_print_sys_message(const char* input_string) {
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
     if (sys_message_id && (index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT) != -1)) {
-      //truncate match for reasonable output
-      char syslog_string[SYSLOG_MESSAGE_LENGTH_LIMIT+1] = {0};
-      int length = SYSLOG_MESSAGE_LENGTH_LIMIT < input_length ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_length;
-      memcpy(syslog_string, input_string, length);
-      syslog_string[length] = '\0';
-
-      printf_wto(syslog_string);// Print our match to the syslog
-      break;
+      //exclude "ZWE_zowe_sysMessages" messages to avoid spam.
+      if (memcmp("ZWE_zowe_sysMessages", input_string, ZWE_SYSMESSAGES_EXCLUDE_LEN)){ 
+        //truncate match for reasonable output
+        char syslog_string[SYSLOG_MESSAGE_LENGTH_LIMIT+1] = {0};
+        int length = SYSLOG_MESSAGE_LENGTH_LIMIT < input_length ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_length;
+        memcpy(syslog_string, input_string, length);
+        syslog_string[length] = '\0';
+        printf_wto(syslog_string);// Print our match to the syslog
+        break;
+      }
     }
   }
   

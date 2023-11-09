@@ -1628,6 +1628,7 @@ int main(int argc, char **argv) {
   }
 
   INFO(MSG_LAUNCHER_START);
+  INFO(MSG_LINE_LENGTH);
   printf_wto(MSG_LAUNCHER_START); // Manual sys log print (messages not set here yet)
 
   zl_config_t config = read_config(argc, argv);

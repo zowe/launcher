@@ -18,8 +18,9 @@
 #include <string.h>
 #include <strings.h>
 #include <errno.h>
-
+#include <regex.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include <pthread.h>
 #include <fcntl.h>
@@ -91,9 +92,14 @@ static zl_time_t gettime(void) {
   struct tm lt;
   zl_time_t result;
 
-  localtime_r(&t, &lt);
+  gmtime_r(&t, &lt);
 
   strftime(result.value, sizeof(result.value), format, &lt);
+
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  int milli = now.tv_usec / 1000;
+  snprintf(result.value+strlen(result.value), 5, ".%03d", milli);
 
   return result;
 }
@@ -239,6 +245,12 @@ static int index_of_string_limited(const char *str, int len, const char *search_
 //size of "ZWE_zowe_sysMessages"
 #define ZWE_SYSMESSAGES_EXCLUDE_LEN 20
 
+// matches YYYY-MM-DD starting with 2xxx.
+#define DATE_PREFIX_REGEXP_PATTERN "^[2-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*"
+
+// zowe standard "YYYY-MM-DD HH-MM-SS.sss "
+#define DATE_PREFIX_LEN 24
+
 static void check_for_and_print_sys_message(const char* input_string) {
   if (!zl_context.sys_messages) {
     return;
@@ -253,8 +265,15 @@ static void check_for_and_print_sys_message(const char* input_string) {
       if (memcmp("ZWE_zowe_sysMessages", input_string, ZWE_SYSMESSAGES_EXCLUDE_LEN)){ 
         //truncate match for reasonable output
         char syslog_string[SYSLOG_MESSAGE_LENGTH_LIMIT+1] = {0};
-        int length = SYSLOG_MESSAGE_LENGTH_LIMIT < input_length ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_length;
-        memcpy(syslog_string, input_string, length);
+        regex_t time_regex;
+        int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
+        printf("regex rc=%d\n", regex_rc);
+        int match = regexec(&time_regex, input_string, 0, NULL, 0);
+        printf("match =%d, %d\n", match, REG_NOMATCH);
+        int offset = match == 0 ? DATE_PREFIX_LEN : 0;
+        printf("offset = %d\n", offset);
+        int length = SYSLOG_MESSAGE_LENGTH_LIMIT < (input_length-offset) ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_length-offset;
+        memcpy(syslog_string, input_string+offset, length);  
         syslog_string[length] = '\0';
         printf_wto(syslog_string);// Print our match to the syslog
         break;

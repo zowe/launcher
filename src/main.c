@@ -782,6 +782,7 @@ static void *handle_comp_comm(void *args) {
 
         while (next_line) {
           printf("%s\n", next_line);
+          check_for_and_print_sys_message(next_line); 
           next_line = strtok(NULL, "\n");
         }
 

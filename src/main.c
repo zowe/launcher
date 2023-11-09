@@ -246,6 +246,7 @@ static int index_of_string_limited(const char *str, int len, const char *search_
 #define ZWE_SYSMESSAGES_EXCLUDE_LEN 20
 
 // matches YYYY-MM-DD starting with 2xxx.
+// this regex was chosen because other patterns didnt seem to work with LE's regex library.
 #define DATE_PREFIX_REGEXP_PATTERN "^[2-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*"
 
 // zowe standard "YYYY-MM-DD HH-MM-SS.sss "
@@ -261,17 +262,16 @@ static void check_for_and_print_sys_message(const char* input_string) {
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
     if (sys_message_id && (index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT) != -1)) {
+
       //exclude "ZWE_zowe_sysMessages" messages to avoid spam.
       if (memcmp("ZWE_zowe_sysMessages", input_string, ZWE_SYSMESSAGES_EXCLUDE_LEN)){ 
+
         //truncate match for reasonable output
         char syslog_string[SYSLOG_MESSAGE_LENGTH_LIMIT+1] = {0};
         regex_t time_regex;
         int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
-        printf("regex rc=%d\n", regex_rc);
         int match = regexec(&time_regex, input_string, 0, NULL, 0);
-        printf("match =%d, %d\n", match, REG_NOMATCH);
         int offset = match == 0 ? DATE_PREFIX_LEN : 0;
-        printf("offset = %d\n", offset);
         int length = SYSLOG_MESSAGE_LENGTH_LIMIT < (input_length-offset) ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_length-offset;
         memcpy(syslog_string, input_string+offset, length);  
         syslog_string[length] = '\0';
@@ -1676,6 +1676,7 @@ int main(int argc, char **argv) {
   }
 
   INFO(MSG_LAUNCHER_START);
+  INFO(MSG_LINE_LENGTH);
   printf_wto(MSG_LAUNCHER_START); // Manual sys log print (messages not set here yet)
 
   zl_config_t config = read_config(argc, argv);

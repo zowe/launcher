@@ -66,7 +66,8 @@ extern char ** environ;
 
 #define COMP_LIST_SIZE 1024
 
-#define SYSLOG_MESSAGE_LENGTH_LIMIT 512
+#define LAUNCHER_MESSAGE_LENGTH_LIMIT 512
+#define SYSLOG_MESSAGE_LENGTH_LIMIT 126
 
 #ifndef PATH_MAX
 #define PATH_MAX _POSIX_PATH_MAX
@@ -208,7 +209,7 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
   
   /* All of this stuff here is because I can't do 
   #define INFO(fmt, ...)  check_for_and_print_sys_message(fmt, ...) so let's make a string */
-  char input_string[SYSLOG_MESSAGE_LENGTH_LIMIT+1];
+  char input_string[LAUNCHER_MESSAGE_LENGTH_LIMIT+1];
   va_list args;
   va_start(args, fmt);
   vsnprintf(input_string, sizeof(input_string), fmt, args);

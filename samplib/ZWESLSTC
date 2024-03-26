@@ -22,10 +22,11 @@
 //********************************************************************/
 //ZWELNCH  EXEC PGM=ZWELNCH,REGION=&RGN,TIME=NOLIMIT,
 // PARM='ENVAR(_CEE_ENVFILE=DD:STDENV),POSIX(ON)/&HAINST.'
-//STEPLIB  DD   DSNAME={zowe.setup.dataset.loadlib},DISP=SHR
-//SYSIN    DD   DUMMY
-//SYSPRINT DD   SYSOUT=*,LRECL=1600
-//SYSERR   DD   SYSOUT=*
+//STEPLIB  DD  DSNAME={zowe.setup.dataset.loadlib},
+//             DISP=SHR
+//SYSIN    DD  DUMMY
+//SYSPRINT DD  SYSOUT=*,LRECL=1600
+//SYSERR   DD  SYSOUT=*
 //********************************************************************/
 //*
 //* CONFIG= can be either a single path ex.

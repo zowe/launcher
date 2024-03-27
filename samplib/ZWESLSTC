@@ -56,7 +56,7 @@
 //********************************************************************/
 //STDENV   DD  *
 _CEE_ENVFILE_CONTINUATION=\
-_CEE_RUNOPTS=HEAPPOOLS(OFF)
+_CEE_RUNOPTS=HEAPPOOLS(OFF),HEAPPOOLS64(OFF)
 _EDC_UMASK_DFLT=0002
 CONFIG={ZWE_CLI_PARAMETER_CONFIG}
 /*

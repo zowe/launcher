@@ -22,7 +22,7 @@
 //********************************************************************/
 //ZWELNCH  EXEC PGM=ZWELNCH,REGION=&RGN,TIME=NOLIMIT,
 // PARM='ENVAR(_CEE_ENVFILE=DD:STDENV),POSIX(ON)/&HAINST.'
-//STEPLIB  DD  DSNAME={zowe.setup.dataset.loadlib},
+//STEPLIB  DD  DSNAME={zowe.setup.dataset.authLoadlib},
 //             DISP=SHR
 //SYSIN    DD  DUMMY
 //SYSPRINT DD  SYSOUT=*,LRECL=1600

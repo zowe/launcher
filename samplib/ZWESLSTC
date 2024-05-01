@@ -1,4 +1,4 @@
-//ZWESLSTC  PROC RGN=0M,HAINST='{{ha_instance_id}}'
+//ZWESLSTC  PROC RGN=0M,HAINST='__ha_instance_id__'
 //********************************************************************/
 //* This program and the accompanying materials are                  */
 //* made available under the terms of the                            */
@@ -22,10 +22,11 @@
 //********************************************************************/
 //ZWELNCH  EXEC PGM=ZWELNCH,REGION=&RGN,TIME=NOLIMIT,
 // PARM='ENVAR(_CEE_ENVFILE=DD:STDENV),POSIX(ON)/&HAINST.'
-//STEPLIB  DD   DSNAME=&SYSUID..LOADLIB,DISP=SHR
-//SYSIN    DD   DUMMY
-//SYSPRINT DD   SYSOUT=*,LRECL=1600
-//SYSERR   DD   SYSOUT=*
+//STEPLIB  DD  DSNAME={zowe.setup.dataset.authLoadlib},
+//             DISP=SHR
+//SYSIN    DD  DUMMY
+//SYSPRINT DD  SYSOUT=*,LRECL=1600
+//SYSERR   DD  SYSOUT=*
 //********************************************************************/
 //*
 //* CONFIG= can be either a single path ex.
@@ -57,5 +58,5 @@
 _CEE_ENVFILE_CONTINUATION=\
 _CEE_RUNOPTS=HEAPPOOLS(OFF),HEAPPOOLS64(OFF)
 _EDC_UMASK_DFLT=0002
-CONFIG=#zowe_yaml
+CONFIG={ZWE_CLI_PARAMETER_CONFIG}
 /*

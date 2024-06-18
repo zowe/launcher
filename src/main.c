@@ -896,6 +896,7 @@ static const char **env_comp(zl_comp_t *comp) {
     char *thisEnv = *env;
     char *aux = malloc(strlen(thisEnv) + 1);
     strncpy(aux, thisEnv, strlen(thisEnv));
+    aux[strlen(thisEnv)] = '\0';
     trimRight(aux, strlen(aux));
     env_comp[i] = aux;
     i++;

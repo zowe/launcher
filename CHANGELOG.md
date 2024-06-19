@@ -3,6 +3,9 @@
 All notable changes to the Zowe Launcher package will be documented in this file.
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
+## 2.17.0
+- Using configmgr to create the component list rather than zwe. (#117)
+
 ## 2.13.0
 - Bugfix: Changed timestamp to UTC to match the server timestamps (#103)
 - Bugfix: Removed server timestamps from syslog to avoid duplicate logging of time (#103)

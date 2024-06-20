@@ -963,17 +963,17 @@ static int start_component(zl_comp_t *comp) {
 
   const char **c_envp = env_comp(comp);
 
-  if (false) {
-    INFO("params for %s:\n", bin);
+  if (zl_context.config.debug_mode) {
+    DEBUG("params for %s:\n", bin);
     for (const char **parm = c_args; *parm != 0; parm++) {
       const char *thisParm = *parm;
-      INFO("for %s, include param: %s\n", bin, thisParm);
+      DEBUG("for %s, include param: %s\n", bin, thisParm);
     }
 
-    INFO("environment for %s: \n", bin);
+    DEBUG("environment for %s: \n", bin);
     for (const char **env = c_envp; *env != 0; env++) {
       const char *thisEnv = *env;
-      INFO("for %s, include env: %s\n", bin, thisEnv);
+      DEBUG("for %s, include env: %s\n", bin, thisEnv);
     }
   }
 

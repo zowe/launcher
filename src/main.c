@@ -40,6 +40,7 @@
 #include "logging.h"
 #include "stcbase.h"
 #include "zos.h"
+#include "yaml2json.h"
 
 extern char ** environ;
 /*
@@ -72,6 +73,8 @@ extern char ** environ;
 #ifndef PATH_MAX
 #define PATH_MAX _POSIX_PATH_MAX
 #endif
+
+#define YAML_ERROR_MAX 1024
 
 // Progressive restart internals in seconds
 static int restart_intervals_default[] = {1, 1, 1, 5, 5, 10, 20, 60, 120, 240};
@@ -1495,23 +1498,151 @@ static char* get_sharedenv(void) {
   return output;
 }
 
-static int get_component_list(char *buf, size_t buf_size) {
-  char *sharedenv = get_sharedenv();
-  char *command = get_launch_components_cmd(sharedenv);
+static int check_if_yaml_exists(const char *yaml, const char *name) {
+  struct stat s;
+  if (stat(yaml, &s) != 0) {
+    DEBUG("failed to get properties for file %s='%s' - %s\n", name, yaml, strerror(errno));
+    return -1;
+  }
+  return 0;
+}
 
-  free(sharedenv);
+static void get_yaml_pair_key(yaml_document_t *document, yaml_node_pair_t *pair, char *buf, size_t buf_size) {
+  yaml_node_t *node = yaml_document_get_node(document, pair->key);
+  if (node) {
+    snprintf(buf, buf_size, "%.*s", (int)node->data.scalar.length, (const char *)node->data.scalar.value);
+#ifdef __MVS__
+    __atoe(buf);
+#endif
+  } else {
+    snprintf(buf, buf_size, "");
+    DEBUG ("key node not found\n");
+  }
+}
+
+static yaml_node_t *get_child_node(yaml_document_t *doc, yaml_node_t *node, const char *name) {
+  char key[ZL_YAML_KEY_LEN + 1];
+  yaml_node_t *value_node = NULL;
+  for (yaml_node_pair_t *pair = node->data.mapping.pairs.start; pair != node->data.mapping.pairs.top; pair++) {
+    get_yaml_pair_key(doc, pair, key, sizeof(key));
+    if (0 == strcmp(key, name)) {
+      value_node = yaml_document_get_node(doc, pair->value);
+      break;
+    }
+  }
+  return value_node;
+}
+
+static void get_yaml_scalar(yaml_document_t *doc, yaml_node_t *node, char *buf, size_t buf_size) {
+  char *value = (char *)node->data.scalar.value;
+  snprintf(buf, buf_size, "%s", value);
+#ifdef __MVS__
+  __atoe(buf);
+#endif
+}
+
+static yaml_node_t *get_node_by_path(yaml_document_t *doc, yaml_node_t *node, const char **path, size_t path_len) {
+  for (size_t i = 0; i < path_len; i++) {
+    node = get_child_node(doc, node, path[i]);
+    if (!node) {
+      break;
+    }
+  }
+  return node;
+}
+
+static int get_string_by_yaml_path(yaml_document_t *doc, yaml_node_t *root, const char **path, size_t path_len, char *buf, int buf_size) {
+  yaml_node_t *node = get_node_by_path(doc, root, path, path_len);
+  if (node && node->type == YAML_SCALAR_NODE) {
+    get_yaml_scalar(doc, node, buf, buf_size);
+    return 0;
+  }
+  return -1;
+}
+
+static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmgr) {
+  char comp_list[COMP_LIST_SIZE] = {0};
+  Json *result = NULL;
+  char manifestPath[PATH_MAX]={0};
+  char *runtimeDirectory=NULL;
+  char *extensionDirectory=NULL;
+  char item[128] = {0};
+  const char *start_path[] = {"commands", "start"};
+  int len = 0;
+  char errorBuffer[YAML_ERROR_MAX];
+  bool yamlExists;
+  bool startScript;
+  bool enabled;
+  bool wasMissing = false;
 
   DEBUG("about to get component list\n");
-  char comp_list[COMP_LIST_SIZE] = {0};
-  if (run_command(command, handle_get_component_line, (void*)comp_list)) {
-    ERROR(MSG_COMP_LIST_ERR);
+  int rc = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &result, 1, "components");
+  if (jsonIsObject(result)) {
+    JsonObject *resultObj = jsonAsObject(result);
+    JsonProperty *prop = resultObj->firstProperty;
+    int getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &runtimeDirectory, 2, "zowe", "runtimeDirectory");
+    if (getStatus) {
+      getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &extensionDirectory, 2, "zowe", "extensionDirectory");
+      if (getStatus) {
+        ERROR(" failed to get runtimeDirectory and extensionDirectory");
+        return -1;
+      }
+    }
+
+    while (prop!=NULL) {
+      enabled = false;
+      // check if component is enabled
+      getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
+      if (getStatus) { // failed to get enabled value of the component
+        DEBUG("failed to get enabled value of the component %s\n", prop->key);
+        prop = prop->next;
+        continue;
+      }
+      snprintf(manifestPath, PATH_MAX, "%s/components/%s/manifest.yaml", runtimeDirectory, prop->key);
+      DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
+
+      // check if manifest.yaml is in instance/components/component-name/manifest.yaml
+      yamlExists = true;
+      if (check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
+        yamlExists = false;
+        // if not check instance/extensions/component/manifest.yaml
+        snprintf(manifestPath, PATH_MAX, "%s/components/%s/manifest.yaml", extensionDirectory, prop->key);
+        DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
+        if(!check_if_yaml_exists(manifestPath, "MANIFEST.YAML"))
+           yamlExists = true;
+      }
+
+      // read the yaml and check for item 'commands.start', if present then add enabled component to component list
+      startScript = false;
+      if(enabled && yamlExists) {
+        yaml_document_t *document = readYAML2(manifestPath, errorBuffer, YAML_ERROR_MAX, &wasMissing);
+        yaml_node_t *root =  yaml_document_get_root_node(document);
+        if (root) {
+            getStatus = get_string_by_yaml_path(document, root, start_path, sizeof(start_path)/sizeof(start_path[0]), item, sizeof(item));
+            memset(item, 0, sizeof(item));
+            if(!getStatus)
+              startScript = true;
+        }
+        if (startScript) {
+          strncpy(comp_list + len, prop->key, strlen(prop->key));
+          strncpy(comp_list + len + strlen(prop->key), ",", 1);
+          len += (strlen(prop->key)+1);
+        }
+      }
+      prop = prop->next;
+    }
+    if (len)
+      comp_list[len-1] = '\0';
   }
+
   if (strlen(comp_list) == 0) {
     ERROR(MSG_COMP_LIST_EMPTY);
     return -1;
   }
+
   snprintf(buf, buf_size, "%s", comp_list);
   INFO(MSG_START_COMP_LIST, buf);
+
   return 0;
 }
 
@@ -1697,6 +1828,7 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
+  setenv("_BPXK_AUTOCVT", "ON", 1);
   INFO(MSG_LAUNCHER_START);
   INFO(MSG_LINE_LENGTH);
   printf_wto(MSG_LAUNCHER_START); // Manual sys log print (messages not set here yet)
@@ -1772,7 +1904,7 @@ int main(int argc, char **argv) {
   if (prepare_instance()) {
     exit(EXIT_FAILURE);
   }
-  if (get_component_list(comp_buf, sizeof(comp_buf))) {
+  if (get_component_list(comp_buf, sizeof(comp_buf), configmgr)) {
     exit(EXIT_FAILURE);
   }
   component_list = comp_buf;

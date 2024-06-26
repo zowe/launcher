@@ -463,7 +463,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     object = jsonAsObject(env);
   }
 
-  int maxRecords = 2;
+  int maxRecords = 5;
 
   for (char **env = environ; *env != 0; env++) {
     maxRecords++;
@@ -474,6 +474,12 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
   // _BPX_SHAREAS is set on component level
   arrayListAdd(list, "_BPX_SHAREAS");
 
+
+  //These are all properties that should not be changed by zowe.environments
+  arrayListAdd(list, "ZWE_CLI_PARAMETER_CONFIG");
+  arrayListAdd(list, "ZWE_CLI_PARAMETER_HA_INSTANCE");
+  arrayListAdd(list, "ZWE_zowe_runtimeDirectory");
+
   if (object) { // environments block is defined in zowe.yaml
     for (JsonProperty *property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
       maxRecords++;
@@ -482,6 +488,16 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
 
   shared_uss_env = malloc(maxRecords * sizeof(char*));
   memset(shared_uss_env, 0, maxRecords * sizeof(char*));
+
+  char *configEnv = malloc(PATH_MAX+32);
+  char *runtimeEnv = malloc(PATH_MAX+32);
+  char *haEnv = malloc(256);
+  snprintf(configEnv, PATH_MAX+32, "ZWE_CLI_PARAMETER_CONFIG=%s", zl_context.config_path);
+  shared_uss_env[idx++] = configEnv;
+  snprintf(runtimeEnv, PATH_MAX+32, "ZWE_zowe_runtimeDirectory=%s", zl_context.root_dir);
+  shared_uss_env[idx++] = runtimeEnv;
+  snprintf(haEnv, 256, "ZWE_CLI_PARAMETER_HA_INSTANCE=%s", zl_context.ha_instance_id);
+  shared_uss_env[idx++] = haEnv;  
 
   if (object) {
     // Get all environment variables defined in zowe.yaml and put them in the output as they are
@@ -516,6 +532,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     }
   }
 
+
   // Get all environment variables defined in the system and put them in output if they were not already defined in zowe.yaml
   for (char **env = environ; *env != 0; env++) { 
     char *thisEnv = *env;
@@ -543,6 +560,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
       shared_uss_env[idx++] = new_env;
     }
   }
+
   shared_uss_env[idx] = NULL;
   arrayListFree(list);
 }
@@ -868,14 +886,20 @@ static const char **env_comp(zl_comp_t *comp) {
     env_records++;
   }
 
-  const char **env_comp = malloc((env_records + 2) * sizeof(char*));
+  const char **env_comp = malloc((env_records + 3) * sizeof(char*));
+
+  char *componentEnv = malloc(256);
+  snprintf(componentEnv, 256, "ZWE_CLI_PARAMETER_COMPONENT=%s", comp->name);
+
 
   int i = 0;
   env_comp[i++] = shareas;
+  env_comp[i++] = componentEnv;
   for (char **env = shared_uss_env; *env != 0 && i < env_records; env++) {
     char *thisEnv = *env;
     char *aux = malloc(strlen(thisEnv) + 1);
     strncpy(aux, thisEnv, strlen(thisEnv));
+    aux[strlen(thisEnv)] = '\0';
     trimRight(aux, strlen(aux));
     env_comp[i] = aux;
     i++;
@@ -915,8 +939,11 @@ static int start_component(zl_comp_t *comp) {
   int fd_count = 3;
   int fd_map[3];
   char bin[PATH_MAX];
+  char js_path[PATH_MAX];
+  snprintf(bin, sizeof(bin), "%s/bin/utils/configmgr", zl_context.root_dir);
+  snprintf(js_path, sizeof(js_path), "%s/bin/commands/internal/start/component/cli.js", zl_context.root_dir);
+ 
 
-  snprintf(bin, sizeof(bin), "%s/bin/zwe", zl_context.root_dir);
   script = fopen(bin, "r");
   if (script == NULL) {
     DEBUG("script not open for %s - %s\n", comp->name, strerror(errno));
@@ -932,12 +959,8 @@ static int start_component(zl_comp_t *comp) {
 
   const char *c_args[] = {
     bin,
-    "internal",
-    "start",
-    "component",
-    "--config", zl_context.config_path,
-    "--ha-instance", zl_context.ha_instance_id,
-    "--component", comp->name, 
+    "-script",
+    js_path,
     NULL
   };
 
@@ -1422,13 +1445,12 @@ static void handle_get_component_line(void *data, const char *line) {
 }
 
 static char* get_launch_components_cmd(char* sharedenv) {
-  const char basecmd[] = "%s %s/bin/zwe internal get-launch-components --config \"%s\" --ha-instance %s 2>&1";
-  int size = strlen(zl_context.root_dir) + strlen(zl_context.config_path) + strlen(zl_context.ha_instance_id) + strlen(sharedenv) + sizeof(basecmd) + 1;
+  const char basecmd[] = "%s ZWE_CLI_PARAMETER_CONFIG=\"%s\" %s/bin/utils/configmgr -script %s/bin/commands/internal/get-launch-components/cli.js 2>&1";
+  int size = (strlen(zl_context.root_dir) * 2) + strlen(zl_context.config_path) + strlen(sharedenv) + sizeof(basecmd) + 1;
   char *command = malloc(size);
 
   snprintf(command, size, basecmd,
-           sharedenv, zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
-  
+           sharedenv, zl_context.config_path, zl_context.root_dir, zl_context.root_dir);
   return command;
 }
 
@@ -1712,13 +1734,12 @@ static void print_line(void *data, const char *line) {
 }
 
 static char* get_start_prepare_cmd(char *sharedenv) {
-  const char basecmd[] = "%s %s/bin/zwe internal start prepare --config \"%s\" --ha-instance %s 2>&1";
-  int size = strlen(zl_context.root_dir) + strlen(zl_context.config_path) + strlen(zl_context.ha_instance_id) + strlen(sharedenv) + sizeof(basecmd) + 1;
+  const char basecmd[] = "%s ZWE_CLI_PARAMETER_CONFIG=\"%s\" %s/bin/utils/configmgr -script %s/bin/commands/internal/start/prepare/cli.js 2>&1";
+  int size = (strlen(zl_context.root_dir) * 2) + strlen(zl_context.config_path) + strlen(sharedenv) + sizeof(basecmd) + 1;
   char *command = malloc(size);
 
   snprintf(command, size, basecmd,
-           sharedenv, zl_context.root_dir, zl_context.config_path, zl_context.ha_instance_id);
-  
+           sharedenv, zl_context.config_path, zl_context.root_dir, zl_context.root_dir);
   return command;
 }
 

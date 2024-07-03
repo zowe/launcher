@@ -48,7 +48,7 @@
 //@Reason: The component `<component-name>`(`<process-id>`) terminated with the status `<code>`.
 //@Action:
 #define MSG_NEXT_RESTART        MSG_PREFIX "0005I" " next attempt to restart component %s in %d seconds\n"
-//@Reason: Next attempt to restart component `<component-name>` in `<n>` seconds."
+//@Reason: Next attempt to restart component `<component-name>` in `<n>` seconds.
 //@Action: No action required. The component `<component-name>` will be restarted in `<n>` seconds.
 #define MSG_STARTING_COMPS      MSG_PREFIX "0006I" " starting components\n"
 //@Reason: Starting the components.
@@ -151,7 +151,7 @@
 //@Reason: ROOT_DIR (`zowe.runtimeDirectory`) is empty string.
 //@Action: Review `zowe.runtimeDirectory` defined in configuration (identified by message `ZWEL0023I`).
 #define MSG_CMDLINE_INVALID     MSG_PREFIX "0035E" " invalid command line arguments, provide HA_INSTANCE_ID as a first argument\n"
-//@Reason: Invalid command line arguments, provide `<HA_INSTANCE_ID>` as a first argument
+//@Reason: Invalid command line arguments, provide `<HA_INSTANCE_ID>` as a first argument.
 //@Action: Review the command and provide `<HA_INSTANCE_ID>` as a first argument.
 #define MSG_CTX_INIT_FAILED     MSG_PREFIX "0036E" " failed to initialize launcher context\n"
 //@Reason: Failed to initialize launcher context.
@@ -194,25 +194,25 @@
 //@!@Action: :x:
 #define MSG_YAML_OPEN_ERR       MSG_PREFIX "0048E" " failed to open zowe.yaml - %s: %s\n"   //@!
 //@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//@!@Reason: Failed to open zowe.yaml - `<path-to-zowe-yaml>`:?"
+//@!@Reason: Failed to open zowe.yaml - `<path-to-zowe-yaml>`:?
 //@!@Action: :x:
 #define MSG_COMP_RESTART_FAILED MSG_PREFIX "0049E" " failed to restart component %s\n"
-//@Reason: Failed to restart the component `<component-name>`."
+//@Reason: Failed to restart the component `<component-name>`.
 //@Action: :x:
 #define MSG_COMP_OUTPUT_ERR     MSG_PREFIX "0050E" " cannot read output from comp %s(%d) - %s\n"
-//@Reason: Cannot read the output from component `<component-name>` (`<process-id>`) - `<error-text>`"
+//@Reason: Cannot read the output from component `<component-name>` (`<process-id>`) - `<error-text>`
 //@Action: :x:
 #define MSG_STDIN_CREATE_ERROR  MSG_PREFIX "0055E" " failed to create file for stdin(%s) - %s\n"
-//@Reason: Failed to create the file for stdin(`<file>`) - <error-text>."
+//@Reason: Failed to create the file for stdin(`<file>`) - <error-text>.
 //@Action: :x:
 #define MSG_STDIN_OPEN_ERROR    MSG_PREFIX "0056E" " failed to open file for stdin(%s) - %s\n"
-//@Reason: Failed to open the file for stdin(`<file>`) - <error-text>."
+//@Reason: Failed to open the file for stdin(`<file>`) - <error-text>.
 //@Action: :x:
 #define MSG_WORKSPACE_ERROR     MSG_PREFIX "0057E" " failed to create workspace dir '%s'\n"
 //@Reason: Failed to create the workspace directory `<path-to-workspace-dir>`.
 //@Action: :x:
 #define MSG_WKSP_DIR_ERR        MSG_PREFIX "0059E" " failed to get WORKSPACE_DIR dir\n"
-//@Reason: Failed to get the WORKSPACE_DIR (`zowe.workspaceDirectory`) directory."
+//@Reason: Failed to get the WORKSPACE_DIR (`zowe.workspaceDirectory`) directory.
 //@Action: :x:
 #define MSG_WKSP_DIR_EMPTY      MSG_PREFIX "0060E" " WORKSPACE_DIR is empty string\n"
 //@Reason: The WORKSPACE_DIR (`zowe.workspaceDirectory`) is empty string.
@@ -273,7 +273,7 @@
 //@Reason: Component `<component-name>`(`<process-id>`) will be terminated using `SIGKILL`.
 //@Action:
 #define MSG_CMD_RCP_WARN        MSG_PREFIX "0066W" " command '%s' ended with code %d\n"
-//@Reason:  The command `<command>` ended with return code `<return-code>`."
+//@Reason:  The command `<command>` ended with return code `<return-code>`.
 //@Action:
 //@DocEnd
 

@@ -1605,8 +1605,8 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
       yamlExists = true;
       if (check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
         yamlExists = false;
-        // if not check instance/extensions/component/manifest.yaml
-        snprintf(manifestPath, PATH_MAX, "%s/components/%s/manifest.yaml", extensionDirectory, prop->key);
+        // if not check <extensionDirectory>/<componentname>/manifest.yaml
+        snprintf(manifestPath, PATH_MAX, "%s/%s/manifest.yaml", extensionDirectory, prop->key);
         DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
         if(!check_if_yaml_exists(manifestPath, "MANIFEST.YAML"))
            yamlExists = true;

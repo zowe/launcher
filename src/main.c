@@ -1584,11 +1584,11 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
     if (!getStatus) {
       getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &extensionDirectory, 2, "zowe", "extensionDirectory");
       if (getStatus) {
-        ERROR(" failed to get extensionDirectory");
+        ERROR("failed to get extensionDirectory\n");
         return -1;
       }
     } else {
-      ERROR(" failed to get runtimeDirectory");
+      ERROR("failed to get runtimeDirectory\n");
       return -1;
     }
 

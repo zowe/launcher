@@ -1575,12 +1575,39 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
   bool enabled;
   bool wasMissing = false;
 
+  bool checkHaSection = false;
+
+  Json *haInstancesJson = NULL;
+  int getStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &haInstancesJson, 1, "haInstances");
+  if (!getStatus) {
+    if ((!strcmp(zl_context.ha_instance_id, "__ha_instance_id__")) || (!strcmp(zl_context.ha_instance_id, "{{ha_instance_id}}"))) {
+      int rc = 0;
+      int rsn = 0;
+      char *resolvedName = resolveSymbol("&SYSNAME", &rc, &rsn);
+      if (!rc) {
+        //ha instance name is always lowercase if derived from sysname automatically.
+        int nameLength = strlen(resolvedName);
+        for(int i = 0; i < nameLength; i++){
+          resolvedName[i] = tolower(resolvedName[i]);
+        }
+
+        // Resolves ha instance id for downstream as well.
+        snprintf(zl_context.ha_instance_id, 8+1, "%s", resolvedName);
+        checkHaSection = true;
+      } else {
+        ERROR("Could not resolve SYSNAME for HA instance lookup, rc=0x%x, rsn=0x%x\n", rc, rsn);
+      }
+    } else {
+      checkHaSection = true;
+    }
+  }
+
   DEBUG("about to get component list\n");
   int rc = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &result, 1, "components");
   if (jsonIsObject(result)) {
     JsonObject *resultObj = jsonAsObject(result);
     JsonProperty *prop = resultObj->firstProperty;
-    int getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &runtimeDirectory, 2, "zowe", "runtimeDirectory");
+    getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &runtimeDirectory, 2, "zowe", "runtimeDirectory");
     if (!getStatus) {
       getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &extensionDirectory, 2, "zowe", "extensionDirectory");
       if (getStatus) {
@@ -1592,10 +1619,20 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
       return -1;
     }
 
+    
+
     while (prop!=NULL) {
       enabled = false;
       // check if component is enabled
-      getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
+      if (checkHaSection) {
+        getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled, 5, "haInstances", zl_context.ha_instance_id, "components", prop->key, "enabled");
+        if (getStatus) {
+          getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
+        }
+      } else {
+        getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
+      }
+      
       if (getStatus) { // failed to get enabled value of the component
         DEBUG("failed to get enabled value of the component %s\n", prop->key);
         prop = prop->next;

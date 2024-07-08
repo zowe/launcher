@@ -1608,12 +1608,15 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
     JsonObject *resultObj = jsonAsObject(result);
     JsonProperty *prop = resultObj->firstProperty;
     getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &runtimeDirectory, 2, "zowe", "runtimeDirectory");
-    if (getStatus) {
+    if (!getStatus) {
       getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &extensionDirectory, 2, "zowe", "extensionDirectory");
       if (getStatus) {
-        ERROR(" failed to get runtimeDirectory and extensionDirectory");
+        ERROR("failed to get extensionDirectory\n");
         return -1;
       }
+    } else {
+      ERROR("failed to get runtimeDirectory\n");
+      return -1;
     }
 
     
@@ -1635,18 +1638,22 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
         prop = prop->next;
         continue;
       }
-      snprintf(manifestPath, PATH_MAX, "%s/components/%s/manifest.yaml", runtimeDirectory, prop->key);
-      DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
 
-      // check if manifest.yaml is in instance/components/component-name/manifest.yaml
-      yamlExists = true;
-      if (check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
-        yamlExists = false;
-        // if not check instance/extensions/component/manifest.yaml
-        snprintf(manifestPath, PATH_MAX, "%s/components/%s/manifest.yaml", extensionDirectory, prop->key);
+      yamlExists = true; //unused if not enabled. otherwise set to false if not found.
+      if (enabled) {
+        snprintf(manifestPath, PATH_MAX, "%s/components/%s/manifest.yaml", runtimeDirectory, prop->key);
         DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
-        if(!check_if_yaml_exists(manifestPath, "MANIFEST.YAML"))
-           yamlExists = true;
+  
+        // check if manifest.yaml is in <runtimeDirectory>/components/<component-name>/manifest.yaml
+        if (check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
+          yamlExists = false;
+          // if not check <extensionDirectory>/<component-name>/manifest.yaml
+          snprintf(manifestPath, PATH_MAX, "%s/%s/manifest.yaml", extensionDirectory, prop->key);
+          DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
+          if(!check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
+             yamlExists = true;
+          }
+        }
       }
 
       // read the yaml and check for item 'commands.start', if present then add enabled component to component list

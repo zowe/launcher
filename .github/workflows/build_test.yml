@@ -2,7 +2,9 @@ name: Build and Test Workflow
 on:
   push:
     branches:
-      - v2.x/master
+      - v3.x/master
+      - v3.x/staging
+      - v3.x/rc
   pull_request:
     types: [opened, reopened, synchronize]
   workflow_dispatch:
@@ -132,7 +134,7 @@ jobs:
         with:
           repository: zowe/zowe-common-c
           path: deps/launcher/common
-          ref: 'v2.x/staging'
+          ref: 'v3.x/staging'
 
       - name: '[Prep 2] Setup jFrog CLI'
         uses: jfrog/setup-jfrog-cli@v2
@@ -183,7 +185,7 @@ jobs:
         uses: zowe-actions/shared-actions/release@main
 
       - name: '[Release 2] NPM bump version (if necessary)' 
-        if: ${{ success() && github.event.inputs.PERFORM_RELEASE == 'true' && env.IS_RELEASE_BRANCH == 'true' && env.IS_FORMAL_RELEASE_BRANCH == 'true' && env.PRE_RELEASE_STRING == ''}}
+        if: ${{ success() && github.event.inputs.PERFORM_RELEASE == 'true' && env.IS_RELEASE_BRANCH == 'true' }}
         uses: zowe-actions/shared-actions/bump-version@main
         with:
           version: minor

@@ -88,6 +88,7 @@
 #define MSG_CFG_LOAD_FAIL       MSG_PREFIX "0072E" " Launcher Could not load configurations\n"
 #define MSG_CFG_SCHEMA_FAIL     MSG_PREFIX "0073E" " Launcher Could not load schemas, status=%d\n"
 #define MSG_NO_LOG_CONTEXT      MSG_PREFIX "0074E" " Log context was not created\n"
+#define MSG_LINE_LENGTH         "-- If you cant see '500' at the end of the line, your log is too short to read!80--------90------ 100----------------------125----------------------150----------------------175----------------------200----------------------225----------------------250----------------------275----------------------300----------------------325----------------------350----------------------375----------------------400----------------------425----------------------450----------------------475----------------------500\n"
 
 #endif // MSG_H
 

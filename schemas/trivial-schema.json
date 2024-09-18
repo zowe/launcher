@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2019-09/schema",
-  "$id": "https://zowe.org/schemas/v2/launcher",
+  "$id": "https://zowe.org/schemas/v3/launcher",
   "allOf": [
     { "$ref": "https://zowe.org/schemas/v2/server-base" },
     {

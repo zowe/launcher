@@ -1,4 +1,10 @@
 name: Build and Test Workflow
+
+permissions:
+  id-token: write
+  issues: write
+  pull-requests: write
+  contents: write
 on:
   push:
     branches:

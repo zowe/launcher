@@ -70,4 +70,12 @@ F ZWELNCH,APPL=DISP
 
 ## Community
 
-This part of Zowe is currently developed by the zOS squad, which you can find on Slack at #zowe-zos-interface or 
+This part of Zowe is currently developed by the zOS squad, which you can find on Slack at #zowe-zos-interface
+
+## Architecture
+
+The launcher is a z/OS program which utilizes [configmgr](https://github.com/zowe/zowe-common-c/blob/v3.x/staging/c/configmgr.c) to read the Zowe config in order to determine which components to start, and then prepares Zowe to run, starts the components, and manages their unix processes.
+
+It's behavior is summarized in this flow chart diagram.
+
+![Launcher flow chart](./Launcher.svg)

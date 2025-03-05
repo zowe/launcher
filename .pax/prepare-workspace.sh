@@ -31,6 +31,9 @@ rm -fr "${PAX_WORKSPACE_DIR}/content" && mkdir -p "${PAX_WORKSPACE_DIR}/content"
 echo "[${SCRIPT_NAME}] copying files ..."
 ls -ltr
 cp -R * "${PAX_WORKSPACE_DIR}/ascii"
+rm  "${PAX_WORKSPACE_DIR}/ascii/dep_hashes"
+cp dep_hashes "${PAX_WORKSPACE_DIR}/content"
+
 
 # update build information
 # BRANCH_NAME and BUILD_NUMBER is Jenkins environment variable

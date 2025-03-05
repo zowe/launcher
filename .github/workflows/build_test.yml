@@ -145,12 +145,14 @@ jobs:
       - name: '[Metadata] Track zowe-common-c version'
         run: |
           cd deps/launcher/common && ZCC_COMMIT_HASH=$(git rev-parse --verify HEAD) && \
-            cd  ../quickjs && QJS_COMMIT_HASH=$(git rev-parse --verify HEAD) && \
+            cd ../quickjs && QJS_COMMIT_HASH=$(git rev-parse --verify HEAD) && \
             cd ../libyaml && LYL_COMMIT_HASH=$(git rev-parse --verify HEAD) && \
-            cd ../../../
-          echo "ZOWE_COMMON_C_HASH=$ZCC_COMMIT_HASH" >> .dep_hashes
-          echo "QUICKJS_HASH=$QJS_COMMIT_HASH" >> .dep_hashes
-          echo "LIBYAML_HASH=$LYL_COMMIT_HASH" >> .dep_hashes
+            cd ../../../ && \
+            echo "ZOWE_COMMON_C_HASH=$ZCC_COMMIT_HASH" > dep_hashes && \
+            echo "QUICKJS_HASH=$QJS_COMMIT_HASH" >> dep_hashes && \
+            echo "LIBYAML_HASH=$LYL_COMMIT_HASH" >> dep_hashes
+          pwd
+          ls -lask
 
       - name: '[Prep 2] Setup jFrog CLI'
         uses: jfrog/setup-jfrog-cli@v2

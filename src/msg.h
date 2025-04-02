@@ -105,11 +105,11 @@
 //-----------------------------------------------------------------------------
 
 //@
-//@  # Error Message Codes
+//@# Error Message Codes
 //@
-//@  The following error message codes may appear on Zowe Launcher SYSPRINT. Use the following message code references and the corresponding reasons and actions to help troubleshoot issues.
+//@The following error message codes may appear on Zowe Launcher SYSPRINT. Use the following message code references and the corresponding reasons and actions to help troubleshoot issues.
 //@
-//@  ## Zowe Launcher informational messages
+//@## Zowe Launcher informational messages
 //@
 // #define MSG_COMP_STARTED        MSG_PREFIX "0001I" " component %s started\n"
 //@### ZWEL0001I

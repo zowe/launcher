@@ -12,7 +12,84 @@
 #define MSG_H
 
 #define MSG_PREFIX "ZWEL"
+
+#define MSG_COMP_STARTED        MSG_PREFIX "0001I" " component %s started\n"
+#define MSG_COMP_STOPPED        MSG_PREFIX "0002I" " component %s stopped\n"
+#define MSG_COMP_INITED         MSG_PREFIX "0003I" " new component initialized %s, restart_cnt=%d, min_uptime=%d seconds, share_as=%s\n"
+#define MSG_COMP_TERMINATED     MSG_PREFIX "0004I" " component %s(%d) terminated, status = %d\n"
+#define MSG_NEXT_RESTART        MSG_PREFIX "0005I" " next attempt to restart component %s in %d seconds\n"
+#define MSG_STARTING_COMPS      MSG_PREFIX "0006I" " starting components\n"
+#define MSG_COMPS_STARTED       MSG_PREFIX "0007I" " components started\n"
+#define MSG_STOPING_COMPS       MSG_PREFIX "0008I" " stopping components\n"
+#define MSG_COMPS_STOPPED       MSG_PREFIX "0009I" " components stopped\n"
+#define MSG_LAUNCHER_COMPS      MSG_PREFIX "0010I" " launcher has the following components:\n"
+#define MSG_LAUNCHER_COMP       MSG_PREFIX "0011I" "     name = %16.16s, PID = %d\n"
+#define MSG_START_CONSOLE       MSG_PREFIX "0012I" " starting console listener\n"
+#define MSG_CMD_RECV            MSG_PREFIX "0013I" " command \'%s\' received\n"
+#define MSG_TERM_CMD_RECV       MSG_PREFIX "0014I" " termination command received\n"
+#define MSG_CONSOLE_STOPPED     MSG_PREFIX "0015I" " console listener stopped\n"
+#define MSG_START_COMP_LIST     MSG_PREFIX "0016I" " start component list: '%s'\n"
+#define MSG_ROOT_DIR            MSG_PREFIX "0017I" " ROOT_DIR is '%s'\n"
+#define MSG_INST_PREPARED       MSG_PREFIX "0018I" " Zowe instance prepared successfully\n"
+#define MSG_LAUNCHER_STOPING    MSG_PREFIX "0019I" " Zowe Launcher stopping\n"
+#define MSG_LOADING_YAML        MSG_PREFIX "0020I" " loading '%s'\n"
+#define MSG_LAUNCHER_START      MSG_PREFIX "0021I" " Zowe Launcher starting\n"
+#define MSG_LAUNCHER_STOPPED    MSG_PREFIX "0022I" " Zowe Launcher stopped\n"
+#define MSG_YAML_FILE           MSG_PREFIX "0023I" " Zowe YAML config file is \'%s\'\n"
+#define MSG_HA_INST_ID          MSG_PREFIX "0024I" " HA_INSTANCE_ID is '%s'\n"
+#define MSG_RESTART_INTRVL      MSG_PREFIX "0025I" " restart_intervals for component '%s'= %s\n"
+#define MSG_ENV_NOT_FOUND       MSG_PREFIX "0026E" " %s env variable not found\n"
+#define MSG_ENV_TOO_LARGE       MSG_PREFIX "0027E" " %s env variable too large\n"
+#define MSG_COMP_LIST_ERR       MSG_PREFIX "0028E" " failed to get component list\n"
+#define MSG_COMP_LIST_EMPTY     MSG_PREFIX "0029E" " start component list is empty\n"
+#define MSG_INST_PREP_ERR       MSG_PREFIX "0030E" " failed to prepare Zowe instance\n"
+#define MSG_SIGNAL_ERR          MSG_PREFIX "0031E" " failed to setup signal handlers\n"
+#define MSG_DIR_ERR             MSG_PREFIX "0032E" " failed to find %s='%s', check if the dir exists\n"
+#define MSG_ROOT_DIR_ERR        MSG_PREFIX "0033E" " failed to get ROOT_DIR dir\n"
+#define MSG_ROOT_DIR_EMPTY      MSG_PREFIX "0034E" " ROOT_DIR is empty string\n"
+#define MSG_CMDLINE_INVALID     MSG_PREFIX "0035E" " invalid command line arguments, provide HA_INSTANCE_ID as a first argument\n"
+#define MSG_CTX_INIT_FAILED     MSG_PREFIX "0036E" " failed to initialize launcher context\n"
+#define MSG_MAX_COMP_REACHED    MSG_PREFIX "0037E" " max component number reached, ignoring the rest\n"
+#define MSG_MAX_RETRIES_REACHED MSG_PREFIX "0038E" " failed to restart component %s, max retries reached\n"
+#define MSG_COMP_ALREADY_RUN    MSG_PREFIX "0039E" " cannot start component %s - already running\n"
+#define MSG_COMP_START_FAILED   MSG_PREFIX "0040E" " failed to start component %s\n"
+#define MSG_BAD_CMD_VAL         MSG_PREFIX "0041E" " bad value supplied, command ignored\n"
+#define MSG_CMD_UNKNOWN         MSG_PREFIX "0042E" " command not recognized\n"
+#define MSG_CONS_START_ERR      MSG_PREFIX "0043E" " failed to start console thread\n"
+#define MSG_CONS_STOP_ERR       MSG_PREFIX "0044E" " failed to stop console thread\n"
+#define MSG_YAML_CONV_ERR       MSG_PREFIX "0045E" " error converting zowe.yaml file - %s\n"
+#define MSG_YAML_READ_ERR       MSG_PREFIX "0046E" " error reading zowe.yaml file - %s\n"
+#define MSG_YAML_PARSE_ERR      MSG_PREFIX "0047E" " failed to parse zowe.yaml - %s\n"
+#define MSG_YAML_OPEN_ERR       MSG_PREFIX "0048E" " failed to open zowe.yaml - %s: %s\n"
+#define MSG_COMP_RESTART_FAILED MSG_PREFIX "0049E" " failed to restart component %s\n"
+#define MSG_COMP_OUTPUT_ERR     MSG_PREFIX "0050E" " cannot read output from comp %s(%d) - %s\n"
+#define MSG_USE_DEFAULTS        MSG_PREFIX "0051W" " failed to read zowe.yaml, launcher will use default settings\n"
+#define MSG_NOT_ALL_STARTED     MSG_PREFIX "0052W" " not all components started\n"
+#define MSG_NOT_ALL_STOPPED     MSG_PREFIX "0053W" " not all components stopped gracefully\n"
+#define MSG_COMP_NOT_FOUND      MSG_PREFIX "0054W" " component %s not found\n"
+#define MSG_STDIN_CREATE_ERROR  MSG_PREFIX "0055E" " failed to create file for stdin(%s) - %s\n"
+#define MSG_STDIN_OPEN_ERROR    MSG_PREFIX "0056E" " failed to open file for stdin(%s) - %s\n"
+#define MSG_WORKSPACE_ERROR     MSG_PREFIX "0057E" " failed to create workspace dir '%s'\n"
+#define MSG_WKSP_DIR            MSG_PREFIX "0058I" " WORKSPACE_DIR is '%s'\n"
+#define MSG_WKSP_DIR_ERR        MSG_PREFIX "0059E" " failed to get WORKSPACE_DIR dir\n"
+#define MSG_WKSP_DIR_EMPTY      MSG_PREFIX "0060E" " WORKSPACE_DIR is empty string\n"
+#define MSG_FILE_ERR            MSG_PREFIX "0061E" " failed to find %s='%s', check if the file exists\n"
+#define MSG_MKDIR_ERR           MSG_PREFIX "0062E" " failed to create dir '%s' - %s\n"
+#define MSG_NOT_SIGTERM_STOPPED MSG_PREFIX "0063W" " Component %s(%d) will be terminated using SIGKILL\n"        
+#define MSG_CMD_RUN_ERR         MSG_PREFIX "0064E" " failed to run command %s - %s\n"
+#define MSG_CMD_OUT_ERR         MSG_PREFIX "0065E" " error reading output from command '%s' - %s\n"
+#define MSG_CMD_RCP_WARN        MSG_PREFIX "0066W" " command '%s' ended with code %d\n"
+#define MSG_MEMBER_NAME_BAD     MSG_PREFIX "0067E" " PARMLIB() entries must all have the same member name\n"
+#define MSG_MEMBER_MISSING      MSG_PREFIX "0068E" " PARMLIB() entries must have a member name\n"
+#define MSG_CFG_VALID           MSG_PREFIX "0069I" " Configuration is valid\n"
+#define MSG_CFG_INVALID         MSG_PREFIX "0070E" " Configuration has validity exceptions:\n"
+#define MSG_CFG_INTERNAL_FAIL   MSG_PREFIX "0071E" " Internal failure during validation, please contact support\n"
+#define MSG_CFG_LOAD_FAIL       MSG_PREFIX "0072E" " Launcher Could not load configurations\n"
+#define MSG_CFG_SCHEMA_FAIL     MSG_PREFIX "0073E" " Launcher Could not load schemas, status=%d\n"
+#define MSG_NO_LOG_CONTEXT      MSG_PREFIX "0074E" " Log context was not created\n"
 #define MSG_LINE_LENGTH         "-- If you cant see '500' at the end of the line, your log is too short to read!80--------90------ 100----------------------125----------------------150----------------------175----------------------200----------------------225----------------------250----------------------275----------------------300----------------------325----------------------350----------------------375----------------------400----------------------425----------------------450----------------------475----------------------500\n"
+
+#endif // MSG_H
 
 //-----------------------------------------------------------------------------
 // Markdown help for Launcher Error Codes
@@ -21,6 +98,10 @@
 // Line starting //@ is MD.
 // When need to create new doc file, use for example:
 //   cat msg.h | grep -e '^//@' | cut -c4- > launcher-error-codes.md
+// The doc is structured:
+//   Zowe Launcher informational messages
+//   Zowe Launcher error messages
+//   Zowe Launcher warning messages
 //-----------------------------------------------------------------------------
 
 //@
@@ -30,7 +111,7 @@
 //@
 //@  ## Zowe Launcher informational messages
 //@
-#define MSG_COMP_STARTED        MSG_PREFIX "0001I" " component %s started\n"
+// #define MSG_COMP_STARTED        MSG_PREFIX "0001I" " component %s started\n"
 //@### ZWEL0001I
 //@
 //@  component %s started
@@ -43,7 +124,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_COMP_STOPPED        MSG_PREFIX "0002I" " component %s stopped\n"
+// #define MSG_COMP_STOPPED        MSG_PREFIX "0002I" " component %s stopped\n"
 //@### ZWEL0002I
 //@
 //@  component %s stopped
@@ -56,7 +137,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_COMP_INITED         MSG_PREFIX "0003I" " new component initialized %s, restart_cnt=%d, min_uptime=%d seconds, share_as=%s\n"
+// #define MSG_COMP_INITED         MSG_PREFIX "0003I" " new component initialized %s, restart_cnt=%d, min_uptime=%d seconds, share_as=%s\n"
 //@### ZWEL0003I
 //@
 //@  new component initialized %s, restart_cnt=%d, min_uptime=%d seconds, share_as=%s
@@ -72,7 +153,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_COMP_TERMINATED     MSG_PREFIX "0004I" " component %s(%d) terminated, status = %d\n"
+// #define MSG_COMP_TERMINATED     MSG_PREFIX "0004I" " component %s(%d) terminated, status = %d\n"
 //@### ZWEL0004I
 //@
 //@  component %s(%d) terminated, status = %d
@@ -85,7 +166,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_NEXT_RESTART        MSG_PREFIX "0005I" " next attempt to restart component %s in %d seconds\n"
+// #define MSG_NEXT_RESTART        MSG_PREFIX "0005I" " next attempt to restart component %s in %d seconds\n"
 //@### ZWEL0005I
 //@
 //@  next attempt to restart component %s in %d seconds
@@ -98,7 +179,7 @@
 //@
 //@  No action required. The component `<component-name>` will be restarted in `<n>` seconds.
 //@
-#define MSG_STARTING_COMPS      MSG_PREFIX "0006I" " starting components\n"
+// #define MSG_STARTING_COMPS      MSG_PREFIX "0006I" " starting components\n"
 //@### ZWEL0006I
 //@
 //@  starting components
@@ -111,7 +192,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_COMPS_STARTED       MSG_PREFIX "0007I" " components started\n"
+// #define MSG_COMPS_STARTED       MSG_PREFIX "0007I" " components started\n"
 //@### ZWEL0007I
 //@
 //@  components started
@@ -124,7 +205,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_STOPING_COMPS       MSG_PREFIX "0008I" " stopping components\n"
+// #define MSG_STOPING_COMPS       MSG_PREFIX "0008I" " stopping components\n"
 //@### ZWEL0008I
 //@
 //@  stopping components
@@ -137,7 +218,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_COMPS_STOPPED       MSG_PREFIX "0009I" " components stopped\n"
+// #define MSG_COMPS_STOPPED       MSG_PREFIX "0009I" " components stopped\n"
 //@### ZWEL0009I
 //@
 //@  components stopped
@@ -150,7 +231,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_LAUNCHER_COMPS      MSG_PREFIX "0010I" " launcher has the following components:\n"
+// #define MSG_LAUNCHER_COMPS      MSG_PREFIX "0010I" " launcher has the following components:\n"
 //@### ZWEL0010I
 //@
 //@  launcher has the following components:
@@ -163,7 +244,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_LAUNCHER_COMP       MSG_PREFIX "0011I" " name = %16.16s, PID = %d\n"
+// #define MSG_LAUNCHER_COMP       MSG_PREFIX "0011I" " name = %16.16s, PID = %d\n"
 //@### ZWEL0011I
 //@
 //@  name = %16.16s, PID = %d
@@ -176,7 +257,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_START_CONSOLE       MSG_PREFIX "0012I" " starting console listener\n"
+// #define MSG_START_CONSOLE       MSG_PREFIX "0012I" " starting console listener\n"
 //@### ZWEL0012I
 //@
 //@  starting console listener
@@ -189,7 +270,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_CMD_RECV            MSG_PREFIX "0013I" " command \'%s\' received\n"
+// #define MSG_CMD_RECV            MSG_PREFIX "0013I" " command \'%s\' received\n"
 //@### ZWEL0013I
 //@
 //@  command \'%s\' received
@@ -202,7 +283,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_TERM_CMD_RECV       MSG_PREFIX "0014I" " termination command received\n"
+// #define MSG_TERM_CMD_RECV       MSG_PREFIX "0014I" " termination command received\n"
 //@### ZWEL0014I
 //@
 //@  termination command received
@@ -215,7 +296,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_CONSOLE_STOPPED     MSG_PREFIX "0015I" " console listener stopped\n"
+// #define MSG_CONSOLE_STOPPED     MSG_PREFIX "0015I" " console listener stopped\n"
 //@### ZWEL0015I
 //@
 //@  console listener stopped
@@ -228,7 +309,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_START_COMP_LIST     MSG_PREFIX "0016I" " start component list: '%s'\n"
+// #define MSG_START_COMP_LIST     MSG_PREFIX "0016I" " start component list: '%s'\n"
 //@### ZWEL0016I
 //@
 //@  start component list: '%s'
@@ -241,7 +322,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_ROOT_DIR            MSG_PREFIX "0017I" " ROOT_DIR is '%s'\n"
+// #define MSG_ROOT_DIR            MSG_PREFIX "0017I" " ROOT_DIR is '%s'\n"
 //@### ZWEL0017I
 //@
 //@  ROOT_DIR is '%s'
@@ -254,7 +335,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_INST_PREPARED       MSG_PREFIX "0018I" " Zowe instance prepared successfully\n"
+// #define MSG_INST_PREPARED       MSG_PREFIX "0018I" " Zowe instance prepared successfully\n"
 //@### ZWEL0018I
 //@
 //@  Zowe instance prepared successfully
@@ -267,7 +348,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_LAUNCHER_STOPING    MSG_PREFIX "0019I" " Zowe Launcher stopping\n"
+// #define MSG_LAUNCHER_STOPING    MSG_PREFIX "0019I" " Zowe Launcher stopping\n"
 //@### ZWEL0019I
 //@
 //@  Zowe Launcher stopping
@@ -280,7 +361,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_LAUNCHER_START      MSG_PREFIX "0021I" " Zowe Launcher starting\n"
+// #define MSG_LAUNCHER_START      MSG_PREFIX "0021I" " Zowe Launcher starting\n"
 //@### ZWEL0021I
 //@
 //@  Zowe Launcher starting
@@ -293,7 +374,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_LAUNCHER_STOPPED    MSG_PREFIX "0022I" " Zowe Launcher stopped\n"
+// #define MSG_LAUNCHER_STOPPED    MSG_PREFIX "0022I" " Zowe Launcher stopped\n"
 //@### ZWEL0022I
 //@
 //@  Zowe Launcher stopped
@@ -306,7 +387,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_YAML_FILE           MSG_PREFIX "0023I" " Zowe YAML config file is \'%s\'\n"
+// #define MSG_YAML_FILE           MSG_PREFIX "0023I" " Zowe YAML config file is \'%s\'\n"
 //@### ZWEL0023I
 //@
 //@  Zowe YAML config file is \'%s\'
@@ -319,7 +400,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_HA_INST_ID          MSG_PREFIX "0024I" " HA_INSTANCE_ID is '%s'\n"
+// #define MSG_HA_INST_ID          MSG_PREFIX "0024I" " HA_INSTANCE_ID is '%s'\n"
 //@### ZWEL0024I
 //@
 //@  HA_INSTANCE_ID is '%s'
@@ -332,7 +413,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_RESTART_INTRVL      MSG_PREFIX "0025I" " restart_intervals for component '%s'= %s\n"
+// #define MSG_RESTART_INTRVL      MSG_PREFIX "0025I" " restart_intervals for component '%s'= %s\n"
 //@### ZWEL0025I
 //@
 //@  restart_intervals for component '%s'= %s
@@ -346,7 +427,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_WKSP_DIR            MSG_PREFIX "0058I" " WORKSPACE_DIR is '%s'\n"
+// #define MSG_WKSP_DIR            MSG_PREFIX "0058I" " WORKSPACE_DIR is '%s'\n"
 //@### ZWEL0058I
 //@
 //@  WORKSPACE_DIR is '%s'
@@ -359,7 +440,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_CFG_VALID           MSG_PREFIX "0069I" " Configuration is valid\n"
+// #define MSG_CFG_VALID           MSG_PREFIX "0069I" " Configuration is valid\n"
 //@### ZWEL0069I
 //@
 //@  Configuration is valid
@@ -375,7 +456,7 @@
 //@
 //@  ## Zowe Launcher error messages
 //@
-#define MSG_ENV_NOT_FOUND       MSG_PREFIX "0026E" " %s env variable not found\n"
+// #define MSG_ENV_NOT_FOUND       MSG_PREFIX "0026E" " %s env variable not found\n"
 //@### ZWEL0026E
 //@
 //@  %s env variable not found
@@ -388,7 +469,7 @@
 //@
 //@  In launcher's STC, under `DD` statement `STDENV`, review the `<variable-name>`.
 //@
-#define MSG_ENV_TOO_LARGE       MSG_PREFIX "0027E" " %s env variable too large\n"
+// #define MSG_ENV_TOO_LARGE       MSG_PREFIX "0027E" " %s env variable too large\n"
 //@### ZWEL0027E
 //@
 //@  %s env variable too large
@@ -401,7 +482,7 @@
 //@
 //@  In launcher's STC, under `DD` statement `STDENV`, review the `<variable-name>`.
 //@
-#define MSG_COMP_LIST_ERR       MSG_PREFIX "0028E" " failed to get component list\n"
+// #define MSG_COMP_LIST_ERR       MSG_PREFIX "0028E" " failed to get component list\n"
 //@### ZWEL0028E
 //@
 //@  failed to get component list
@@ -414,7 +495,7 @@
 //@
 //@  Review the components defined in the configuration (identified by message `ZWEL0023I`).
 //@
-#define MSG_COMP_LIST_EMPTY     MSG_PREFIX "0029E" " start component list is empty\n"
+// #define MSG_COMP_LIST_EMPTY     MSG_PREFIX "0029E" " start component list is empty\n"
 //@### ZWEL0029E
 //@
 //@  start component list is empty
@@ -427,7 +508,7 @@
 //@
 //@  Review the components defined in the configuration (identified by message `ZWEL0023I`).
 //@
-#define MSG_INST_PREP_ERR       MSG_PREFIX "0030E" " failed to prepare Zowe instance\n"
+// #define MSG_INST_PREP_ERR       MSG_PREFIX "0030E" " failed to prepare Zowe instance\n"
 //@### ZWEL0030E
 //@
 //@  failed to prepare Zowe instance
@@ -440,7 +521,7 @@
 //@
 //@  Check previous messages in the Zowe Launcher `SYSPRINT` to find the reason and correct it.
 //@
-#define MSG_SIGNAL_ERR          MSG_PREFIX "0031E" " failed to setup signal handlers\n"
+// #define MSG_SIGNAL_ERR          MSG_PREFIX "0031E" " failed to setup signal handlers\n"
 //@### ZWEL0031E
 //@
 //@  failed to setup signal handlers
@@ -453,7 +534,7 @@
 //@
 //@  Contact Support.
 //@
-#define MSG_DIR_ERR             MSG_PREFIX "0032E" " failed to find %s='%s', check if the dir exists\n"
+// #define MSG_DIR_ERR             MSG_PREFIX "0032E" " failed to find %s='%s', check if the dir exists\n"
 //@### ZWEL0032E
 //@
 //@  failed to find %s='%s', check if the dir exists
@@ -466,7 +547,7 @@
 //@
 //@  Verify `<dir-type>` is correctly defined in configuration (identified by message `ZWEL0023I`).
 //@
-#define MSG_ROOT_DIR_ERR        MSG_PREFIX "0033E" " failed to get ROOT_DIR dir\n"
+// #define MSG_ROOT_DIR_ERR        MSG_PREFIX "0033E" " failed to get ROOT_DIR dir\n"
 //@### ZWEL0033E
 //@
 //@  failed to get ROOT_DIR dir
@@ -479,7 +560,7 @@
 //@
 //@  Review `zowe.runtimeDirectory` defined in configuration (identified by message `ZWEL0023I`).
 //@
-#define MSG_ROOT_DIR_EMPTY      MSG_PREFIX "0034E" " ROOT_DIR is empty string\n"
+// #define MSG_ROOT_DIR_EMPTY      MSG_PREFIX "0034E" " ROOT_DIR is empty string\n"
 //@### ZWEL0034E
 //@
 //@  ROOT_DIR is empty string
@@ -492,7 +573,7 @@
 //@
 //@  Review `zowe.runtimeDirectory` defined in configuration (identified by message `ZWEL0023I`).
 //@
-#define MSG_CMDLINE_INVALID     MSG_PREFIX "0035E" " invalid command line arguments, provide HA_INSTANCE_ID as a first argument\n"
+// #define MSG_CMDLINE_INVALID     MSG_PREFIX "0035E" " invalid command line arguments, provide HA_INSTANCE_ID as a first argument\n"
 //@### ZWEL0035E
 //@
 //@  invalid command line arguments, provide HA_INSTANCE_ID as a first argument
@@ -505,7 +586,7 @@
 //@
 //@  Review the command and provide `<HA_INSTANCE_ID>` as a first argument.
 //@
-#define MSG_CTX_INIT_FAILED     MSG_PREFIX "0036E" " failed to initialize launcher context\n"
+// #define MSG_CTX_INIT_FAILED     MSG_PREFIX "0036E" " failed to initialize launcher context\n"
 //@### ZWEL0036E
 //@
 //@  failed to initialize launcher context
@@ -518,7 +599,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_MAX_COMP_REACHED    MSG_PREFIX "0037E" " max component number reached, ignoring the rest\n"
+// #define MSG_MAX_COMP_REACHED    MSG_PREFIX "0037E" " max component number reached, ignoring the rest\n"
 //@### ZWEL0037E
 //@
 //@  max component number reached, ignoring the rest
@@ -531,7 +612,7 @@
 //@
 //@  Review the components defined in configuration (identified by message `ZWEL0023I`).
 //@
-#define MSG_MAX_RETRIES_REACHED MSG_PREFIX "0038E" " failed to restart component %s, max retries reached\n"
+// #define MSG_MAX_RETRIES_REACHED MSG_PREFIX "0038E" " failed to restart component %s, max retries reached\n"
 //@### ZWEL0038E
 //@
 //@  failed to restart component %s, max retries reached
@@ -544,7 +625,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_COMP_ALREADY_RUN    MSG_PREFIX "0039E" " cannot start component %s - already running\n"
+// #define MSG_COMP_ALREADY_RUN    MSG_PREFIX "0039E" " cannot start component %s - already running\n"
 //@### ZWEL0039E
 //@
 //@  cannot start component %s - already running
@@ -557,7 +638,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_COMP_START_FAILED   MSG_PREFIX "0040E" " failed to start component %s\n"
+// #define MSG_COMP_START_FAILED   MSG_PREFIX "0040E" " failed to start component %s\n"
 //@### ZWEL0040E
 //@
 //@  failed to start component %s
@@ -570,7 +651,7 @@
 //@
 //@  Review the component defined in configuration (identified by message `ZWEL0023I`).
 //@
-#define MSG_BAD_CMD_VAL         MSG_PREFIX "0041E" " bad value supplied, command ignored\n"
+// #define MSG_BAD_CMD_VAL         MSG_PREFIX "0041E" " bad value supplied, command ignored\n"
 //@### ZWEL0041E
 //@
 //@  bad value supplied, command ignored
@@ -583,7 +664,7 @@
 //@
 //@  Review the command.
 //@
-#define MSG_CMD_UNKNOWN         MSG_PREFIX "0042E" " command not recognized\n"
+// #define MSG_CMD_UNKNOWN         MSG_PREFIX "0042E" " command not recognized\n"
 //@### ZWEL0042E
 //@
 //@  command not recognized
@@ -596,7 +677,7 @@
 //@
 //@  Review the command.
 //@
-#define MSG_CONS_START_ERR      MSG_PREFIX "0043E" " failed to start console thread\n"
+// #define MSG_CONS_START_ERR      MSG_PREFIX "0043E" " failed to start console thread\n"
 //@### ZWEL0043E
 //@
 //@  failed to start console thread
@@ -609,7 +690,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_CONS_STOP_ERR       MSG_PREFIX "0044E" " failed to stop console thread\n"
+// #define MSG_CONS_STOP_ERR       MSG_PREFIX "0044E" " failed to stop console thread\n"
 //@### ZWEL0044E
 //@
 //@  failed to stop console thread
@@ -622,7 +703,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_YAML_CONV_ERR       MSG_PREFIX "0045E" " error converting zowe.yaml file - %s\n"
+// #define MSG_YAML_CONV_ERR       MSG_PREFIX "0045E" " error converting zowe.yaml file - %s\n"
 //@### ZWEL0045E
 //@
 //@  error converting zowe.yaml file - %s
@@ -635,7 +716,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_YAML_READ_ERR       MSG_PREFIX "0046E" " error reading zowe.yaml file - %s\n"
+// #define MSG_YAML_READ_ERR       MSG_PREFIX "0046E" " error reading zowe.yaml file - %s\n"
 //@### ZWEL0046E
 //@
 //@  error reading zowe.yaml file - %s
@@ -648,7 +729,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_YAML_PARSE_ERR      MSG_PREFIX "0047E" " failed to parse zowe.yaml - %s\n"
+// #define MSG_YAML_PARSE_ERR      MSG_PREFIX "0047E" " failed to parse zowe.yaml - %s\n"
 //@### ZWEL0047E
 //@
 //@  failed to parse zowe.yaml - %s
@@ -661,7 +742,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_YAML_OPEN_ERR       MSG_PREFIX "0048E" " failed to open zowe.yaml - %s: %s\n"
+// #define MSG_YAML_OPEN_ERR       MSG_PREFIX "0048E" " failed to open zowe.yaml - %s: %s\n"
 //@### ZWEL0048E
 //@
 //@  failed to open zowe.yaml - %s: %s
@@ -674,7 +755,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_COMP_RESTART_FAILED MSG_PREFIX "0049E" " failed to restart component %s\n"
+// #define MSG_COMP_RESTART_FAILED MSG_PREFIX "0049E" " failed to restart component %s\n"
 //@### ZWEL0049E
 //@
 //@  failed to restart component %s
@@ -687,7 +768,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_COMP_OUTPUT_ERR     MSG_PREFIX "0050E" " cannot read output from comp %s(%d) - %s\n"
+// #define MSG_COMP_OUTPUT_ERR     MSG_PREFIX "0050E" " cannot read output from comp %s(%d) - %s\n"
 //@### ZWEL0050E
 //@
 //@  cannot read output from comp %s(%d) - %s
@@ -700,7 +781,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_STDIN_CREATE_ERROR  MSG_PREFIX "0055E" " failed to create file for stdin(%s) - %s\n"
+// #define MSG_STDIN_CREATE_ERROR  MSG_PREFIX "0055E" " failed to create file for stdin(%s) - %s\n"
 //@### ZWEL0055E
 //@
 //@  failed to create file for stdin(%s) - %s
@@ -713,7 +794,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_STDIN_OPEN_ERROR    MSG_PREFIX "0056E" " failed to open file for stdin(%s) - %s\n"
+// #define MSG_STDIN_OPEN_ERROR    MSG_PREFIX "0056E" " failed to open file for stdin(%s) - %s\n"
 //@### ZWEL0056E
 //@
 //@  failed to open file for stdin(%s) - %s
@@ -726,7 +807,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_WORKSPACE_ERROR     MSG_PREFIX "0057E" " failed to create workspace dir '%s'\n"
+// #define MSG_WORKSPACE_ERROR     MSG_PREFIX "0057E" " failed to create workspace dir '%s'\n"
 //@### ZWEL0057E
 //@
 //@  failed to create workspace dir '%s'
@@ -739,7 +820,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_WKSP_DIR_ERR        MSG_PREFIX "0059E" " failed to get WORKSPACE_DIR dir\n"
+// #define MSG_WKSP_DIR_ERR        MSG_PREFIX "0059E" " failed to get WORKSPACE_DIR dir\n"
 //@### ZWEL0059E
 //@
 //@  failed to get WORKSPACE_DIR dir
@@ -752,7 +833,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_WKSP_DIR_EMPTY      MSG_PREFIX "0060E" " WORKSPACE_DIR is empty string\n"
+// #define MSG_WKSP_DIR_EMPTY      MSG_PREFIX "0060E" " WORKSPACE_DIR is empty string\n"
 //@### ZWEL0060E
 //@
 //@  WORKSPACE_DIR is empty string
@@ -765,7 +846,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_FILE_ERR            MSG_PREFIX "0061E" " failed to find %s='%s', check if the file exists\n"
+// #define MSG_FILE_ERR            MSG_PREFIX "0061E" " failed to find %s='%s', check if the file exists\n"
 //@### ZWEL0061E
 //@
 //@  failed to find %s='%s', check if the file exists
@@ -778,7 +859,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_MKDIR_ERR           MSG_PREFIX "0062E" " failed to create dir '%s' - %s\n"
+// #define MSG_MKDIR_ERR           MSG_PREFIX "0062E" " failed to create dir '%s' - %s\n"
 //@### ZWEL0062E
 //@
 //@  failed to create dir '%s' - %s
@@ -791,7 +872,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_CMD_RUN_ERR         MSG_PREFIX "0064E" " failed to run command %s - %s\n"
+// #define MSG_CMD_RUN_ERR         MSG_PREFIX "0064E" " failed to run command %s - %s\n"
 //@### ZWEL0064E
 //@
 //@  failed to run command %s - %s
@@ -804,7 +885,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_CMD_OUT_ERR         MSG_PREFIX "0065E" " error reading output from command '%s' - %s\n"
+// #define MSG_CMD_OUT_ERR         MSG_PREFIX "0065E" " error reading output from command '%s' - %s\n"
 //@### ZWEL0065E
 //@
 //@  error reading output from command '%s' - %s
@@ -817,7 +898,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_MEMBER_NAME_BAD     MSG_PREFIX "0067E" " PARMLIB() entries must all have the same member name\n"
+// #define MSG_MEMBER_NAME_BAD     MSG_PREFIX "0067E" " PARMLIB() entries must all have the same member name\n"
 //@### ZWEL0067E
 //@
 //@  PARMLIB() entries must all have the same member name
@@ -830,7 +911,7 @@
 //@
 //@  Review the member names are identical for all PARMLIB() entries.
 //@
-#define MSG_MEMBER_MISSING      MSG_PREFIX "0068E" " PARMLIB() entries must have a member name\n"
+// #define MSG_MEMBER_MISSING      MSG_PREFIX "0068E" " PARMLIB() entries must have a member name\n"
 //@### ZWEL0068E
 //@
 //@  PARMLIB() entries must have a member name
@@ -843,7 +924,7 @@
 //@
 //@  Review the dataset name contains the member name in PARMLIB entry.
 //@
-#define MSG_CFG_INVALID         MSG_PREFIX "0070E" " Configuration has validity exceptions:\n"
+// #define MSG_CFG_INVALID         MSG_PREFIX "0070E" " Configuration has validity exceptions:\n"
 //@### ZWEL0070E
 //@
 //@  Configuration has validity exceptions:
@@ -856,7 +937,7 @@
 //@
 //@  Review the exceptions and correct the configuration.
 //@
-#define MSG_CFG_INTERNAL_FAIL   MSG_PREFIX "0071E" " Internal failure during validation, please contact support\n"
+// #define MSG_CFG_INTERNAL_FAIL   MSG_PREFIX "0071E" " Internal failure during validation, please contact support\n"
 //@### ZWEL0071E
 //@
 //@  Internal failure during validation, please contact support
@@ -869,7 +950,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_CFG_LOAD_FAIL       MSG_PREFIX "0072E" " Launcher could not load configurations\n"
+// #define MSG_CFG_LOAD_FAIL       MSG_PREFIX "0072E" " Launcher could not load configurations\n"
 //@### ZWEL0072E
 //@
 //@  Launcher could not load configurations
@@ -882,7 +963,7 @@
 //@
 //@  Review the configuration entries.
 //@
-#define MSG_CFG_SCHEMA_FAIL     MSG_PREFIX "0073E" " Launcher could not load schemas, status=%d\n"
+// #define MSG_CFG_SCHEMA_FAIL     MSG_PREFIX "0073E" " Launcher could not load schemas, status=%d\n"
 //@### ZWEL0073E
 //@
 //@  Launcher could not load schemas, status=%d
@@ -895,7 +976,7 @@
 //@
 //@  Review the runtime directory
 //@
-#define MSG_NO_LOG_CONTEXT      MSG_PREFIX "0074E" " Log context was not created\n"
+// #define MSG_NO_LOG_CONTEXT      MSG_PREFIX "0074E" " Log context was not created\n"
 //@### ZWEL0074E
 //@
 //@  Log context was not created
@@ -910,7 +991,7 @@
 //@
 //@  ## Zowe Launcher warning messages
 //@
-#define MSG_USE_DEFAULTS        MSG_PREFIX "0051W" " failed to read zowe.yaml, launcher will use default settings\n"
+// #define MSG_USE_DEFAULTS        MSG_PREFIX "0051W" " failed to read zowe.yaml, launcher will use default settings\n"
 //@### ZWEL0051W
 //@
 //@  failed to read zowe.yaml, launcher will use default settings
@@ -923,7 +1004,7 @@
 //@
 //@  Contact support.
 //@
-#define MSG_NOT_ALL_STARTED     MSG_PREFIX "0052W" " not all components started\n"
+// #define MSG_NOT_ALL_STARTED     MSG_PREFIX "0052W" " not all components started\n"
 //@### ZWEL0052W
 //@
 //@  not all components started
@@ -936,7 +1017,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_NOT_ALL_STOPPED     MSG_PREFIX "0053W" " not all components stopped gracefully\n"
+// #define MSG_NOT_ALL_STOPPED     MSG_PREFIX "0053W" " not all components stopped gracefully\n"
 //@### ZWEL0053W
 //@
 //@  not all components stopped gracefully
@@ -949,7 +1030,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_COMP_NOT_FOUND      MSG_PREFIX "0054W" " component %s not found\n"
+// #define MSG_COMP_NOT_FOUND      MSG_PREFIX "0054W" " component %s not found\n"
 //@### ZWEL0054W
 //@
 //@  component %s not found
@@ -962,7 +1043,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_NOT_SIGTERM_STOPPED MSG_PREFIX "0063W" " Component %s(%d) will be terminated using SIGKILL\n"
+// #define MSG_NOT_SIGTERM_STOPPED MSG_PREFIX "0063W" " Component %s(%d) will be terminated using SIGKILL\n"
 //@### ZWEL0063W
 //@
 //@  Component %s(%d) will be terminated using SIGKILL
@@ -975,7 +1056,7 @@
 //@
 //@  No action required.
 //@
-#define MSG_CMD_RCP_WARN        MSG_PREFIX "0066W" " command '%s' ended with code %d\n"
+// #define MSG_CMD_RCP_WARN        MSG_PREFIX "0066W" " command '%s' ended with code %d\n"
 //@### ZWEL0066W
 //@
 //@  command '%s' ended with code %d
@@ -988,8 +1069,6 @@
 //@
 //@  No action required.
 //@
-
-#endif // MSG_H
 
 /*
   This program and the accompanying materials are

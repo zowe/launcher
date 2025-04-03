@@ -104,7 +104,6 @@
 //   Zowe Launcher warning messages
 //-----------------------------------------------------------------------------
 
-//@
 //@# Error Message Codes
 //@
 //@The following error message codes may appear on Zowe Launcher SYSPRINT. Use the following message code references and the corresponding reasons and actions to help troubleshoot issues.
@@ -454,7 +453,7 @@
 //@  No action required.
 //@
 //@
-//@  ## Zowe Launcher error messages
+//@## Zowe Launcher error messages
 //@
 // #define MSG_ENV_NOT_FOUND       MSG_PREFIX "0026E" " %s env variable not found\n"
 //@### ZWEL0026E
@@ -1000,7 +999,7 @@
 //@
 //@  Contact support.
 //@
-//@  ## Zowe Launcher warning messages
+//@## Zowe Launcher warning messages
 //@
 // #define MSG_USE_DEFAULTS        MSG_PREFIX "0051W" " failed to read zowe.yaml, launcher will use default settings\n"
 //@### ZWEL0051W

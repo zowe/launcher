@@ -75,7 +75,7 @@
 #define MSG_WKSP_DIR_EMPTY      MSG_PREFIX "0060E" " WORKSPACE_DIR is empty string\n"
 #define MSG_FILE_ERR            MSG_PREFIX "0061E" " failed to find %s='%s', check if the file exists\n"
 #define MSG_MKDIR_ERR           MSG_PREFIX "0062E" " failed to create dir '%s' - %s\n"
-#define MSG_NOT_SIGTERM_STOPPED MSG_PREFIX "0063W" " Component %s(%d) will be terminated using SIGKILL\n"        
+#define MSG_NOT_SIGTERM_STOPPED MSG_PREFIX "0063W" " Component %s(%d) will be terminated using SIGKILL\n"
 #define MSG_CMD_RUN_ERR         MSG_PREFIX "0064E" " failed to run command %s - %s\n"
 #define MSG_CMD_OUT_ERR         MSG_PREFIX "0065E" " error reading output from command '%s' - %s\n"
 #define MSG_CMD_RCP_WARN        MSG_PREFIX "0066W" " command '%s' ended with code %d\n"
@@ -974,7 +974,18 @@
 //@
 //@  **Action:**
 //@
-//@  Review the runtime directory
+//@  For the `status=5`, locate the `zowe.runtimeDirectory` in the configuration.
+//@
+//@  Check the `zowe.runtimeDirectory/schemas` contains four `.json` files shown below:
+//@
+//@  ```
+//@  manifest-schema.json
+//@  server-common-json
+//@  trivial-component-schema.json
+//@  zowe-yaml-schema.json
+//@  ```
+//@
+//@  On occasion the error occurs because the `zowe.runtimeDirectory` is pointing to a valid directory, but one which doesn't contain a valid Zowe runtime environment is one of the first failures during a Zowe launch.
 //@
 // #define MSG_NO_LOG_CONTEXT      MSG_PREFIX "0074E" " Log context was not created\n"
 //@### ZWEL0074E

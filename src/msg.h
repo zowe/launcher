@@ -276,7 +276,7 @@
 //@
 //@  **Reason:**
 //@
-//@  The command `<commnad>` was received.
+//@  The command `<command>` was received.
 //@
 //@  **Action:**
 //@

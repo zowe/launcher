@@ -792,7 +792,7 @@
 //@
 //@  **Reason:**
 //@
-//@  Failed to create the file for stdin(`<file>`) - <error-text>.
+//@  Failed to create the file for stdin(`<file>`) - `<error-text>`.
 //@
 //@  **Action:**
 //@
@@ -805,7 +805,7 @@
 //@
 //@  **Reason:**
 //@
-//@  Failed to open the file for stdin(`<file>`) - <error-text>.
+//@  Failed to open the file for stdin(`<file>`) - `<error-text>`.
 //@
 //@  **Action:**
 //@

@@ -618,11 +618,16 @@
 //@
 //@  **Reason:**
 //@
-//@  Failed to restart the component `<component-name>`, maximum number of retries reached.
+//@  The component `<component-name>` has been terminating and being restarted by the launcher,
+//@  but the maximum restart limit has been reached and so the component remains stopped.
 //@
 //@  **Action:**
 //@
-//@  Contact support.
+//@  Review the logs to determine the cause of the component terminations.
+//@  When the problem has been corrected, restart the main Zowe task or 
+//@  restart the component manually, to continue using the component.
+//@  Information on restarting Zowe or individual components can be found at
+//@  https://docs.zowe.org/stable/user-guide/start-zowe-zos
 //@
 // #define MSG_COMP_ALREADY_RUN    MSG_PREFIX "0039E" " cannot start component %s - already running\n"
 //@### ZWEL0039E
@@ -739,7 +744,7 @@
 //@
 //@  **Action:**
 //@
-//@  Contact support.
+//@  Verify that the YAML has no syntax errors.
 //@
 // #define MSG_YAML_OPEN_ERR       MSG_PREFIX "0048E" " failed to open zowe.yaml - %s: %s\n"
 //@### ZWEL0048E
@@ -752,7 +757,7 @@
 //@
 //@  **Action:**
 //@
-//@  Contact support.
+//@  Verify if the YAML provided exists and the user running Zowe has permission to read it.
 //@
 // #define MSG_COMP_RESTART_FAILED MSG_PREFIX "0049E" " failed to restart component %s\n"
 //@### ZWEL0049E
@@ -787,7 +792,7 @@
 //@
 //@  **Reason:**
 //@
-//@  Failed to create the file for stdin(`<file>`) - <error-text>.
+//@  Failed to create the file for stdin(`<file>`) - `<error-text>`.
 //@
 //@  **Action:**
 //@
@@ -800,7 +805,7 @@
 //@
 //@  **Reason:**
 //@
-//@  Failed to open the file for stdin(`<file>`) - <error-text>.
+//@  Failed to open the file for stdin(`<file>`) - `<error-text>`.
 //@
 //@  **Action:**
 //@
@@ -817,7 +822,7 @@
 //@
 //@  **Action:**
 //@
-//@  Contact support.
+//@  Verify that the directory is valid and the Zowe user has permission to create it.
 //@
 // #define MSG_WKSP_DIR_ERR        MSG_PREFIX "0059E" " failed to get WORKSPACE_DIR dir\n"
 //@### ZWEL0059E
@@ -843,7 +848,7 @@
 //@
 //@  **Action:**
 //@
-//@  Contact support.
+//@  Correct the Zowe YAML to define the `zowe.workspaceDirectory` value.
 //@
 // #define MSG_FILE_ERR            MSG_PREFIX "0061E" " failed to find %s='%s', check if the file exists\n"
 //@### ZWEL0061E
@@ -869,7 +874,7 @@
 //@
 //@  **Action:**
 //@
-//@  Contact support.
+//@  Review the error text to determine the action to take.
 //@
 // #define MSG_CMD_RUN_ERR         MSG_PREFIX "0064E" " failed to run command %s - %s\n"
 //@### ZWEL0064E
@@ -882,7 +887,7 @@
 //@
 //@  **Action:**
 //@
-//@  Contact support.
+//@  Review the error text to determine the action to take.
 //@
 // #define MSG_CMD_OUT_ERR         MSG_PREFIX "0065E" " error reading output from command '%s' - %s\n"
 //@### ZWEL0065E
@@ -895,7 +900,7 @@
 //@
 //@  **Action:**
 //@
-//@  Contact support.
+//@  Review the error text to determine the action to take.
 //@
 // #define MSG_MEMBER_NAME_BAD     MSG_PREFIX "0067E" " PARMLIB() entries must all have the same member name\n"
 //@### ZWEL0067E

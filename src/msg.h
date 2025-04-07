@@ -618,7 +618,7 @@
 //@
 //@  **Reason:**
 //@
-//#  The component `<component-name>` has been terminating and being restarted by the launcher,
+//@  The component `<component-name>` has been terminating and being restarted by the launcher,
 //@  but the maximum restart limit has been reached and so the component remains stopped.
 //@
 //@  **Action:**

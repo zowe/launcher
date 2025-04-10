@@ -120,7 +120,7 @@ jobs:
     steps:
       - name: Check defined and documented ZWEL messages
         run: |
-          result=$(node ../build/buildZweMessages.js --check)
+          result=$(node "${GITHUB_PATH}/build/buildZweMessages.js" --check)
           if [ "${result}" != "0" ]; then
             echo "Undocumented message(s) found."
             exit 1

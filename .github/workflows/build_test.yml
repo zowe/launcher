@@ -119,8 +119,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check defined and documented ZWEL messages
+        uses: actions/checkout@v2
         run: |
-          result=$(node "${GITHUB_PATH}/build/buildZweMessages.js" --check)
+          result=$(node build/buildZweMessages.js --check)
           if [ "${result}" != "0" ]; then
             echo "Undocumented message(s) found."
             exit 1

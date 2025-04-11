@@ -128,8 +128,7 @@ jobs:
         run: |
           node --version
           ls -al
-          cd ./build
-          ls -al
+          pwd
         # run: |
         #   result=$(node ./buildZweMessages.js --check)
         #   if [ "${result}" != "0" ]; then

@@ -10,7 +10,8 @@
 */
 
 const NO_ACTION = "No action required.";
-const CONTACT_SUPPORT = "Contact Support."
+const CONTACT_SUPPORT = "Contact support."
+const ZOS_MIN_SUPPORT = '2.5.0'
 
 export const MESSAGES = [
     {
@@ -28,7 +29,10 @@ export const MESSAGES = [
     {
         id: "ZWEL0003I",
         text: "new component initialized %s, restart_cnt=%d, min_uptime=%d seconds, share_as=%s",
-        reason: "The component `<component-name>` was initialized.\n- `restart_cnt` - The number of attempts to restart the component in case of failure\n- `min_uptime` - The minimum uptime that the component can be considered as successfully started\n- `share_as` - One of the following values: `<yes|no|must>`. The value indicates whether child processes of the component start in the same address space. For details, see [_BPX_SHAREAS](https://www.ibm.com/docs/en/zos/2.4.0?topic=shell-setting-bpx-shareas-bpx-spawn-script) in the IBM documentation.",
+        reason: `The component \`<component-name>\` was initialized.
+  - \`restart_cnt\` - The number of attempts to restart the component in case of failure
+  - \`min_uptime\` - The minimum uptime that the component can be considered as successfully started
+  - \`share_as\` - One of the following values: \`<yes|no|must>\`. The value indicates whether child processes of the component start in the same address space. For details, see [_BPX_SHAREAS](https://www.ibm.com/docs/en/zos/${ZOS_MIN_SUPPORT}?topic=shell-setting-bpx-shareas-bpx-spawn-script) in the IBM documentation.`,
         action: NO_ACTION
     },
     {
@@ -41,7 +45,7 @@ export const MESSAGES = [
         id: "ZWEL0005I",
         text: "next attempt to restart component %s in %d seconds",
         reason: "Next attempt to restart component `<component-name>` in `<n>` seconds.",
-        action: "No action required. The component <component-name> will be restarted in <n> seconds."
+        action: "No action required. The component `<component-name>` will be restarted in `<n>` seconds."
     },
     {
         id: "ZWEL0006I",
@@ -160,7 +164,8 @@ export const MESSAGES = [
     {
         id: "ZWEL0025I",
         text: "restart_intervals for component '%s'= %s",
-        reason: "Restart intervals for component `<component-name>` = `<restart-intervals>.` Restart intervals is defined in `zowe.launcher.restartIntervals`.",
+        reason: `Restart intervals for component \`<component-name>\` = \`<restart-intervals>.\`
+  Restart intervals is defined in \`zowe.launcher.restartIntervals\`.`,
         action: NO_ACTION
     },
     {
@@ -227,7 +232,7 @@ export const MESSAGES = [
         id: "ZWEL0034E",
         text: "ROOT_DIR is empty string",
         reason: "ROOT_DIR (`zowe.runtimeDirectory`) is empty string.",
-        action: "Review `zowe.runtimeDirectory` defined in configuration (identified by message `ZWEL0023I)."
+        action: "Review `zowe.runtimeDirectory` defined in configuration (identified by message `ZWEL0023I`)."
     },
     {
         id: "ZWEL0035E",
@@ -250,8 +255,8 @@ export const MESSAGES = [
     {
         id: "ZWEL0038E",
         text: "failed to restart component %s, max retries reached",
-        reason: "The component `<component-name>` terminates, and the start limit of the launcher has been reached, thereby preventing component restart.",
-        action: "Review the logs to determine the cause of component terminations.\nWhen the problem has been corrected, restart the main Zowe task or restart the component manually, to continue using the component. For more information on restarting Zowe or individual components,   see [Starting and stopping Zowe](https://docs.zowe.org/stable/user-guide/start-zowe-zos)."
+        reason: "The component `<component-name>` terminates, and the start limit of the launcher has been reached,\n  thereby preventing component restart.",
+        action: "Review the logs to determine the cause of component terminations.\n  When the problem has been corrected, restart the main Zowe task or\n  restart the component manually, to continue using the component.\n  For more information on restarting Zowe or individual components,\n  see [Starting and stopping Zowe](https://docs.zowe.org/stable/user-guide/start-zowe-zos)."
     },
     {
         id: "ZWEL0039E",
@@ -413,7 +418,18 @@ export const MESSAGES = [
         id: "ZWEL0073E",
         text: "Launcher could not load schemas, status=%d",
         reason: "Launcher could not load schemas, status=`<return-code>`",
-        action: "For the `status=5`, locate the `zowe.runtimeDirectory` in the configuration.\nCheck the `zowe.runtimeDirectory/schemas` contains four `.json` files shown below:\n```\nmanifest-schema.json\nserver-common-json\ntrivial-component-schema.json\n  zowe-yaml-schema.json\n```\n  On occasion the error occurs because the `zowe.runtimeDirectory` is pointing to a valid directory, but one which doesn't contain a valid Zowe runtime environment is one of the first failures during a Zowe launch."
+        action: `For the \`status=5\`, locate the \`zowe.runtimeDirectory\` in the configuration.
+
+  Check the \`zowe.runtimeDirectory/schemas\` contains four \`.json\` files shown below:
+
+  \`\`\`
+  manifest-schema.json
+  server-common-json
+  trivial-component-schema.json
+  zowe-yaml-schema.json
+  \`\`\`
+
+  On occasion the error occurs because the \`zowe.runtimeDirectory\` is pointing to a valid directory, but one which doesn't contain a valid Zowe runtime environment is one of the first failures during a Zowe launch.`
     },
     {
         id: "ZWEL0074E",

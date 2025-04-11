@@ -21,22 +21,23 @@ const { values: { check } } = parseArgs({ options });
 
 // Documentation is made in oder of info, error and warning messages
 const SEVERITY_LIST = 'IEW';
+const CHAPTERS = [ 'informational', 'error', 'warning' ];
+const INTRO = `# Error Message Codes\n\nThe following error message codes may appear on Zowe Launcher SYSPRINT. Use the following message code references and the corresponding reasons and actions to help troubleshoot issues.\n`;
 const DEBUG = false;
 let sorted = [[],[],[]];
 
 // Markdown template
 const TEMPLATE = `### \${this.id}
 
-\${this.text}
+  \${this.text}
 
-**Reason:**
+  **Reason:**
 
-\${this.reason}
+  \${this.reason}
 
-**Action:**
+  **Action:**
 
-\${this.action}
-
+  \${this.action}
 `
 
 function resolveTemplate(templateString, data) {
@@ -73,7 +74,9 @@ function checkAndSort() {
 
 // Print as MD using the template
 function createMD() {
+    console.log(INTRO);
     for (let svr = 0; svr < SEVERITY_LIST.length; svr ++) {
+        console.log(`## Zowe Launcher ${CHAPTERS[svr]} messages\n`);
         sorted[svr].forEach(msg => {
             DEBUG && console.log(`<!--\n${msg.id} -> ${msg.text}\nR=${msg.reason}\nA=${msg.action}\n-->`);
             console.log(resolveTemplate(TEMPLATE, { id: msg.id, text: msg.text, reason: msg.reason, action: msg.action }));

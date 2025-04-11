@@ -126,15 +126,11 @@ jobs:
 
       - name: Check defined and documented ZWEL messages
         run: |
-          node --version
-          ls -al
-          pwd
-        # run: |
-        #   result=$(node ./buildZweMessages.js --check)
-        #   if [ "${result}" != "0" ]; then
-        #     echo "Undocumented message(s) found."
-        #     exit 1
-        #   fi
+          result=$(node ./buildZwelMessages.js --check)
+          if [ "${result}" != "0" ]; then
+            echo "Undocumented message(s) found."
+            exit 1
+          fi
 
   build-test:
     runs-on: ubuntu-latest

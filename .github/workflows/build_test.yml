@@ -125,7 +125,11 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Check defined and documented ZWEL messages
-        run: node --version
+        run: |
+          node --version
+          ls -al
+          cd ./build
+          ls -al
         # run: |
         #   result=$(node ./buildZweMessages.js --check)
         #   if [ "${result}" != "0" ]; then

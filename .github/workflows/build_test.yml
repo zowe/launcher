@@ -117,13 +117,16 @@ jobs:
   check_messages:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./build
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Check defined and documented ZWEL messages
         run: |
-          result=$(node build/buildZweMessages.js --check)
+          result=$(node ./buildZweMessages.js --check)
           if [ "${result}" != "0" ]; then
             echo "Undocumented message(s) found."
             exit 1

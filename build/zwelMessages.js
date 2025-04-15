@@ -11,7 +11,7 @@
 
 const NO_ACTION = "No action required.";
 const CONTACT_SUPPORT = "Contact support."
-const ZOS_MIN_SUPPORT = '2.5.0'
+const ZOS_MIN_SUPPORTED = '2.5.0'
 
 export const MESSAGES = [
     {
@@ -32,7 +32,7 @@ export const MESSAGES = [
         reason: `The component \`<component-name>\` was initialized.
   - \`restart_cnt\` - The number of attempts to restart the component in case of failure
   - \`min_uptime\` - The minimum uptime that the component can be considered as successfully started
-  - \`share_as\` - One of the following values: \`<yes|no|must>\`. The value indicates whether child processes of the component start in the same address space. For details, see [_BPX_SHAREAS](https://www.ibm.com/docs/en/zos/${ZOS_MIN_SUPPORT}?topic=shell-setting-bpx-shareas-bpx-spawn-script) in the IBM documentation.`,
+  - \`share_as\` - One of the following values: \`<yes|no|must>\`. The value indicates whether child processes of the component start in the same address space. For details, see [_BPX_SHAREAS](https://www.ibm.com/docs/en/zos/${ZOS_MIN_SUPPORTED}?topic=shell-setting-bpx-shareas-bpx-spawn-script) in the IBM documentation.`,
         action: NO_ACTION
     },
     {
@@ -45,7 +45,7 @@ export const MESSAGES = [
         id: "ZWEL0005I",
         text: "next attempt to restart component %s in %d seconds",
         reason: "Next attempt to restart component `<component-name>` in `<n>` seconds.",
-        action: "No action required. The component `<component-name>` will be restarted in `<n>` seconds."
+        action: `${NO_ACTION}. The component \`<component-name>\` will be restarted in \`<n>\` seconds.`
     },
     {
         id: "ZWEL0006I",

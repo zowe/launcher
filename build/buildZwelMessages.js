@@ -19,7 +19,7 @@ const options = {
 
 const { values: { check } } = parseArgs({ options });
 
-// Documentation is made in oder of info, error and warning messages
+// Documentation is made in oder of Info, Error and Warning messages => IEW
 const SEVERITY_LIST = 'IEW';
 const CHAPTERS = [ 'informational', 'error', 'warning' ];
 const INTRO = `# Error Message Codes\n\nThe following error message codes may appear on Zowe Launcher SYSPRINT. Use the following message code references and the corresponding reasons and actions to help troubleshoot issues.\n`;
@@ -78,14 +78,16 @@ function createMD() {
     for (let svr = 0; svr < SEVERITY_LIST.length; svr ++) {
         console.log(`## Zowe Launcher ${CHAPTERS[svr]} messages\n`);
         sorted[svr].forEach(msg => {
+
             DEBUG && console.log(`<!--\n${msg.id} -> ${msg.text}\nR=${msg.reason}\nA=${msg.action}\n-->`);
+
             console.log(resolveTemplate(TEMPLATE, { id: msg.id, text: msg.text, reason: msg.reason, action: msg.action }));
         })
     }
 }
 
 // Check header messages and compare with ZWEL.MESSAGES
-function checkMessages() {
+function checkMessages(printResult) {
     const headerFile = fs.readFileSync('../src/msg.h', 'utf8');
     let header = [];
     let doc = [];
@@ -95,26 +97,47 @@ function checkMessages() {
             const firstApos = line.indexOf('"');
             const secondApos = line.indexOf('"', firstApos + 1);
             const headerCode = 'ZWEL' + line.substring(firstApos + 1, secondApos);
-            header.push(headerCode);
+            if (header.indexOf(headerCode) == -1) {
+                header.push(headerCode);
+            } else {
+                console.log(line);
+                console.log(`Message ${headerCode} already defined in header file!`);
+            }
 
             DEBUG && console.log(`${headerCode} -> ${line}`);
         }
     })
 
     ZWEL.MESSAGES.forEach(element => {
-        doc.push(element.id);
+        if (doc.indexOf(element.id) == -1) {
+            doc.push(element.id);
+        } else {
+            console.log(`Message ${element.id} already defined in documentation!`);
+        }
     })
 
     DEBUG && console.dir(header.sort());
     DEBUG && console.dir(doc.sort());
 
-    let difference = header.filter(zwelMsg => !doc.includes(zwelMsg));
-    console.log(difference.length);
+    let diff1 = header.filter(zwelMsg => !doc.includes(zwelMsg));
+    let diff2 = doc.filter(zwelMsg => !header.includes(zwelMsg));
+    if (printResult) {
+        console.log(diff1.length + diff2.length);
+    }
+    if (diff1.length) {
+        console.log("Missing ZWEL message(s) in documentation:");
+        console.dir(diff1);
+    }
+    if (diff2.length) {
+        console.log("Missing ZWEL message(s) in header file:");
+        console.dir(diff2);
+    }
 }
 
 if (check) {
-    checkMessages();
+    checkMessages(check);
 } else {
+    checkMessages(check);
     checkAndSort();
     createMD();
 }

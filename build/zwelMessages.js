@@ -15,12 +15,6 @@ const ZOS_MIN_SUPPORTED = '2.5.0'
 
 export const MESSAGES = [
     {
-        id: "ZWEL0001I",
-        text: "component %s started",
-        reason: "The component `<component-name>` was started.",
-        action: NO_ACTION
-    },
-    {
         id: "ZWEL0002I",
         text: "component %s stopped",
         reason: "The component `<component-name>` was stopped.",

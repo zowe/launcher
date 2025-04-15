@@ -79,7 +79,7 @@
 #define MSG_CMD_RUN_ERR         MSG_PREFIX "0064E" " failed to run command %s - %s\n"
 #define MSG_CMD_OUT_ERR         MSG_PREFIX "0065E" " error reading output from command '%s' - %s\n"
 #define MSG_CMD_RCP_WARN        MSG_PREFIX "0066W" " command '%s' ended with code %d\n"
-#define MSG_MEMBER_NAME_BAD     MSG_PREFIX "0067E" " PARMLIB() entries must all have the same member name\n"
+# 67E retired, parmlib member name restriction removed
 #define MSG_MEMBER_MISSING      MSG_PREFIX "0068E" " PARMLIB() entries must have a member name\n"
 #define MSG_CFG_VALID           MSG_PREFIX "0069I" " Configuration is valid\n"
 #define MSG_CFG_INVALID         MSG_PREFIX "0070E" " Configuration has validity exceptions:\n"
@@ -901,19 +901,6 @@
 //@  **Action:**
 //@
 //@  Review the error text to determine the action to take.
-//@
-// #define MSG_MEMBER_NAME_BAD     MSG_PREFIX "0067E" " PARMLIB() entries must all have the same member name\n"
-//@### ZWEL0067E
-//@
-//@  PARMLIB() entries must all have the same member name
-//@
-//@  **Reason:**
-//@
-//@  PARMLIB() entries must all have the same member name.
-//@
-//@  **Action:**
-//@
-//@  Review the member names are identical for all PARMLIB() entries.
 //@
 // #define MSG_MEMBER_MISSING      MSG_PREFIX "0068E" " PARMLIB() entries must have a member name\n"
 //@### ZWEL0068E

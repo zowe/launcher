@@ -128,7 +128,7 @@ jobs:
         run: |
           result=$(node ./buildZwelMessages.js --check)
           if [ "${result}" != "0" ]; then
-            echo "Problem detected, see the previous messages."
+            echo "${result}"
             exit 1
           fi
 

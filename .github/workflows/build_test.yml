@@ -114,7 +114,7 @@ jobs:
             echo "changelog was updated successfully."
           fi
 
-  check_messages:
+  check-messages:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     defaults:
@@ -128,13 +128,13 @@ jobs:
         run: |
           result=$(node ./buildZwelMessages.js --check)
           if [ "${result}" != "0" ]; then
-            echo "Undocumented message(s) found."
+            echo "Problem detected, see the previous messages."
             exit 1
           fi
 
   build-test:
     runs-on: ubuntu-latest
-    needs: check-permission
+    needs: [ check-permission, check-messages ]
     steps:
       - name: '[Prep 1] Checkout'
         uses: actions/checkout@v3

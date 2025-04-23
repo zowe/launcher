@@ -3,6 +3,9 @@
 All notable changes to the Zowe Launcher package will be documented in this file.
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
+## 3.3
+- Enhancment: Trimming the sys messages to print from the sys-message-id as optional based on the zowe.sysMessageTrim=true/false. (#147)
+
 ## 3.1
 - Bugfix: HEAPPOOLS and HEAPPOOLS64 no longer need to be set to OFF for launcher (#133)
 

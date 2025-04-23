@@ -176,12 +176,13 @@ struct {
   char *root_dir;
   char *workspace_dir;
   JsonArray *sys_messages;
+  bool trim_sys_message;
   char ha_instance_id[64];
   
   pid_t pid;
   char userid[9];
   
-} zl_context = {.config = {.debug_mode = false}, .userid = "(NONE)"} ;
+} zl_context = {.config = {.debug_mode = false}, .trim_sys_message = false, .userid = "(NONE)"} ;
 
 // Wrapper for wtoPrintf3
 static void printf_wto(const char *formatString, ...) {
@@ -203,6 +204,13 @@ static void set_sys_messages(ConfigManager *configmgr) {
   if (sys_messages) {
     zl_context.sys_messages = sys_messages;
   }
+
+  bool trim = false; // for backwards compatibility trimming sys messages is disabled by default.
+  cfgGetStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &trim, 2, "zowe", "sysMessageTrim");
+  if (cfgGetStatus != ZCFG_SUCCESS) { // No sysMessageTrim found in Zowe configuration, disabled by default.
+    return;
+  }
+  zl_context.trim_sys_message = trim;
 }
 
 static void launcher_syslog_on_match(const char* fmt, ...) {
@@ -221,8 +229,13 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
   int count = jsonArrayGetCount(zl_context.sys_messages);
   for (int i = 0; i < count; i++) {
       const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
-      if (sys_message_id && strstr(input_string, sys_message_id)) {
-          printf_wto(input_string); // Print our match to the syslog
+      char *sys_message_start = strstr(input_string, sys_message_id);
+      if (sys_message_id && sys_message_start) {
+          if (zl_context.trim_sys_message) {
+            printf_wto(sys_message_start); // Print out match starting from sys message ID
+          } else {
+            printf_wto(input_string); // Print our match to the syslog
+          }
           break;
       }
   }
@@ -265,6 +278,7 @@ static void check_for_and_print_sys_message(const char* input_string) {
   int input_length = strlen(input_string);
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
+    int sys_message_pos = index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT);
     if (sys_message_id && (index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT) != -1)) {
 
       //exclude "ZWE_zowe_sysMessages" messages to avoid spam.
@@ -276,6 +290,9 @@ static void check_for_and_print_sys_message(const char* input_string) {
         int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
         int match = regexec(&time_regex, input_string, 0, NULL, 0);
         int offset = match == 0 ? DATE_PREFIX_LEN : 0;
+        if (zl_context.trim_sys_message) {
+          offset = sys_message_pos; // Skip and Print syslog message starting from sys message ID
+        }
         int length = SYSLOG_MESSAGE_LENGTH_LIMIT < (input_length-offset) ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_length-offset;
         memcpy(syslog_string, input_string+offset, length);  
         syslog_string[length] = '\0';

@@ -575,6 +575,7 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
   if (zl_context.config_path[0] == '/') { // simple file case, must be absolute path.
     snprintf(config_line, config_len+7, "FILE(%s)", zl_context.config_path);
     snprintf(zl_context.configmgr_path, config_len+7, "%s", config_line);
+    setenv("CONFIG", zl_context.config_path, 1);
   } else {
     //check that PARMLIB has no missing members
     int parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", 0);
@@ -586,10 +587,10 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
       }
       parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", rParenIndex);
     }
+    snprintf(zl_context.configmgr_path, config_len+1, "%s", zl_context.config_path);
   }
 
 
-  setenv("CONFIG", zl_context.config_path, 1);
   INFO(MSG_YAML_FILE, zl_context.configmgr_path);
 
   zl_context.config = *cfg;

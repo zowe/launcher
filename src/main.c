@@ -184,6 +184,8 @@ struct {
   
 } zl_context = {.config = {.debug_mode = false}, .trim_sys_message = false, .userid = "(NONE)"} ;
 
+static int index_of_string_limited(const char *, int, const char *, int, int);
+
 // Wrapper for wtoPrintf3
 static void printf_wto(const char *formatString, ...) {
   va_list argPointer;
@@ -213,6 +215,7 @@ static void set_sys_messages(ConfigManager *configmgr) {
   zl_context.trim_sys_message = trim;
 }
 
+
 static void launcher_syslog_on_match(const char* fmt, ...) {
   if (!zl_context.sys_messages) {
     return;
@@ -227,12 +230,13 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
   va_end(args);
     
   int count = jsonArrayGetCount(zl_context.sys_messages);
+  int input_length = strlen(input_string);
   for (int i = 0; i < count; i++) {
       const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
-      char *sys_message_start = strstr(input_string, sys_message_id);
-      if (sys_message_id && sys_message_start) {
+      int  sys_message_pos = index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT);
+      if (sys_message_id && (sys_message_pos != -1)) {
           if (zl_context.trim_sys_message) {
-            printf_wto(sys_message_start); // Print out match starting from sys message ID
+            printf_wto(input_string + sys_message_pos); // Print out match starting from sys message ID
           } else {
             printf_wto(input_string); // Print our match to the syslog
           }
@@ -276,20 +280,21 @@ static void check_for_and_print_sys_message(const char* input_string) {
 
   int count = jsonArrayGetCount(zl_context.sys_messages);
   int input_length = strlen(input_string);
+  regex_t time_regex;
+  int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
+  int match = regexec(&time_regex, input_string, 0, NULL, 0);
+  int offset = match == 0 ? DATE_PREFIX_LEN : 0;
+
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
     int sys_message_pos = index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT);
-    if (sys_message_id && (index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT) != -1)) {
+    if (sys_message_id && (sys_message_pos != -1)) {
 
       //exclude "ZWE_zowe_sysMessages" messages to avoid spam.
       if (memcmp("ZWE_zowe_sysMessages", input_string, ZWE_SYSMESSAGES_EXCLUDE_LEN)){ 
 
         //truncate match for reasonable output
         char syslog_string[SYSLOG_MESSAGE_LENGTH_LIMIT+1] = {0};
-        regex_t time_regex;
-        int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
-        int match = regexec(&time_regex, input_string, 0, NULL, 0);
-        int offset = match == 0 ? DATE_PREFIX_LEN : 0;
         if (zl_context.trim_sys_message) {
           offset = sys_message_pos; // Skip and Print syslog message starting from sys message ID
         }

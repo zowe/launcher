@@ -908,6 +908,9 @@ static const char **env_comp(zl_comp_t *comp) {
   return env_comp;
 }
 
+// define method signature
+static int cleanup_ipc(void);
+
 static int start_component(zl_comp_t *comp) {
 
   if (comp->pid != -1) {
@@ -916,6 +919,11 @@ static int start_component(zl_comp_t *comp) {
   }
 
   DEBUG("about to start component %s\n", comp->name);
+
+  // run cleanup-ipc before starting the component
+  if(cleanup_ipc()){
+    DEBUG("launcher could not run or complete cleanup ipc\n");
+  }
 
   // ensure the new process has its own process group ID so we can terminate
   // the entire process tree
@@ -1255,7 +1263,7 @@ static void *handle_console(void *args) {
   return NULL;
 }
 
-static int start_console_tread(void) {
+static int start_console_thread(void) {
 
   DEBUG("starting console thread\n");
 
@@ -1777,14 +1785,38 @@ static void print_line(void *data, const char *line) {
   check_for_and_print_sys_message(line);
 }
 
-static char* get_start_prepare_cmd(char *sharedenv) {
-  const char basecmd[] = "%s ZWE_CLI_PARAMETER_CONFIG=\"%s\" %s/bin/utils/configmgr -script %s/bin/commands/internal/start/prepare/cli.js 2>&1";
-  int size = (strlen(zl_context.root_dir) * 2) + strlen(zl_context.config_path) + strlen(sharedenv) + sizeof(basecmd) + 1;
+static char* get_command(char* sharedenv, const char* basecmd) {
+  int size = (strlen(zl_context.root_dir) * 2) + strlen(zl_context.config_path) + strlen(sharedenv) + strlen(basecmd) + 1; 
   char *command = malloc(size);
 
   snprintf(command, size, basecmd,
            sharedenv, zl_context.config_path, zl_context.root_dir, zl_context.root_dir);
   return command;
+}
+
+static char* get_cleanup_ipc_cmd(char* sharedenv) {
+  const char basecmd[] = "%s ZWE_CLI_PARAMETER_CONFIG=\"%s\" %s/bin/utils/configmgr -script %s/bin/commands/internal/utils/cleanup-ipcmq/cli.js 2>&1";
+  return get_command(sharedenv, basecmd);
+}
+
+static char* get_start_prepare_cmd(char *sharedenv) {
+  const char basecmd[] = "%s ZWE_CLI_PARAMETER_CONFIG=\"%s\" %s/bin/utils/configmgr -script %s/bin/commands/internal/start/prepare/cli.js 2>&1";
+  return get_command(sharedenv, basecmd);
+}
+
+static int cleanup_ipc() {
+  char *sharedenv = get_sharedenv();
+  char *command = get_cleanup_ipc_cmd(sharedenv);
+
+  free(sharedenv);
+
+  DEBUG("about to cleanup IPC queue\n");
+  if (run_command(command, print_line, NULL)) {
+    DEBUG(MSG_IPC_CLEANUP_FAILED);
+    return -1;
+  }
+  DEBUG(MSG_IPC_CLEANUP_SUCCESS);
+  return 0;
 }
 
 static int prepare_instance() {
@@ -1959,7 +1991,7 @@ int main(int argc, char **argv) {
 
   start_components();
 
-  if (start_console_tread()) {
+  if (start_console_thread()) {
     ERROR(MSG_CONS_START_ERR);
     free(shared_uss_env);
     exit(EXIT_FAILURE);

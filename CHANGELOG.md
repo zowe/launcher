@@ -4,7 +4,7 @@ All notable changes to the Zowe Launcher package will be documented in this file
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
 ## 3.3
-- Enhancement: launcher runs cleanup_ipcmq on every component start (#148)
+- Enhancement: launcher runs cleanup_ipcmq on initial start and every app-server start (#148)
 
 ## 3.1
 - Bugfix: HEAPPOOLS and HEAPPOOLS64 no longer need to be set to OFF for launcher (#133)

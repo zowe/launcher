@@ -920,9 +920,11 @@ static int start_component(zl_comp_t *comp) {
 
   DEBUG("about to start component %s\n", comp->name);
 
-  // run cleanup-ipc before starting the component
-  if(cleanup_ipc()){
-    DEBUG("launcher could not run or complete cleanup ipc\n");
+  // run cleanup-ipc before starting the app-server
+  if (strncmp(comp->name, "app-server", 12)) {
+    if(cleanup_ipc()){
+      DEBUG("launcher could not run or complete cleanup ipc\n");
+    }
   }
 
   // ensure the new process has its own process group ID so we can terminate
@@ -1811,11 +1813,12 @@ static int cleanup_ipc() {
   free(sharedenv);
 
   DEBUG("about to cleanup IPC queue\n");
-  if (run_command(command, print_line, NULL)) {
-    DEBUG(MSG_IPC_CLEANUP_FAILED);
+  int run_rc = run_command(command, print_line, NULL);
+  if (run_rc != 0) {
+    DEBUG("ipc cleanup command failed, rc=%d\n", run_rc);
     return -1;
   }
-  DEBUG(MSG_IPC_CLEANUP_SUCCESS);
+  INFO(MSG_IPC_CLEANUP_SUCCESS);
   return 0;
 }
 

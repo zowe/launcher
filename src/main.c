@@ -581,7 +581,10 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
     int parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", 0);
     while (parmIndex != -1) {
       int rParenIndex = indexOfString(zl_context.config_path, config_len, "))", parmIndex);
-      if (rParenIndex == -1) {
+      //find ( after PARMLIB( section, to find where member name should be
+      int lParenIndex = indexOfString(zl_context.config_path, config_len, "(", parmIndex+9);
+      if ((rParenIndex == -1)
+          || (rParenIndex == (lParenIndex+1))) {
         ERROR(MSG_MEMBER_MISSING);
         return -1;
       }

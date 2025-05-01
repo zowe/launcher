@@ -63,8 +63,7 @@ while read config haInstace textMatch desc debug; do
     if [ "${config}" != "CONFIG " ]; then
         run_launcher $config $haInstace $textMatch $desc $debug 
     fi
-done <<EOF #! /bin/sh
-EOF
+done <<EOF
 CONFIG | HA-INSTANCE | TEXT-TO-FIND | DESCRIPTION | ZLDEBUG
  | | PANIC! readJson got null pathElement | No config lead to PANIC!
 /git/repos/launcher/bin/zowe.yaml | | ZWEL0021I Zowe Launcher starting | Check the basic message ZWEL0021I
@@ -78,4 +77,3 @@ PARMLIB(ZOWE.PR4285.A()) | hello | ZWEL0068E PARMLIB() entries must have a membe
 EOF
 
 exit $errors
-EOF

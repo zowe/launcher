@@ -3,9 +3,9 @@
 # This program and the accompanying materials are
 # made available under the terms of the Eclipse Public License v2.0 which accompanies
 # this distribution, and is available at https://www.eclipse.org/legal/epl-v20.html
-# 
+#
 # SPDX-License-Identifier: EPL-2.0
-# 
+#
 # Copyright Contributors to the Zowe Project.
 
 # Start with_any_paramter -> prints output (diff style)
@@ -19,6 +19,13 @@ if [ ! -z "${1}" ]; then
 fi
 
 LAUNCHER='../bin/zowe_launcher'
+ABS_PATH=$(cd .; pwd)
+
+TEST_FILES='./files'
+ZOWE="${TEST_FILES}/zowe.runtime.dev.null.yaml"
+ZOWE_EMPTY="${TEST_FILES}/zowe.empty.yaml"
+ABS_ZOWE="${ABS_PATH}/${ZOWE}"
+ABS_ZOWE2="${ABS_PATH}/././././////./////${ZOWE}"
 
 run_launcher() {
     # trim via awk
@@ -52,6 +59,8 @@ run_launcher() {
         if [ -z "${findText}" ]; then
             echo "- >  Not found: ${textMatch}"
             errors=`expr $errors + 1`
+        else
+            [ ! -z "${print}" ] && echo "+ >  Found: ${textMatch}"
         fi
     fi
 
@@ -60,20 +69,24 @@ run_launcher() {
 
 IFS='|'
 while read config haInstace textMatch desc debug; do
+    # Skip the first line
     if [ "${config}" != "CONFIG " ]; then
-        run_launcher $config $haInstace $textMatch $desc $debug 
+        run_launcher $config $haInstace $textMatch $desc $debug
     fi
 done <<EOF
 CONFIG | HA-INSTANCE | TEXT-TO-FIND | DESCRIPTION | ZLDEBUG
- | | PANIC! readJson got null pathElement | No config lead to PANIC!
-/git/repos/launcher/bin/zowe.yaml | | ZWEL0021I Zowe Launcher starting | Check the basic message ZWEL0021I
-/git/repos/launcher/bin/zowe.yaml | | INFO ZWEL0023I Zowe YAML config file is 'FILE(/git/repos/launcher/bin/zowe.yaml)' | ZWEL0023I wrapped by FILE()
-FILE(/git/repos/launcher/bin/zowe.yaml) | | INFO ZWEL0023I Zowe YAML config file is 'FILE(/git/repos/launcher/bin/zowe.yaml)' | Same as previous test
-FILE(/git/repos/launcher/bin/zowe.yaml) | LPAR123 | ZWEL0024I HA_INSTANCE_ID is 'lpar123' | HaInstance should be sanitazed
-PARMLIB(ZOWE.PR4285.A(A)) | hello | ZWEL0023I Zowe YAML config file is 'PARMLIB(ZOWE.PR4285.A(A))' | Parmlib does not exist, but it should be in ZWEL00203I
-PARMLIB(ZOWE.PR4285.A) | hello | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
-PARMLIB(ZOWE.PR4285.A() | hello | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
-PARMLIB(ZOWE.PR4285.A()) | hello | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
+ | | PANIC! readJson got null pathElement | No config leads to PANIC!
+FILE(${ZOWE_EMPTY}) | | ZWEL0318E - failed to get root node in YAML | Empty config leads to ZWEL0318E
+${ABS_ZOWE} | | ZWEL0021I Zowe Launcher starting | Check the basic message ZWEL0021I
+${ZOWE} | | INFO ZWEL0023I Zowe YAML config file is 'FILE(${ZOWE})' | ZWEL0023I wrapped by FILE()
+FILE(${ZOWE}) | | INFO ZWEL0023I Zowe YAML config file is 'FILE(${ZOWE})' | Same as previous test
+${ABS_ZOWE} | | INFO ZWEL0023I Zowe YAML config file is 'FILE(${ABS_ZOWE})' | ZWEL0023I wrapped by FILE()
+${ABS_ZOWE2} | | INFO ZWEL0023I Zowe YAML config file is 'FILE(${ABS_ZOWE2})' | Should be able to read the file
+FILE(${ZOWE}) | LPAR123 | ZWEL0024I HA_INSTANCE_ID is 'lpar123' | HaInstance should be sanitazed
+PARMLIB(ZOWE.TEST-1.A(A)) | hello | ZWEL0023I Zowe YAML config file is 'PARMLIB(ZOWE.TEST-1.A(A))' | Parmlib does not exist, but it should be in ZWEL00203I
+PARMLIB(ZOWE.TEST-1.A) | world | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
+PARMLIB(ZOWE.TEST-1.A() | | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
+PARMLIB(ZOWE.TEST-1.A()) | | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
 EOF
 
 exit $errors

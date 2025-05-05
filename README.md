@@ -6,7 +6,7 @@ SPDX-License-Identifier: EPL-2.0
 
 Copyright Contributors to the Zowe Project.
 
-<h1 align="center">Zowe Launcher</h1>
+# Zowe Launcher
 
 The Zowe launcher is a part of the Zowe server architecture that was added as an optional program for HA/FT usage in v1.
 In v2, the Zowe laucher became the sole way to start the Zowe servers.
@@ -31,6 +31,10 @@ cd zowe-launcher/build
 ```
 
 The launcher binary will be saved into the bin directory.
+
+## Testing
+
+See [details](./test/README.md) in `test` directory.
 
 ## Prerequisites
 

@@ -172,7 +172,6 @@ struct {
   char config_path[PATH_MAX*17];
   //configmgr_path is the path in a form configmgr consumes
   char configmgr_path[PATH_MAX*17];
-  char parm_member[8+1];
   char *root_dir;
   char *workspace_dir;
   JsonArray *sys_messages;
@@ -572,57 +571,29 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
   }
 
   int config_len = strlen(zl_context.config_path);
-  bool hasMember = false;
-  char member[9] = {0};
   char config_line[PATH_MAX*17] = {0};
   if (zl_context.config_path[0] == '/') { // simple file case, must be absolute path.
     snprintf(config_line, config_len+7, "FILE(%s)", zl_context.config_path);
     snprintf(zl_context.configmgr_path, config_len+7, "%s", config_line);
-  } else { //HERE loop over input to construct new string for configmgr use.
-    // It needs to strip out the (member) within each occurrence of PARMLIB()
+    setenv("CONFIG", zl_context.config_path, 1);
+  } else {
+    //check that PARMLIB has no missing members
     int parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", 0);
-    int destPos = 0;
-    int srcPos = 0;
-    DEBUG("Handling config=%s\n",zl_context.config_path);
     while (parmIndex != -1) {
-      int parenStartIndex = indexOf(zl_context.config_path, config_len, '(', parmIndex+9);
-      int parenEndIndex = indexOf(zl_context.config_path, config_len, ')', parmIndex+9);
-      DEBUG("pStart=%d, pEnd=%d\n", parenStartIndex, parenEndIndex);
-      if (parenStartIndex != -1 && parenEndIndex != -1 && (parenStartIndex < parenEndIndex)) {
-        memcpy(zl_context.parm_member, zl_context.config_path+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
-        if (hasMember && strcmp(zl_context.parm_member, member) != 0) {
-          ERROR(MSG_MEMBER_NAME_BAD);
-          return -1;
-        }
-        hasMember = true;
-        memcpy(member, zl_context.config_path+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
-        DEBUG("Found member=%s\n",member);
-        memcpy(config_line+destPos, zl_context.config_path+srcPos, parenStartIndex-srcPos);
-        destPos+= parenStartIndex-srcPos;
-        srcPos=parenEndIndex+1;
-        parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", parenEndIndex+2);
-      } else {
+      int rParenIndex = indexOfString(zl_context.config_path, config_len, "))", parmIndex);
+      //find ( after PARMLIB( section, to find where member name should be
+      int lParenIndex = indexOfString(zl_context.config_path, config_len, "(", parmIndex+9);
+      if ((rParenIndex == -1)
+          || (rParenIndex == (lParenIndex+1))) {
         ERROR(MSG_MEMBER_MISSING);
         return -1;
       }
-      DEBUG("config_line now=%s\n", config_line);
-      DEBUG("src=%d, dst=%d, pNext=%d\n",srcPos,destPos,parmIndex);
+      parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", rParenIndex);
     }
-
-    if (destPos >= 0) {
-      memcpy(config_line+destPos, zl_context.config_path+srcPos, config_len - srcPos);
-      destPos+= config_len - srcPos;
-      memcpy(zl_context.configmgr_path, config_line, destPos);
-      zl_context.configmgr_path[destPos]='\0';
-    }
-    if (!hasMember) {
-      zl_context.parm_member[0] = '\0';
-    }
-  
+    snprintf(zl_context.configmgr_path, config_len+1, "%s", zl_context.config_path);
   }
 
 
-  setenv("CONFIG", zl_context.config_path, 1);
   INFO(MSG_YAML_FILE, zl_context.configmgr_path);
 
   zl_context.config = *cfg;
@@ -1899,10 +1870,6 @@ int main(int argc, char **argv) {
   }
 
   cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.configmgr_path);
-  int parm_member_len = strlen(zl_context.parm_member);
-  if (parm_member_len > 0 && parm_member_len < 9) {
-    cfgSetParmlibMemberName(configmgr, ZOWE_CONFIG_NAME, zl_context.parm_member);
-  }
 
   if (cfgLoadConfiguration(configmgr, ZOWE_CONFIG_NAME) != 0){
     ERROR(MSG_CFG_LOAD_FAIL);

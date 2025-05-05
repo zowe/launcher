@@ -32,6 +32,10 @@ cd zowe-launcher/build
 
 The launcher binary will be saved into the bin directory.
 
+## Testing
+
+See [details](./test/README.md) in `test` directory.
+
 ## Prerequisites
 
 * Zowe 2.4.0

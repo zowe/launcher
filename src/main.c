@@ -232,7 +232,8 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
   int input_length = strlen(input_string);
   for (int i = 0; i < count; i++) {
       const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
-      int  sys_message_pos = index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT);
+      char *sys_message_start = strstr(input_string, sys_message_id);
+      int sys_message_pos = (sys_message_start != NULL) ? (sys_message_start - input_string) : -1;
       if (sys_message_id && (sys_message_pos != -1)) {
           if (zl_context.trim_sys_message) {
             printf_wto(input_string + sys_message_pos); // Print out match starting from sys message ID

@@ -6,7 +6,7 @@ This repo is part of the app-server Zowe Component, and the change logs here may
 ## 3.3
 - Enhancement: Launcher can now accept PARMLIB CONFIG entries that have more than one member name ([#146](https://github.com/zowe/launcher/pull/146))
 - Enhancement: Trimming the sys messages to print from the sys-message-id as optional based on the zowe.sysMessageTrim=true/false. (#147)
-- Bugfix: Resolved an issue introduced in PR #147 where certain system messages were not duplicated because the sys-message-id appeared beyond the 126-character prefix limit. (#149) 
+- Bugfix: Resolved an issue introduced in PR #147 where certain system messages were not duplicated because the sys-message-id appeared beyond the 126-character prefix limit. (#156) 
 
 ## 3.1
 - Bugfix: HEAPPOOLS and HEAPPOOLS64 no longer need to be set to OFF for launcher (#133)

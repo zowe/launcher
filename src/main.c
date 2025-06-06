@@ -183,8 +183,6 @@ struct {
   
 } zl_context = {.config = {.debug_mode = false}, .trim_sys_message = false, .userid = "(NONE)"} ;
 
-static int index_of_string_limited(const char *, int, const char *, int, int);
-
 // Wrapper for wtoPrintf3
 static void printf_wto(const char *formatString, ...) {
   va_list argPointer;
@@ -214,7 +212,49 @@ static void set_sys_messages(ConfigManager *configmgr) {
   zl_context.trim_sys_message = trim;
 }
 
+static bool check_match_in_message(const char* sys_message_id, const char* input_string, const bool other_messages) {
+  char *sys_message_start = strstr(input_string, sys_message_id);
+  int sys_message_pos = (sys_message_start != NULL) ? (sys_message_start - input_string) : -1;
+  if (sys_message_pos == -1) {
+    return false;
+  }
+  int input_string_len = strlen(input_string);
 
+  if (other_messages) {
+    // App-server: "Show Environment"
+    // E.g.ZWE_zowe_sysMessages_0=ZWEL0021I
+    if (memcmp("ZWE_zowe_sysMessages", input_string, ZWE_SYSMESSAGES_EXCLUDE_LEN) == 0) {
+      return 0;
+    }
+    // App-server: ZWED5015I prints config as json
+    // All zowe.sysMessages are printed, this is trying to ignore it
+    // Eg: |     "ZWED0031I",| -> strlen("ZWED0031I") + 9 extra characters
+    if (input_string_len <= strlen(sys_message_id) + 9) {
+      return false;
+    }
+  }
+
+  if (sys_message_id) {
+    if (zl_context.trim_sys_message) {
+      printf_wto(input_string + sys_message_pos); // Print out match starting from sys message ID
+    } else {
+      if (input_string_len <= WTO_MESSAGE_LENGTH) {  // Directly wto entire message
+        printf_wto(input_string);
+      } else {
+        if (input_string_len - sys_message_pos > WTO_MESSAGE_LENGTH) {
+          printf_wto(input_string + sys_message_pos);
+        } else {
+          printf_wto(input_string + (input_string_len - WTO_MESSAGE_LENGTH));
+        }
+      }
+    }
+    return true;
+  }
+
+  return false;
+}
+
+// Launcher's message contains the body only, no timestamp
 static void launcher_syslog_on_match(const char* fmt, ...) {
   if (!zl_context.sys_messages) {
     return;
@@ -227,39 +267,15 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
   va_start(args, fmt);
   vsnprintf(input_string, sizeof(input_string), fmt, args);
   va_end(args);
-    
+
   int count = jsonArrayGetCount(zl_context.sys_messages);
-  int input_length = strlen(input_string);
   for (int i = 0; i < count; i++) {
-      const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
-      int  sys_message_pos = index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT);
-      if (sys_message_id && (sys_message_pos != -1)) {
-          if (zl_context.trim_sys_message) {
-            printf_wto(input_string + sys_message_pos); // Print out match starting from sys message ID
-          } else {
-            printf_wto(input_string); // Print our match to the syslog
-          }
-          break;
-      }
-  }
-  
-}
-
-static int index_of_string_limited(const char *str, int len, const char *search_string, int start_pos, int search_limit){
-  int search_len = strlen(search_string);
-  int last_possible_start = len < search_limit ? len - search_len : search_limit - search_len;
-  int pos = start_pos;
-
-  if (start_pos > last_possible_start){
-    return -1;
-  }
-  while (pos <= last_possible_start){
-    if (!memcmp(str+pos,search_string,search_len)){
-      return pos;
+    const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
+    if (check_match_in_message(sys_message_id, input_string, false)) {
+      break;
     }
-    pos++;
   }
-  return -1;
+
 }
 
 //size of "ZWE_zowe_sysMessages"
@@ -272,13 +288,13 @@ static int index_of_string_limited(const char *str, int len, const char *search_
 // zowe standard "YYYY-MM-DD HH-MM-SS.sss "
 #define DATE_PREFIX_LEN 24
 
+// Other messages are completed, check possible date and filter it out
 static void check_for_and_print_sys_message(const char* input_string) {
   if (!zl_context.sys_messages) {
     return;
   }
 
   int count = jsonArrayGetCount(zl_context.sys_messages);
-  int input_length = strlen(input_string);
   regex_t time_regex;
   int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
   int match = regexec(&time_regex, input_string, 0, NULL, 0);
@@ -286,23 +302,8 @@ static void check_for_and_print_sys_message(const char* input_string) {
 
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
-    int sys_message_pos = index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT);
-    if (sys_message_id && (sys_message_pos != -1)) {
-
-      //exclude "ZWE_zowe_sysMessages" messages to avoid spam.
-      if (memcmp("ZWE_zowe_sysMessages", input_string, ZWE_SYSMESSAGES_EXCLUDE_LEN)){ 
-
-        //truncate match for reasonable output
-        char syslog_string[SYSLOG_MESSAGE_LENGTH_LIMIT+1] = {0};
-        if (zl_context.trim_sys_message) {
-          offset = sys_message_pos; // Skip and Print syslog message starting from sys message ID
-        }
-        int length = SYSLOG_MESSAGE_LENGTH_LIMIT < (input_length-offset) ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_length-offset;
-        memcpy(syslog_string, input_string+offset, length);  
-        syslog_string[length] = '\0';
-        printf_wto(syslog_string);// Print our match to the syslog
-        break;
-      }
+    if (check_match_in_message(sys_message_id, input_string + offset, true)) {
+      break;
     }
   }
   

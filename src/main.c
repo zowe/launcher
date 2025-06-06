@@ -217,6 +217,10 @@ static void set_sys_messages(ConfigManager *configmgr) {
 #define ZWE_ZOWE_SYS_MESSAGES_LEN (sizeof(ZWE_ZOWE_SYS_MESSAGES) - 1)
 
 static bool check_match_in_message(const char* sys_message_id, const char* input_string, const bool other_messages) {
+  // sysMessages could possibly contain null item
+  if (!sys_message_id) {
+    return false;
+  }
   char *sys_message_start = strstr(input_string, sys_message_id);
   int sys_message_pos = (sys_message_start != NULL) ? (sys_message_start - input_string) : -1;
   if (sys_message_pos == -1) {
@@ -238,24 +242,20 @@ static bool check_match_in_message(const char* sys_message_id, const char* input
     }
   }
 
-  if (sys_message_id) {
-    if (zl_context.trim_sys_message) {
-      printf_wto(input_string + sys_message_pos); // Print out match starting from sys message ID
+  if (zl_context.trim_sys_message) {
+    printf_wto(input_string + sys_message_pos);
+  } else {
+    if (input_string_len <= WTO_MESSAGE_LENGTH) {
+      printf_wto(input_string);
     } else {
-      if (input_string_len <= WTO_MESSAGE_LENGTH) {  // Directly wto entire message
-        printf_wto(input_string);
+      if (input_string_len - sys_message_pos > WTO_MESSAGE_LENGTH) {
+        printf_wto(input_string + sys_message_pos);
       } else {
-        if (input_string_len - sys_message_pos > WTO_MESSAGE_LENGTH) {
-          printf_wto(input_string + sys_message_pos);
-        } else {
-          printf_wto(input_string + (input_string_len - WTO_MESSAGE_LENGTH));
-        }
+        printf_wto(input_string + (input_string_len - WTO_MESSAGE_LENGTH));
       }
     }
-    return true;
   }
-
-  return false;
+  return true;
 }
 
 // Launcher's message contains the body only, no timestamp

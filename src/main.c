@@ -68,7 +68,7 @@ extern char ** environ;
 #define COMP_LIST_SIZE 1024
 
 #define LAUNCHER_MESSAGE_LENGTH_LIMIT 512
-#define SYSLOG_MESSAGE_LENGTH_LIMIT 126
+#define WTO_MESSAGE_LENGTH 126
 
 #ifndef PATH_MAX
 #define PATH_MAX _POSIX_PATH_MAX
@@ -212,6 +212,10 @@ static void set_sys_messages(ConfigManager *configmgr) {
   zl_context.trim_sys_message = trim;
 }
 
+//size of "ZWE_zowe_sysMessages"
+#define ZWE_ZOWE_SYS_MESSAGES "ZWE_zowe_sysMessages"
+#define ZWE_ZOWE_SYS_MESSAGES_LEN (sizeof(ZWE_ZOWE_SYS_MESSAGES) - 1)
+
 static bool check_match_in_message(const char* sys_message_id, const char* input_string, const bool other_messages) {
   char *sys_message_start = strstr(input_string, sys_message_id);
   int sys_message_pos = (sys_message_start != NULL) ? (sys_message_start - input_string) : -1;
@@ -223,7 +227,7 @@ static bool check_match_in_message(const char* sys_message_id, const char* input
   if (other_messages) {
     // App-server: "Show Environment"
     // E.g.ZWE_zowe_sysMessages_0=ZWEL0021I
-    if (memcmp("ZWE_zowe_sysMessages", input_string, ZWE_SYSMESSAGES_EXCLUDE_LEN) == 0) {
+    if (memcmp(ZWE_ZOWE_SYS_MESSAGES, input_string, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
       return 0;
     }
     // App-server: ZWED5015I prints config as json
@@ -277,9 +281,6 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
   }
 
 }
-
-//size of "ZWE_zowe_sysMessages"
-#define ZWE_SYSMESSAGES_EXCLUDE_LEN 20
 
 // matches YYYY-MM-DD starting with 2xxx.
 // this regex was chosen because other patterns didnt seem to work with LE's regex library.

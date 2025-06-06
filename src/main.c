@@ -216,7 +216,7 @@ static void set_sys_messages(ConfigManager *configmgr) {
 #define ZWE_ZOWE_SYS_MESSAGES "ZWE_zowe_sysMessages"
 #define ZWE_ZOWE_SYS_MESSAGES_LEN (sizeof(ZWE_ZOWE_SYS_MESSAGES) - 1)
 
-static bool check_match_in_message(const char* sys_message_id, const char* input_string, const bool other_messages) {
+static bool check_match_and_wto_message(const char* sys_message_id, const char* input_string, const bool other_messages) {
   // sysMessages could possibly contain null item
   if (!sys_message_id) {
     return false;
@@ -275,7 +275,7 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
   int count = jsonArrayGetCount(zl_context.sys_messages);
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
-    if (check_match_in_message(sys_message_id, input_string, false)) {
+    if (check_match_and_wto_message(sys_message_id, input_string, false)) {
       break;
     }
   }
@@ -303,7 +303,7 @@ static void check_for_and_print_sys_message(const char* input_string) {
 
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
-    if (check_match_in_message(sys_message_id, input_string + offset, true)) {
+    if (check_match_and_wto_message(sys_message_id, input_string + offset, true)) {
       break;
     }
   }

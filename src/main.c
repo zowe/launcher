@@ -215,6 +215,9 @@ static void set_sys_messages(ConfigManager *configmgr) {
 //size of "ZWE_zowe_sysMessages"
 #define ZWE_ZOWE_SYS_MESSAGES "ZWE_zowe_sysMessages"
 #define ZWE_ZOWE_SYS_MESSAGES_LEN (sizeof(ZWE_ZOWE_SYS_MESSAGES) - 1)
+// App-server: ZWED5015I prints config as json
+// All zowe.sysMessages are printed, E.g. ^      "ZWED0031I",$
+#define ZWED5015I_JSON_CONFIG_EXTRA_CHARACTERS (sizeof("      \"\",") - 1)
 
 static bool check_match_and_wto_message(const char* sys_message_id, const char* input_string, const bool other_messages) {
 
@@ -226,15 +229,12 @@ static bool check_match_and_wto_message(const char* sys_message_id, const char* 
   int input_string_len = strlen(input_string);
 
   if (other_messages) {
-    // App-server: "Show Environment"
-    // E.g.ZWE_zowe_sysMessages_0=ZWEL0021I
+    // App-server -> Show Environment -> E.g. ^ZWE_zowe_sysMessages_0=ZWEL0021I$
     if (memcmp(ZWE_ZOWE_SYS_MESSAGES, input_string, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
       return 0;
     }
-    // App-server: ZWED5015I prints config as json
-    // All zowe.sysMessages are printed, this is trying to ignore it
-    // Eg: |     "ZWED0031I",| -> strlen("ZWED0031I") + 9 extra characters
-    if (input_string_len <= strlen(sys_message_id) + 9) {
+    // Try to ignore short message
+    if (input_string_len <= strlen(sys_message_id) + ZWED5015I_JSON_CONFIG_EXTRA_CHARACTERS) {
       return false;
     }
   }

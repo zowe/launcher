@@ -296,7 +296,6 @@ static void check_for_and_print_sys_message(const char* input_string) {
   }
 
   int count = jsonArrayGetCount(zl_context.sys_messages);
-  regex_t time_regex;
   if (!time_regex.re_comp) {
     int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
   }

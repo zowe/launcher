@@ -286,6 +286,9 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
 // zowe standard "YYYY-MM-DD HH-MM-SS.sss "
 #define DATE_PREFIX_LEN 24
 
+// Needed once
+static regex_t time_regex = { .re_comp = NULL };
+
 // Other messages are completed, check possible date and filter it out
 static void check_for_and_print_sys_message(const char* input_string) {
   if (!zl_context.sys_messages) {
@@ -294,7 +297,9 @@ static void check_for_and_print_sys_message(const char* input_string) {
 
   int count = jsonArrayGetCount(zl_context.sys_messages);
   regex_t time_regex;
-  int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
+  if (!time_regex.re_comp) {
+    int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
+  }
   int match = regexec(&time_regex, input_string, 0, NULL, 0);
   int offset = match == 0 ? DATE_PREFIX_LEN : 0;
 

@@ -1616,13 +1616,13 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
     bool apimlModulithEnabled = false;
     if (checkHaSection) {
       getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &apimlModulithEnabled, 5, "haInstances", zl_context.ha_instance_id, "components", "apiml", "enabled");
-      if (getStatus) {
+      if (getStatus != ZCFG_SUCCESS) {
         getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &apimlModulithEnabled,3, "components", "apiml", "enabled");
       }
     } else {
       getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &apimlModulithEnabled,3, "components", "apiml", "enabled");
     }
-    if (getStatus) {
+    if (getStatus != ZCFG_SUCCESS) {
       DEBUG("apiml modulith not found or error, %d\n", getStatus);
       apimlModulithEnabled = false;
     }
@@ -1647,14 +1647,14 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
       } else {
         if (checkHaSection) {
           getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled, 5, "haInstances", zl_context.ha_instance_id, "components", prop->key, "enabled");
-          if (getStatus) {
+          if (getStatus != ZCFG_SUCCESS) {
             getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
           }
         } else {
           getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
         }
       
-        if (getStatus) { // failed to get enabled value of the component
+        if (getStatus != ZCFG_SUCCESS) { // failed to get enabled value of the component
           DEBUG("failed to get enabled value of the component %s\n", prop->key);
           prop = prop->next;
           continue;

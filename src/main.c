@@ -1678,8 +1678,8 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
         }
 
         // read the yaml and check for item 'commands.start', if present then add enabled component to component list
-        startScript = false;
         if(enabled && yamlExists) {
+          startScript = false;
           yaml_document_t *document = readYAML2(manifestPath, errorBuffer, YAML_ERROR_MAX, &wasMissing);
           yaml_node_t *root =  yaml_document_get_root_node(document);
           if (root) {

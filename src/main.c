@@ -1612,60 +1612,90 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
       return -1;
     }
 
-    
+
+    bool apimlModulithEnabled = false;
+    if (checkHaSection) {
+      getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &apimlModulithEnabled, 5, "haInstances", zl_context.ha_instance_id, "components", "apiml", "enabled");
+      if (getStatus != ZCFG_SUCCESS) {
+        getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &apimlModulithEnabled,3, "components", "apiml", "enabled");
+      }
+    } else {
+      getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &apimlModulithEnabled,3, "components", "apiml", "enabled");
+    }
+    if (getStatus != ZCFG_SUCCESS) {
+      DEBUG("apiml modulith not found or error, %d\n", getStatus);
+      apimlModulithEnabled = false;
+    }
+
+                               
 
     while (prop!=NULL) {
       enabled = false;
       // check if component is enabled
-      if (checkHaSection) {
-        getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled, 5, "haInstances", zl_context.ha_instance_id, "components", prop->key, "enabled");
-        if (getStatus) {
+      // except for apiml components - those are checked against if the apiml modulith is enabled
+      // if it is, skip over the individual apiml components to avoid duplication.
+      if (apimlModulithEnabled == true &&
+          (
+           !strcmp("gateway", prop->key) ||
+           !strcmp("discovery", prop->key) ||
+           !strcmp("api-catalog", prop->key) ||
+           !strcmp("caching-service", prop->key) ||
+           !strcmp("zaas", prop->key)
+           )
+          ) {
+        DEBUG("Skipping individual apiml components because apiml modulith enabled\n");
+      } else {
+        if (checkHaSection) {
+          getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled, 5, "haInstances", zl_context.ha_instance_id, "components", prop->key, "enabled");
+          if (getStatus != ZCFG_SUCCESS) {
+            getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
+          }
+        } else {
           getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
         }
-      } else {
-        getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
-      }
       
-      if (getStatus) { // failed to get enabled value of the component
-        DEBUG("failed to get enabled value of the component %s\n", prop->key);
-        prop = prop->next;
-        continue;
-      }
+        if (getStatus != ZCFG_SUCCESS) { // failed to get enabled value of the component
+          DEBUG("failed to get enabled value of the component %s\n", prop->key);
+          prop = prop->next;
+          continue;
+        }
 
-      yamlExists = true; //unused if not enabled. otherwise set to false if not found.
-      if (enabled) {
-        snprintf(manifestPath, PATH_MAX, "%s/components/%s/manifest.yaml", runtimeDirectory, prop->key);
-        DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
-  
-        // check if manifest.yaml is in <runtimeDirectory>/components/<component-name>/manifest.yaml
-        if (check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
-          yamlExists = false;
-          // if not check <extensionDirectory>/<component-name>/manifest.yaml
-          snprintf(manifestPath, PATH_MAX, "%s/%s/manifest.yaml", extensionDirectory, prop->key);
+        yamlExists = true; //unused if not enabled. otherwise set to false if not found.
+        if (enabled) {
+          snprintf(manifestPath, PATH_MAX, "%s/components/%s/manifest.yaml", runtimeDirectory, prop->key);
           DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
-          if(!check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
-             yamlExists = true;
+  
+          // check if manifest.yaml is in <runtimeDirectory>/components/<component-name>/manifest.yaml
+          if (check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
+            yamlExists = false;
+            // if not check <extensionDirectory>/<component-name>/manifest.yaml
+            snprintf(manifestPath, PATH_MAX, "%s/%s/manifest.yaml", extensionDirectory, prop->key);
+            DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
+            if(!check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
+              yamlExists = true;
+            }
           }
         }
-      }
 
-      // read the yaml and check for item 'commands.start', if present then add enabled component to component list
-      startScript = false;
-      if(enabled && yamlExists) {
-        yaml_document_t *document = readYAML2(manifestPath, errorBuffer, YAML_ERROR_MAX, &wasMissing);
-        yaml_node_t *root =  yaml_document_get_root_node(document);
-        if (root) {
+        // read the yaml and check for item 'commands.start', if present then add enabled component to component list
+        if(enabled && yamlExists) {
+          startScript = false;
+          yaml_document_t *document = readYAML2(manifestPath, errorBuffer, YAML_ERROR_MAX, &wasMissing);
+          yaml_node_t *root =  yaml_document_get_root_node(document);
+          if (root) {
             getStatus = get_string_by_yaml_path(document, root, start_path, sizeof(start_path)/sizeof(start_path[0]), item, sizeof(item));
             memset(item, 0, sizeof(item));
             if(!getStatus)
               startScript = true;
-        }
-        if (startScript) {
-          strncpy(comp_list + len, prop->key, strlen(prop->key));
-          strncpy(comp_list + len + strlen(prop->key), ",", 1);
-          len += (strlen(prop->key)+1);
+          }
+          if (startScript) {
+            strncpy(comp_list + len, prop->key, strlen(prop->key));
+            strncpy(comp_list + len + strlen(prop->key), ",", 1);
+            len += (strlen(prop->key)+1);
+          }
         }
       }
+      
       prop = prop->next;
     }
     if (len)

@@ -68,7 +68,7 @@ extern char ** environ;
 #define COMP_LIST_SIZE 1024
 
 #define LAUNCHER_MESSAGE_LENGTH_LIMIT 512
-#define SYSLOG_MESSAGE_LENGTH_LIMIT 126
+#define WTO_MESSAGE_LENGTH 126
 
 #ifndef PATH_MAX
 #define PATH_MAX _POSIX_PATH_MAX
@@ -172,16 +172,16 @@ struct {
   char config_path[PATH_MAX*17];
   //configmgr_path is the path in a form configmgr consumes
   char configmgr_path[PATH_MAX*17];
-  char parm_member[8+1];
   char *root_dir;
   char *workspace_dir;
   JsonArray *sys_messages;
+  bool trim_sys_message;
   char ha_instance_id[64];
   
   pid_t pid;
   char userid[9];
   
-} zl_context = {.config = {.debug_mode = false}, .userid = "(NONE)"} ;
+} zl_context = {.config = {.debug_mode = false}, .trim_sys_message = false, .userid = "(NONE)"} ;
 
 // Wrapper for wtoPrintf3
 static void printf_wto(const char *formatString, ...) {
@@ -203,8 +203,68 @@ static void set_sys_messages(ConfigManager *configmgr) {
   if (sys_messages) {
     zl_context.sys_messages = sys_messages;
   }
+
+  bool trim = false; // for backwards compatibility trimming sys messages is disabled by default.
+  cfgGetStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &trim, 2, "zowe", "sysMessageTrim");
+  if (cfgGetStatus != ZCFG_SUCCESS) { // No sysMessageTrim found in Zowe configuration, disabled by default.
+    return;
+  }
+  zl_context.trim_sys_message = trim;
 }
 
+//size of "ZWE_zowe_sysMessages"
+#define ZWE_ZOWE_SYS_MESSAGES "ZWE_zowe_sysMessages"
+#define ZWE_ZOWE_SYS_MESSAGES_LEN (sizeof(ZWE_ZOWE_SYS_MESSAGES) - 1)
+/* App-server: ZWED5015I prints config as json
+All zowe.sysMessages are printed, e.g. ^      "ZWED0031I",$
+#define ZWED5015I_JSON_CONFIG_EXTRA_CHARACTERS (sizeof("      \"\",") - 1)
+*/
+
+static bool check_match_and_wto_message(const char* sys_message_id, const char* input_string, const bool other_messages) {
+
+  char *sys_message_start = strstr(input_string, sys_message_id);
+  int sys_message_pos = (sys_message_start != NULL) ? (sys_message_start - input_string) : -1;
+  if (sys_message_pos == -1) {
+    return false;
+  }
+  int input_string_len = strlen(input_string);
+
+  if (other_messages) {
+    // App-server -> Show Environment -> E.g. ^ZWE_zowe_sysMessages_0=ZWEL0021I$
+    if (memcmp(ZWE_ZOWE_SYS_MESSAGES, input_string, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
+      return false;
+    }
+    /* TODO: Try to ignore messages, which are short and probably output of ZWED5015I
+    if (input_string_len <= strlen(sys_message_id) + ZWED5015I_JSON_CONFIG_EXTRA_CHARACTERS) {
+      return false;
+    }
+    */
+  }
+
+  if (zl_context.trim_sys_message) {
+    printf_wto(input_string + sys_message_pos);
+  } else {
+    // Short message, WTO *
+    if (input_string_len <= WTO_MESSAGE_LENGTH) {
+      printf_wto(input_string);
+    // Message length > WTO_MESSAGE_LENGTH
+    } else {
+      // After the match, there are more chars than WTO_MESSAGE_LENGTH
+      // WTO from match position
+      if (input_string_len - sys_message_pos > WTO_MESSAGE_LENGTH) {
+        printf_wto(input_string + sys_message_pos);
+      } else {
+        // The match is in the last WTO_MESSAGE_LENGTH chars
+        // WTO last WTO_MESSAGE_LENGTH chars - egde case: if the match is last word
+        //   user will see the text before match too
+        printf_wto(input_string + (input_string_len - WTO_MESSAGE_LENGTH));
+      }
+    }
+  }
+  return true;
+}
+
+// Launcher's message contains the body only, no timestamp
 static void launcher_syslog_on_match(const char* fmt, ...) {
   if (!zl_context.sys_messages) {
     return;
@@ -217,37 +277,16 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
   va_start(args, fmt);
   vsnprintf(input_string, sizeof(input_string), fmt, args);
   va_end(args);
-    
+
   int count = jsonArrayGetCount(zl_context.sys_messages);
   for (int i = 0; i < count; i++) {
-      const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
-      if (sys_message_id && strstr(input_string, sys_message_id)) {
-          printf_wto(input_string); // Print our match to the syslog
-          break;
-      }
-  }
-  
-}
-
-static int index_of_string_limited(const char *str, int len, const char *search_string, int start_pos, int search_limit){
-  int search_len = strlen(search_string);
-  int last_possible_start = len < search_limit ? len - search_len : search_limit - search_len;
-  int pos = start_pos;
-
-  if (start_pos > last_possible_start){
-    return -1;
-  }
-  while (pos <= last_possible_start){
-    if (!memcmp(str+pos,search_string,search_len)){
-      return pos;
+    const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
+    if (check_match_and_wto_message(sys_message_id, input_string, false)) {
+      break;
     }
-    pos++;
   }
-  return -1;
-}
 
-//size of "ZWE_zowe_sysMessages"
-#define ZWE_SYSMESSAGES_EXCLUDE_LEN 20
+}
 
 // matches YYYY-MM-DD starting with 2xxx.
 // this regex was chosen because other patterns didnt seem to work with LE's regex library.
@@ -256,32 +295,26 @@ static int index_of_string_limited(const char *str, int len, const char *search_
 // zowe standard "YYYY-MM-DD HH-MM-SS.sss "
 #define DATE_PREFIX_LEN 24
 
+// Needed once
+static regex_t time_regex = { .re_comp = NULL };
+
+// Other messages are completed, check possible date and filter it out
 static void check_for_and_print_sys_message(const char* input_string) {
   if (!zl_context.sys_messages) {
     return;
   }
 
   int count = jsonArrayGetCount(zl_context.sys_messages);
-  int input_length = strlen(input_string);
+  if (!time_regex.re_comp) {
+    int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
+  }
+  int match = regexec(&time_regex, input_string, 0, NULL, 0);
+  int offset = match == 0 ? DATE_PREFIX_LEN : 0;
+
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
-    if (sys_message_id && (index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT) != -1)) {
-
-      //exclude "ZWE_zowe_sysMessages" messages to avoid spam.
-      if (memcmp("ZWE_zowe_sysMessages", input_string, ZWE_SYSMESSAGES_EXCLUDE_LEN)){ 
-
-        //truncate match for reasonable output
-        char syslog_string[SYSLOG_MESSAGE_LENGTH_LIMIT+1] = {0};
-        regex_t time_regex;
-        int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
-        int match = regexec(&time_regex, input_string, 0, NULL, 0);
-        int offset = match == 0 ? DATE_PREFIX_LEN : 0;
-        int length = SYSLOG_MESSAGE_LENGTH_LIMIT < (input_length-offset) ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_length-offset;
-        memcpy(syslog_string, input_string+offset, length);  
-        syslog_string[length] = '\0';
-        printf_wto(syslog_string);// Print our match to the syslog
-        break;
-      }
+    if (check_match_and_wto_message(sys_message_id, input_string + offset, true)) {
+      break;
     }
   }
   
@@ -572,57 +605,29 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
   }
 
   int config_len = strlen(zl_context.config_path);
-  bool hasMember = false;
-  char member[9] = {0};
   char config_line[PATH_MAX*17] = {0};
   if (zl_context.config_path[0] == '/') { // simple file case, must be absolute path.
     snprintf(config_line, config_len+7, "FILE(%s)", zl_context.config_path);
     snprintf(zl_context.configmgr_path, config_len+7, "%s", config_line);
-  } else { //HERE loop over input to construct new string for configmgr use.
-    // It needs to strip out the (member) within each occurrence of PARMLIB()
+    setenv("CONFIG", zl_context.config_path, 1);
+  } else {
+    //check that PARMLIB has no missing members
     int parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", 0);
-    int destPos = 0;
-    int srcPos = 0;
-    DEBUG("Handling config=%s\n",zl_context.config_path);
     while (parmIndex != -1) {
-      int parenStartIndex = indexOf(zl_context.config_path, config_len, '(', parmIndex+9);
-      int parenEndIndex = indexOf(zl_context.config_path, config_len, ')', parmIndex+9);
-      DEBUG("pStart=%d, pEnd=%d\n", parenStartIndex, parenEndIndex);
-      if (parenStartIndex != -1 && parenEndIndex != -1 && (parenStartIndex < parenEndIndex)) {
-        memcpy(zl_context.parm_member, zl_context.config_path+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
-        if (hasMember && strcmp(zl_context.parm_member, member) != 0) {
-          ERROR(MSG_MEMBER_NAME_BAD);
-          return -1;
-        }
-        hasMember = true;
-        memcpy(member, zl_context.config_path+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
-        DEBUG("Found member=%s\n",member);
-        memcpy(config_line+destPos, zl_context.config_path+srcPos, parenStartIndex-srcPos);
-        destPos+= parenStartIndex-srcPos;
-        srcPos=parenEndIndex+1;
-        parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", parenEndIndex+2);
-      } else {
+      int rParenIndex = indexOfString(zl_context.config_path, config_len, "))", parmIndex);
+      //find ( after PARMLIB( section, to find where member name should be
+      int lParenIndex = indexOfString(zl_context.config_path, config_len, "(", parmIndex+9);
+      if ((rParenIndex == -1)
+          || (rParenIndex == (lParenIndex+1))) {
         ERROR(MSG_MEMBER_MISSING);
         return -1;
       }
-      DEBUG("config_line now=%s\n", config_line);
-      DEBUG("src=%d, dst=%d, pNext=%d\n",srcPos,destPos,parmIndex);
+      parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", rParenIndex);
     }
-
-    if (destPos >= 0) {
-      memcpy(config_line+destPos, zl_context.config_path+srcPos, config_len - srcPos);
-      destPos+= config_len - srcPos;
-      memcpy(zl_context.configmgr_path, config_line, destPos);
-      zl_context.configmgr_path[destPos]='\0';
-    }
-    if (!hasMember) {
-      zl_context.parm_member[0] = '\0';
-    }
-  
+    snprintf(zl_context.configmgr_path, config_len+1, "%s", zl_context.config_path);
   }
 
 
-  setenv("CONFIG", zl_context.config_path, 1);
   INFO(MSG_YAML_FILE, zl_context.configmgr_path);
 
   zl_context.config = *cfg;
@@ -1619,60 +1624,90 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
       return -1;
     }
 
-    
+
+    bool apimlModulithEnabled = false;
+    if (checkHaSection) {
+      getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &apimlModulithEnabled, 5, "haInstances", zl_context.ha_instance_id, "components", "apiml", "enabled");
+      if (getStatus != ZCFG_SUCCESS) {
+        getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &apimlModulithEnabled,3, "components", "apiml", "enabled");
+      }
+    } else {
+      getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &apimlModulithEnabled,3, "components", "apiml", "enabled");
+    }
+    if (getStatus != ZCFG_SUCCESS) {
+      DEBUG("apiml modulith not found or error, %d\n", getStatus);
+      apimlModulithEnabled = false;
+    }
+
+                               
 
     while (prop!=NULL) {
       enabled = false;
       // check if component is enabled
-      if (checkHaSection) {
-        getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled, 5, "haInstances", zl_context.ha_instance_id, "components", prop->key, "enabled");
-        if (getStatus) {
+      // except for apiml components - those are checked against if the apiml modulith is enabled
+      // if it is, skip over the individual apiml components to avoid duplication.
+      if (apimlModulithEnabled == true &&
+          (
+           !strcmp("gateway", prop->key) ||
+           !strcmp("discovery", prop->key) ||
+           !strcmp("api-catalog", prop->key) ||
+           !strcmp("caching-service", prop->key) ||
+           !strcmp("zaas", prop->key)
+           )
+          ) {
+        DEBUG("Skipping individual apiml components because apiml modulith enabled\n");
+      } else {
+        if (checkHaSection) {
+          getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled, 5, "haInstances", zl_context.ha_instance_id, "components", prop->key, "enabled");
+          if (getStatus != ZCFG_SUCCESS) {
+            getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
+          }
+        } else {
           getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
         }
-      } else {
-        getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
-      }
       
-      if (getStatus) { // failed to get enabled value of the component
-        DEBUG("failed to get enabled value of the component %s\n", prop->key);
-        prop = prop->next;
-        continue;
-      }
+        if (getStatus != ZCFG_SUCCESS) { // failed to get enabled value of the component
+          DEBUG("failed to get enabled value of the component %s\n", prop->key);
+          prop = prop->next;
+          continue;
+        }
 
-      yamlExists = true; //unused if not enabled. otherwise set to false if not found.
-      if (enabled) {
-        snprintf(manifestPath, PATH_MAX, "%s/components/%s/manifest.yaml", runtimeDirectory, prop->key);
-        DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
-  
-        // check if manifest.yaml is in <runtimeDirectory>/components/<component-name>/manifest.yaml
-        if (check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
-          yamlExists = false;
-          // if not check <extensionDirectory>/<component-name>/manifest.yaml
-          snprintf(manifestPath, PATH_MAX, "%s/%s/manifest.yaml", extensionDirectory, prop->key);
+        yamlExists = true; //unused if not enabled. otherwise set to false if not found.
+        if (enabled) {
+          snprintf(manifestPath, PATH_MAX, "%s/components/%s/manifest.yaml", runtimeDirectory, prop->key);
           DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
-          if(!check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
-             yamlExists = true;
+  
+          // check if manifest.yaml is in <runtimeDirectory>/components/<component-name>/manifest.yaml
+          if (check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
+            yamlExists = false;
+            // if not check <extensionDirectory>/<component-name>/manifest.yaml
+            snprintf(manifestPath, PATH_MAX, "%s/%s/manifest.yaml", extensionDirectory, prop->key);
+            DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
+            if(!check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
+              yamlExists = true;
+            }
           }
         }
-      }
 
-      // read the yaml and check for item 'commands.start', if present then add enabled component to component list
-      startScript = false;
-      if(enabled && yamlExists) {
-        yaml_document_t *document = readYAML2(manifestPath, errorBuffer, YAML_ERROR_MAX, &wasMissing);
-        yaml_node_t *root =  yaml_document_get_root_node(document);
-        if (root) {
+        // read the yaml and check for item 'commands.start', if present then add enabled component to component list
+        if(enabled && yamlExists) {
+          startScript = false;
+          yaml_document_t *document = readYAML2(manifestPath, errorBuffer, YAML_ERROR_MAX, &wasMissing);
+          yaml_node_t *root =  yaml_document_get_root_node(document);
+          if (root) {
             getStatus = get_string_by_yaml_path(document, root, start_path, sizeof(start_path)/sizeof(start_path[0]), item, sizeof(item));
             memset(item, 0, sizeof(item));
             if(!getStatus)
               startScript = true;
-        }
-        if (startScript) {
-          strncpy(comp_list + len, prop->key, strlen(prop->key));
-          strncpy(comp_list + len + strlen(prop->key), ",", 1);
-          len += (strlen(prop->key)+1);
+          }
+          if (startScript) {
+            strncpy(comp_list + len, prop->key, strlen(prop->key));
+            strncpy(comp_list + len + strlen(prop->key), ",", 1);
+            len += (strlen(prop->key)+1);
+          }
         }
       }
+      
       prop = prop->next;
     }
     if (len)
@@ -1899,10 +1934,6 @@ int main(int argc, char **argv) {
   }
 
   cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.configmgr_path);
-  int parm_member_len = strlen(zl_context.parm_member);
-  if (parm_member_len > 0 && parm_member_len < 9) {
-    cfgSetParmlibMemberName(configmgr, ZOWE_CONFIG_NAME, zl_context.parm_member);
-  }
 
   if (cfgLoadConfiguration(configmgr, ZOWE_CONFIG_NAME) != 0){
     ERROR(MSG_CFG_LOAD_FAIL);

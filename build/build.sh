@@ -28,6 +28,7 @@ DEPS_DESTINATION=$(get_destination "${WORKING_DIR}/.." "${PROJECT}")
 # These paths assume that the build is run from /launcher/builds
 
 date_stamp=$(date +%Y%m%d%S)
+launcher_date_stamp=$(date +%Y%m%d)
 
 TMP_DIR="${WORKING_DIR}/tmp-${date_stamp}"
 
@@ -56,7 +57,7 @@ mkdir -p "${LAUNCHER}/bin"
 GSKDIR=/usr/lpp/gskssl
 GSKINC="${GSKDIR}/include"
 
-echo "Compiling qascii libyaml and quickjs"
+echo "Compiling qascii libyaml \"${LIBYAML_BRANCH}\" and quickjs \"${QUICKJS_BRANCH}\""
 
 xlclang \
   -c \
@@ -94,7 +95,7 @@ if [ $rc -ne 0 ]; then
   exit 8
 fi
 
-echo "Compiling zowe_launcher"
+echo "Compiling zowe_launcher ${MAJOR}.${MINOR}.${PATCH}+${launcher_date_stamp}"
 
 xlclang \
   -q64 \
@@ -107,6 +108,10 @@ xlclang \
   -DNOIBMHTTP=1 \
   -DNEW_CAA_LOCATIONS=1 \
   -DUSE_ZOWE_TLS=1 \
+  -DPRODUCT_MAJOR_VERSION="${MAJOR}" \
+  -DPRODUCT_MINOR_VERSION="${MINOR}" \
+  -DPRODUCT_REVISION="${PATCH}" \
+  -DPRODUCT_VERSION_DATE_STAMP="${launcher_date_stamp}" \
   -I "${LAUNCHER}/src/msg.h" \
   -I "${DEPS_DESTINATION}/${COMMON}/h" \
   -I "${DEPS_DESTINATION}/${COMMON}/platform/posix" \

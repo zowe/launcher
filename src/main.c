@@ -76,17 +76,17 @@ extern char ** environ;
 
 #define YAML_ERROR_MAX 1024
 
-#ifndef PRODUCT_MAJOR_VERSION
-#define PRODUCT_MAJOR_VERSION 0
+#ifndef LAUNCHER_VERSION_MAJOR
+#define LAUNCHER_VERSION_MAJOR 0
 #endif
-#ifndef PRODUCT_MINOR_VERSION
-#define PRODUCT_MINOR_VERSION 0
+#ifndef LAUNCHER_VERSION_MINOR
+#define LAUNCHER_VERSION_MINOR 0
 #endif
-#ifndef PRODUCT_REVISION
-#define PRODUCT_REVISION 0
+#ifndef LAUNCHER_VERSION_PATCH
+#define LAUNCHER_VERSION_PATCH 0
 #endif
-#ifndef PRODUCT_VERSION_DATE_STAMP
-#define PRODUCT_VERSION_DATE_STAMP 0
+#ifndef LAUNCHER_VERSION_DATE_STAMP
+#define LAUCHNER_VERSION_DATE_STAMP 0
 #endif
 char launcherVersion[40];
 
@@ -1922,7 +1922,7 @@ int main(int argc, char **argv) {
   }
 
   setenv("_BPXK_AUTOCVT", "ON", 1);
-  sprintf(launcherVersion, "%d.%d.%d+%d", PRODUCT_MAJOR_VERSION, PRODUCT_MINOR_VERSION, PRODUCT_REVISION, PRODUCT_VERSION_DATE_STAMP);
+  sprintf(launcherVersion, "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
   INFO(MSG_LAUNCHER_START, launcherVersion);
   INFO(MSG_LINE_LENGTH);
   printf_wto(MSG_LAUNCHER_START, launcherVersion); // Manual sys log print (messages not set here yet)

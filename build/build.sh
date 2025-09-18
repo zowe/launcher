@@ -3,9 +3,9 @@
 # This program and the accompanying materials are
 # made available under the terms of the Eclipse Public License v2.0 which accompanies
 # this distribution, and is available at https://www.eclipse.org/legal/epl-v20.html
-# 
+#
 # SPDX-License-Identifier: EPL-2.0
-# 
+#
 # Copyright Contributors to the Zowe Project.
 
 WORKING_DIR=$(cd $(dirname "$0") && pwd)
@@ -18,7 +18,7 @@ WORKING_DIR=$(cd $(dirname "$0") && pwd)
 echo "********************************************************************************"
 echo "Building $PROJECT..."
 
-LAUNCHER="$WORKING_DIR/.."
+LAUNCHER_DIR="$WORKING_DIR/.."
 
 # Checks for and possibly downloads dependencies from env vars from above file
 . $WORKING_DIR/dependencies.sh
@@ -34,25 +34,22 @@ TMP_DIR="${WORKING_DIR}/tmp-${date_stamp}"
 
 mkdir -p "${TMP_DIR}" && cd "${TMP_DIR}"
 
-
-# Split version into parts
+# Split LIBYAML version into parts
 OLDIFS=$IFS
 IFS="."
-for part in ${VERSION}; do
-  if [ -z "$MAJOR" ]; then
-    MAJOR=$part
-  elif [ -z "$MINOR" ]; then
-    MINOR=$part
+for part in ${LIBYAML_BRANCH}; do
+  if [ -z "$LIBYAML_MAJOR" ]; then
+    LIBYAML_MAJOR=$part
+  elif [ -z "$LIBYAML_MINOR" ]; then
+    LIBYAML_MINOR=$part
   else
-    PATCH=$part
+    LIBYAML_PATCH=$part
   fi
 done
 IFS=$OLDIFS
 
-VERSION="\"${VERSION}\""
-
-rm -f "${LAUNCHER}/bin/zowe_launcher"
-mkdir -p "${LAUNCHER}/bin"
+rm -f "${LAUNCHER_DIR}/bin/zowe_launcher"
+mkdir -p "${LAUNCHER_DIR}/bin"
 
 GSKDIR=/usr/lpp/gskssl
 GSKINC="${GSKDIR}/include"
@@ -64,10 +61,10 @@ xlclang \
   -q64 \
   -qascii \
   "-Wc,float(ieee),longname,langlvl(extc99),gonum,goff,ASM,asmlib('CEE.SCEEMAC','SYS1.MACLIB','SYS1.MODGEN')" \
-  -DYAML_VERSION_MAJOR=${MAJOR} \
-  -DYAML_VERSION_MINOR=${MINOR} \
-  -DYAML_VERSION_PATCH=${PATCH} \
-  -DYAML_VERSION_STRING="${VERSION}" \
+  -DYAML_VERSION_MAJOR=${LIBYAML_MAJOR} \
+  -DYAML_VERSION_MINOR=${LIBYAML_MINOR} \
+  -DYAML_VERSION_PATCH=${LIBYAML_PATCH} \
+  -DYAML_VERSION_STRING="\"${LIBYAML_BRANCH}\"" \
   -DYAML_DECLARE_STATIC=1 \
   -D_OPEN_SYS_FILE_EXT=1 \
   -D_XOPEN_SOURCE=600 \
@@ -95,7 +92,20 @@ if [ $rc -ne 0 ]; then
   exit 8
 fi
 
-echo "Compiling zowe_launcher ${MAJOR}.${MINOR}.${PATCH}+${launcher_date_stamp}"
+# LAUNCHER_VERSION can be exported to specific version
+# However C code is expecting numbers
+# print $1/1 -> numeric input => numeric output, other input => "0"
+if [ -z "${LAUNCHER_VERSION}" ]; then
+  LAUNCHER_VERSION=$(cat "${LAUNCHER_DIR}/manifest.yaml" | grep -e "^version:" | awk -F: '{ print $2 }')
+  LAUNCHER_VERSION=$(echo "${LAUNCHER_VERSION}" | awk '{$1=$1};1')  # awk = strip leading and trailing spaces
+fi
+if [ -n "${LAUNCHER_VERSION}" ]; then
+  LAUNCHER_MAJOR=$(echo "${LAUNCHER_VERSION}" | awk -F. '{ print $1/1 }')
+  LAUNCHER_MINOR=$(echo "${LAUNCHER_VERSION}" | awk -F. '{ print $2/1 }')
+  LAUNCHER_PATCH=$(echo "${LAUNCHER_VERSION}" | awk -F. '{ print $3/1 }')
+fi
+
+echo "Compiling zowe_launcher ${LAUNCHER_MAJOR}.${LAUNCHER_MINOR}.${LAUNCHER_PATCH}+${launcher_date_stamp}"
 
 xlclang \
   -q64 \
@@ -108,17 +118,17 @@ xlclang \
   -DNOIBMHTTP=1 \
   -DNEW_CAA_LOCATIONS=1 \
   -DUSE_ZOWE_TLS=1 \
-  -DPRODUCT_MAJOR_VERSION="${MAJOR}" \
-  -DPRODUCT_MINOR_VERSION="${MINOR}" \
-  -DPRODUCT_REVISION="${PATCH}" \
-  -DPRODUCT_VERSION_DATE_STAMP="${launcher_date_stamp}" \
-  -I "${LAUNCHER}/src/msg.h" \
+  -DLAUNCHER_VERSION_MAJOR="${LAUNCHER_MAJOR}" \
+  -DLAUNCHER_VERSION_MINOR="${LAUNCHER_MINOR}" \
+  -DLAUNCHER_VERSION_PATCH="${LAUNCHER_PATCH}" \
+  -DLAUNCHER_VERSION_DATE_STAMP="${launcher_date_stamp}" \
+  -I "${LAUNCHER_DIR}/src/msg.h" \
   -I "${DEPS_DESTINATION}/${COMMON}/h" \
   -I "${DEPS_DESTINATION}/${COMMON}/platform/posix" \
   -I ${GSKINC} \
   -I "${DEPS_DESTINATION}/${LIBYAML}/include" \
   -I "${DEPS_DESTINATION}/${QUICKJS}" \
-  -o "${LAUNCHER}/bin/zowe_launcher" \
+  -o "${LAUNCHER_DIR}/bin/zowe_launcher" \
   api.o \
   reader.o \
   scanner.o \
@@ -133,7 +143,7 @@ xlclang \
   libunicode.o \
   libregexp.o \
   polyfill.o \
-  ${LAUNCHER}/src/main.c \
+  ${LAUNCHER_DIR}/src/main.c \
   ${DEPS_DESTINATION}/${COMMON}/c/alloc.c \
   ${DEPS_DESTINATION}/${COMMON}/c/bpxskt.c \
   ${DEPS_DESTINATION}/${COMMON}/c/charsets.c \
@@ -179,7 +189,7 @@ fi
 # This program and the accompanying materials are
 # made available under the terms of the Eclipse Public License v2.0 which accompanies
 # this distribution, and is available at https://www.eclipse.org/legal/epl-v20.html
-# 
+#
 # SPDX-License-Identifier: EPL-2.0
-# 
+#
 # Copyright Contributors to the Zowe Project.

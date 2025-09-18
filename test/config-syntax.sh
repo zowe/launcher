@@ -14,14 +14,19 @@
 print=
 errors=0
 
-# Get the launchers's version
-. ../build/launcher.proj.env
+# Get the launchers's version from manifest.yaml
+VERSION=$(cat "../manifest.yaml" | grep -e "^version:" | awk -F: '{ print $2 }' | awk '{$1=$1};1')
 
 if [ ! -z "${1}" ]; then
     print='1'
 fi
 
 LAUNCHER='../bin/zowe_launcher'
+if [ ! -f "${LAUNCHER}" ]; then
+    echo "Executable for Zowe launcher not found at: ${LAUNCHER}"
+    exit 255
+fi
+
 ABS_PATH=$(cd .; pwd)
 
 TEST_FILES='./files'

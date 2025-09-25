@@ -436,15 +436,19 @@ static bool arrayListContains(ArrayList *list, char *element) {
 static char* escape_string(char *input) {
     int length = strlen(input);
     int quotes = 0;
+    int backSlashes = 0;
     for (int i = 0; i < length; i++) {
         if (input[i] == '\"') quotes++;
+        if (input[i] == '\\') backSlashes++;
     }
 
-    char *output = malloc(length + quotes + 2 + 1); // add quote on first and the last position and escape quotes inside
+    // 2 + 1 = add quote on first and the last position and \0 at the end
+    // quotes & backSlashes = add '\' to escape '"' and '\'
+    char *output = malloc(length + quotes + backSlashes + 2 + 1);
     output[0] = '\"';
     int j = 1;
     for (int i = 0; i < length; i++) {
-        if (input[i] == '\"') {
+        if (input[i] == '\"' || input[i] == '\\') {
             output[j++] = '\\';
         }
         output[j++] = input[i];

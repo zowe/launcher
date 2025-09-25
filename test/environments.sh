@@ -9,7 +9,7 @@
 # Copyright Contributors to the Zowe Project.
 
 # ---------------------------------------------------
-# Start with any paramter -> prints Launcher's output
+# Start with any parameter -> prints Launcher's output
 # ---------------------------------------------------
 
 print=

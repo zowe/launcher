@@ -1,0 +1,24 @@
+zowe:
+  environments:
+
+    TEST_VAR01: 'TE\"ST'        # "TE\\\"ST"
+    TEST_VAR02: "TE\"ST"        # "TE\"ST"
+    TEST_VAR03: TE\"ST          # "TE\\\"ST"
+    TEST_VAR04:                 #
+    TEST_VAR05: ~               #
+    TEST_VAR06: true            # true
+    TEST_VAR07: \\\\\\\\\\      # "\\\\\\\\\\\\\\\\\\\\"
+    TEST_VAR08: '""""""""""'    # "\"\"\"\"\"\"\"\"\"\""
+    TEST_VAR09: '"'             # "\""
+    TEST_VAR10: 123456          # 123456
+    TEST_VAR11: \n              # "\\n"
+    TEST_VAR12: \0              # "\\0"
+
+  runtimeDirectory: "${{ () => {
+        let thisPath = os.realpath('./fakeRuntime');
+        if (thisPath[1] == 0) {
+          return thisPath[0];
+        }
+        return undefined;
+      } ()
+    }}"

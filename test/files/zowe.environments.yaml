@@ -23,7 +23,7 @@ zowe:
       Rather in power than use; and keep thy friend
       Under thy own life's key: be check'd for silence,
       But never tax'd for speech.
-  TEST_VAR_END: \E\N\D              # "\\E\\N\\D"
+    TEST_VAR_END: \E\N\D            # "\\E\\N\\D"
   runtimeDirectory: "${{ () => {
         let thisPath = os.realpath('./fakeRuntime');
         if (thisPath[1] == 0) {

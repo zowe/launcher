@@ -1,19 +1,29 @@
 zowe:
   environments:
-
-    TEST_VAR01: 'TE\"ST'        # "TE\\\"ST"
-    TEST_VAR02: "TE\"ST"        # "TE\"ST"
-    TEST_VAR03: TE\"ST          # "TE\\\"ST"
-    TEST_VAR04:                 #
-    TEST_VAR05: ~               #
-    TEST_VAR06: true            # true
-    TEST_VAR07: \\\\\\\\\\      # "\\\\\\\\\\\\\\\\\\\\"
-    TEST_VAR08: '""""""""""'    # "\"\"\"\"\"\"\"\"\"\""
-    TEST_VAR09: '"'             # "\""
-    TEST_VAR10: 123456          # 123456
-    TEST_VAR11: \n              # "\\n"
-    TEST_VAR12: \0              # "\\0"
-
+    TEST_VAR_START: \S\T\A\R\T      # "\\S\\T\\A\\R\\T"
+    TEST_VAR01: 'TE\"ST'            # "TE\\\"ST"
+    TEST_VAR02: "TE\"ST"            # "TE\"ST"
+    TEST_VAR03: TE\"ST              # "TE\\\"ST"
+    TEST_VAR04:                     #
+    TEST_VAR05: ~                   #
+    TEST_VAR06: true                # true
+    TEST_VAR07: \\\\\\\\\\          # "\\\\\\\\\\\\\\\\\\\\"
+    TEST_VAR08: '""""""""""'        # "\"\"\"\"\"\"\"\"\"\""
+    TEST_VAR09: '"'                 # "\""
+    TEST_VAR10: 123456              # 123456
+    TEST_VAR11: \n                  # "\\n"
+    TEST_VAR12: \0                  # "\\0"
+    TEST_VAR13:                     # Array
+      - kiwi
+      - banana
+      - orange
+    TEST_VAR14: |-                  # William Shakespeare: All's Well That Ends Well
+      Love all, trust a few,
+      Do wrong to none: be able for thine enemy
+      Rather in power than use; and keep thy friend
+      Under thy own life's key: be check'd for silence,
+      But never tax'd for speech.
+  TEST_VAR_END: \E\N\D              # "\\E\\N\\D"
   runtimeDirectory: "${{ () => {
         let thisPath = os.realpath('./fakeRuntime');
         if (thisPath[1] == 0) {

@@ -1,5 +1,7 @@
 zowe:
   environments:
+    # For sipmlification, keep TEST_VAR_START as the first
+    # and TEST_VAR_END as the last variable
     TEST_VAR_START: \S\T\A\R\T      # "\\S\\T\\A\\R\\T"
     TEST_VAR01: 'TE\"ST'            # "TE\\\"ST"
     TEST_VAR02: "TE\"ST"            # "TE\"ST"

@@ -29,7 +29,7 @@ if [ ! -z "${print}" ]; then
     "${LAUNCHER}" "ha1"
 fi
 
-LAUNCHER_OUTPUT=$("${LAUNCHER}" "ha1" 2>&1 | grep 'DEBUG shared env pos1')
+LAUNCHER_OUTPUT=$("${LAUNCHER}" "ha1" 2>&1 | grep "DEBUG shared env pos.*TEST_VAR.*")
 
 printf "%s\n\n" "${LAUNCHER_OUTPUT}"
 

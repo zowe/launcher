@@ -19,7 +19,7 @@ if [ ! -z "${1}" ]; then
 fi
 
 LAUNCHER='../bin/zowe_launcher'
-if [ ! -f "{LAUNCHER}" ]; then
+if [ ! -f "${LAUNCHER}" ]; then
     echo "Executable \"${LAUNCHER}\" not found."
     exit 1
 fi

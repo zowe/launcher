@@ -19,6 +19,11 @@ if [ ! -z "${1}" ]; then
 fi
 
 LAUNCHER='../bin/zowe_launcher'
+if [ ! -f "{LAUNCHER}" ]; then
+    echo "Executable \"${LAUNCHER}\" not found."
+    exit 1
+fi
+
 ZOWE_YAML="./files/zowe.environments.yaml"
 
 LAUNCHER_OUTPUT=

@@ -468,7 +468,7 @@ static char* jsonToString(Json *json) {
       return jsonAsBoolean(json) ? "true" : "false";
     case JSON_TYPE_NUMBER:
     case JSON_TYPE_INT64:
-      output = malloc(21); // Longest string possible -9223372036854775807
+      output = malloc(21); // Longest string possible -9223372036854775808 (20+\0)
       snprintf(output, 21, "%ld", jsonAsInt64(json));
       return output;
     case JSON_TYPE_DOUBLE:

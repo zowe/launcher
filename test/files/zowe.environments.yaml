@@ -1,31 +1,51 @@
 zowe:
   environments:
-    # For sipmlification, keep TEST_VAR_START as the first
-    # and TEST_VAR_END as the last variable
-    TEST_VAR_START: \S\T\A\R\T      # "\\S\\T\\A\\R\\T"
-    TEST_VAR01: 'TE\"ST'            # "TE\\\"ST"
-    TEST_VAR02: "TE\"ST"            # "TE\"ST"
-    TEST_VAR03: TE\"ST              # "TE\\\"ST"
-    TEST_VAR04:                     #
-    TEST_VAR05: ~                   #
-    TEST_VAR06: true                # true
-    TEST_VAR07: \\\\\\\\\\          # "\\\\\\\\\\\\\\\\\\\\"
-    TEST_VAR08: '""""""""""'        # "\"\"\"\"\"\"\"\"\"\""
-    TEST_VAR09: '"'                 # "\""
-    TEST_VAR10: 123456              # 123456
-    TEST_VAR11: \n                  # "\\n"
-    TEST_VAR12: \0                  # "\\0"
-    TEST_VAR13:                     # Array
-      - kiwi
-      - banana
-      - orange
-    TEST_VAR14: |-                  # William Shakespeare: All's Well That Ends Well
+    TEST_VAR_START: \S\T\A\R\T                  # "\\S\\T\\A\\R\\T"
+    # *** Bool ***
+    TEST_VAR_BOOL_01: true                      # true
+    TEST_VAR_BOOL_02: false                     # false
+    TEST_VAR_BOOL_03: !!bool true               # true
+    TEST_VAR_BOOL_04: !!bool false              # false
+    # *** Int ***
+    TEST_VAR_INT_01: 123456                     # 123456
+    TEST_VAR_INT_02: !!int 123456               # 123456
+    TEST_VAR_INT_03: 0x7FFFFFFF                 # 2147483647
+    TEST_VAR_INT_04: 0x00000001                 # 1
+    TEST_VAR_INT_05: !!int 0x7FFFFFFF           # 2147483647
+    TEST_VAR_INT_06: !!int 0x00000001           # 1
+    TEST_VAR_INT_07: 9223372036854775807        # 9223372036854775807
+    TEST_VAR_INT_08: !!int 9223372036854775807  # 9223372036854775807
+    TEST_VAR_INT_09: -9223372036854775808       # -9223372036854775808
+    TEST_VAR_INT_10: !!int -9223372036854775808 # -9223372036854775808
+    # *** Str ***
+    TEST_VAR_STR_01: \\\\\\\\\\                 # "\\\\\\\\\\\\\\\\\\\\"
+    TEST_VAR_STR_02: !!str \\\\\\\\\\           # "\\\\\\\\\\\\\\\\\\\\"
+    TEST_VAR_STR_03: '""""""""""'               # "\"\"\"\"\"\"\"\"\"\""
+    TEST_VAR_STR_04: '"'                        # "\""
+    TEST_VAR_STR_05: \n                         # "\\n"
+    TEST_VAR_STR_06: \0                         # "\\0"
+    TEST_VAR_STR_07: 'TE\"ST'                   # "TE\\\"ST"
+    TEST_VAR_STR_08: "TE\"ST"                   # "TE\"ST"
+    TEST_VAR_STR_09: TE\"ST                     # "TE\\\"ST"
+    TEST_VAR_STR_10: !!str 123                  # "123"
+    TEST_VAR_STR_11: !!str true                 # "true"
+    TEST_VAR_STR_12: |-                         # William Shakespeare: All's Well That Ends Well
       Love all, trust a few,
       Do wrong to none: be able for thine enemy
       Rather in power than use; and keep thy friend
       Under thy own life's key: be check'd for silence,
       But never tax'd for speech.
-    TEST_VAR_END: \E\N\D            # "\\E\\N\\D"
+    # *** Null ***
+    TEST_VAR_NULL_01:                           #
+    TEST_VAR_NULL_02: ~                         #
+    TEST_VAR_NULL_03: null                      #
+    # *** Array ***
+    TEST_VAR_ARRAY_01:                          # Array
+      - kiwi
+      - banana
+      - orange
+    TEST_VAR_ARRAY_02: ['A', 'B', 'C']          # Array
+    TEST_VAR_END: \E\N\D                        # "\\E\\N\\D"
   runtimeDirectory: "${{ () => {
         let thisPath = os.realpath('./fakeRuntime');
         if (thisPath[1] == 0) {

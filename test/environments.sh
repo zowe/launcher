@@ -9,7 +9,7 @@
 # Copyright Contributors to the Zowe Project.
 
 # Start with any parameter -> prints Launcher's output
-#   rc of this = number of errors found for "WARN Key in configuration `zowe.environments.<key>` is invalid"
+#   rc of this = number of errors found
 
 print=
 errors=0
@@ -38,23 +38,34 @@ if [ ! -z "${print}" ]; then
     printf "%s" "${LAUNCHER_OUTPUT}"
 fi
 
+printf "\n---zowe.environments.TEST_VAR_* expected to be used or ignored ---\n\n"
 # awk prints between TEST_VAR_START= and TEST_VAR_END=
 LAUNCHER_OUTPUT_TEST_VAR=$(printf "%s" "${LAUNCHER_OUTPUT}" | awk '/TEST_VAR_START=/{flag=1}/TEST_VAR_END=/{print; flag=0}flag')
-printf "%s\n\n" "${LAUNCHER_OUTPUT_TEST_VAR}"
-
-awk '/TEST_VAR_START/{flag=1}/TEST_VAR_END/{print; flag=0}flag' "${ZOWE_YAML}"
+while read -r line; do
+    if [ -n "$(echo "${line}" | grep 'TEST_VAR_')" ]; then
+        key=$(echo "${line}" | cut -d: -f1)
+        if [ -n "$(echo "${line}" | grep '#')" ]; then
+            output=$(echo "${LAUNCHER_OUTPUT_TEST_VAR}" | grep "${key}")
+            if [ -n "${output}" ]; then
+                printf "OK: %s\n" "${output}"
+            else
+                echo "Key '${key}' not found!"
+                errors=`expr $errors + 1`
+            fi
+            
+        fi
+    fi
+done < "${ZOWE_YAML}"
 
 printf "\n---zowe.environments.* expected to be ignored ---\n\n"
-
 LAUNCHER_OUTPUT_KEYS=$(printf "%s" "${LAUNCHER_OUTPUT}" | grep -e 'Key in configuration')
-
 while read -r line; do
     if [ -n "$(echo "${line}" | grep -e '<ignored>')" ]; then
         key="$(echo "${line}" | awk -F: '{ print $1}')"
         key="\`zowe.environments.${key}\`"
         matchKey="$(printf "%s" "${LAUNCHER_OUTPUT_KEYS}" | grep -e "${key}")"
         if [ -n "${matchKey}" ]; then
-            printf "Key '%s' found:\n  %s\n" "${key}" "${matchKey}"
+            printf "OK: Key '%s' found: %s\n" "${key}" "${matchKey}"
         else
             echo "Key '${key}' not found!"
             errors=`expr $errors + 1`

@@ -36,15 +36,18 @@ zowe:
       Under thy own life's key: be check'd for silence,
       But never tax'd for speech.
     # *** Null ***
-    TEST_VAR_NULL_01:                           #
-    TEST_VAR_NULL_02: ~                         #
-    TEST_VAR_NULL_03: null                      #
+    TEST_VAR_NULL_01:
+    TEST_VAR_NULL_02: ~
+    TEST_VAR_NULL_03: null
     # *** Array ***
-    TEST_VAR_ARRAY_01:                          # Array
+    TEST_VAR_ARRAY_01:
       - kiwi
       - banana
       - orange
-    TEST_VAR_ARRAY_02: ['A', 'B', 'C']          # Array
+    TEST_VAR_ARRAY_02: ['A', 'B', 'C']
+    TEST_VAR_NESTED:
+      enabled: true
+      disabled: false
     TEST_VAR_END: \E\N\D                        # "\\E\\N\\D"
     # *** Ignored keys ***
     -key-: ~                                    # <ignored>

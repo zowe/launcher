@@ -58,7 +58,7 @@ zowe:
     ~null: not null                             # <ignored>
     =: equal sign                               # <ignored>
     <h1>: heading                               # <ignored>
-runtimeDirectory: "${{ () => {
+  runtimeDirectory: "${{ () => {
       let thisPath = os.realpath('./fakeRuntime');
       if (thisPath[1] == 0) {
         return thisPath[0];

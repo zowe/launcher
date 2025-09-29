@@ -17,4 +17,8 @@ Return code is the number detected errors. To see an output, use any parameter, 
 
 ## Environments
 
-Script for testing `zowe.environments`, especially escaping strings with `\` or `"`. See [config](./files/zowe.environments.yaml) used for testing. It will only print filtered output of Launcher and configuration.
+Script for testing `zowe.environments`:
+* Escaping strings with `\` or `"`. It will only print filtered output of Launcher and configuration.
+* Ignoring environment variables, which are not valid unix names.
+
+See [config](./files/zowe.environments.yaml) used for testing.

@@ -447,11 +447,19 @@ static char* jsonToString(Json *json) {
   }
 }
 
-static bool is_valid_key(char *key) {
+// Zowe.environments key must follow Unix variable name syntax:
+// alphaNum | underscore & first char is not a digit
+static bool is_key_valid_unix_name(char *key) {
     int length = strlen(key);
+    if (!length) {
+        return false;
+    }
+    if (isdigit(key[0])) {
+        return false;
+    }
     for (int i = 0; i < length; i++) {
         if (isalnum(key[i])) continue;
-        if (strchr("_-", key[i])) continue;
+        if (key[i] == '_') continue;
         return false;
     }
     return true;
@@ -507,7 +515,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     // Get all environment variables defined in zowe.yaml and put them in the output as they are
     for (JsonProperty *property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
       char *key = jsonPropertyGetKey(property);
-      if (!is_valid_key(key)) {
+      if (!is_key_valid_unix_name(key)) {
         WARN("Key in zowe.yaml `zowe.environments.%s` is invalid and it will be ignored\n", key);
         continue;
       }

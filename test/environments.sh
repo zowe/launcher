@@ -8,9 +8,8 @@
 #
 # Copyright Contributors to the Zowe Project.
 
-# ---------------------------------------------------
 # Start with any parameter -> prints Launcher's output
-# ---------------------------------------------------
+#   rc of this = number of errors found for "WARN Key in configuration `zowe.environments.<key>` is invalid"
 
 print=
 errors=0

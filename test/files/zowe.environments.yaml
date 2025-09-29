@@ -46,11 +46,23 @@ zowe:
       - orange
     TEST_VAR_ARRAY_02: ['A', 'B', 'C']          # Array
     TEST_VAR_END: \E\N\D                        # "\\E\\N\\D"
-  runtimeDirectory: "${{ () => {
-        let thisPath = os.realpath('./fakeRuntime');
-        if (thisPath[1] == 0) {
-          return thisPath[0];
-        }
-        return undefined;
-      } ()
-    }}"
+    # *** Ignored keys ***
+    -key-: ~                                    # <ignored>
+    ?key: '?'                                   # <ignored>
+    1+1: =2                                     # <ignored>
+    1-1: "=0"                                   # <ignored>
+    _!_: '!!!'                                  # <ignored>
+    1TEST: true                                 # <ignored>
+    3_141592: 6535                              # <ignored>
+    (): !!int 0                                 # <ignored>
+    ~null: not null                             # <ignored>
+    =: equal sign                               # <ignored>
+    <h1>: heading                               # <ignored>
+runtimeDirectory: "${{ () => {
+      let thisPath = os.realpath('./fakeRuntime');
+      if (thisPath[1] == 0) {
+        return thisPath[0];
+      }
+      return undefined;
+    } ()
+  }}"

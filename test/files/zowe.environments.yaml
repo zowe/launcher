@@ -48,6 +48,17 @@ zowe:
     TEST_VAR_NESTED:
       enabled: true
       disabled: false
+    # *** Embedded JS ***
+    TEST_VAR_EJS_01: "${{ zowe.environments.TEST_VAR_INT_01 }}"   # zowe.environments.TEST_VAR_INT_01
+    TEST_VAR_EJS_02: "${{ 1+1*7 }}"             # 8
+    TEST_VAR_EJS_03: "${{ 'EJS' }}"             # "EJS"
+    TEST_VAR_EJS_04: "${{ `EJS` }}"             # "EJS"
+    TEST_VAR_EJS_05: "${{ \"EJS\" }}"           # "EJS"
+    TEST_VAR_EJS_06: "${{ `E` + 'J' + \"S\" }}" # "EJS"
+    TEST_VAR_EJS_07: "${{ `\\` }}"              # "\\"
+    TEST_VAR_EJS_08: "${{                    /* # true */
+       () => { if (1 == 1) return true } ();
+      }}"
     TEST_VAR_END: \E\N\D                        # "\\E\\N\\D"
     # *** Ignored keys ***
     -key-: ~                                    # <ignored>

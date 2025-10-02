@@ -234,11 +234,6 @@ static bool check_match_and_wto_message(const char* sys_message_id, const char* 
     if (memcmp(ZWE_ZOWE_SYS_MESSAGES, input_string, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
       return false;
     }
-    /* TODO: Try to ignore messages, which are short and probably output of ZWED5015I
-    if (input_string_len <= strlen(sys_message_id) + ZWED5015I_JSON_CONFIG_EXTRA_CHARACTERS) {
-      return false;
-    }
-    */
   }
 
   if (zl_context.trim_sys_message) {

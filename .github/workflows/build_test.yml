@@ -81,11 +81,15 @@ jobs:
             git commit -s -m "Update changelog with PR #${{ github.event.pull_request.number }} description"
             git push
             echo "Updated CHANGELOG from description"
-          else
-            echo $result
-            echo -e "No changelog and version information found in PR description. Please add them.\nExpected Format:\nVERSION:X.XX.X\nCHANGELOG:This is changelog note.\nTo re-run the action, just make a push or commit after updating the PR description or updating the changelog via a manual file changing commit."
-            exit 1
+            exit 0
           fi
+          if [ "$result" = "Skip" ]; then
+            echo "Skipping CHANGELOG."
+            exit 0
+          fi
+          echo $result
+          echo -e "No changelog and version information found in PR description. Please add them.\nExpected Format:\nVERSION:X.XX.X\nCHANGELOG:This is changelog note.\nTo re-run the action, just make a push or commit after updating the PR description or updating the changelog via a manual file changing commit."
+          exit 1
 
       - name: check for changes
         id: check-change

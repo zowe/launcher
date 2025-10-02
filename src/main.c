@@ -481,8 +481,9 @@ static char* jsonToString(Json *json) {
 }
 
 // Zowe.environments key must follow Unix variable name syntax:
-// alphaNum | underscore & first char is not a digit
-static bool is_key_valid_unix_name(char *key) {
+// * The first char must not be a digit
+// * Any characters must be either alphanumeric or an underscore
+static bool is_key_valid_unix_name(const char *key) {
     int length = strlen(key);
     if (!length) {
         return false;

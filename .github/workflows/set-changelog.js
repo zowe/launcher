@@ -54,6 +54,8 @@ if (description.includes('VERSION:') && description.includes('CHANGELOG:')) {
       console.log('Missing VERSION');
     }
   }
+} else if (description.includes('SKIP CHANGELOG')) {
+  console.log('Skip');
 } else {
   console.log('Missing CHANGELOG or VERSION');
 }

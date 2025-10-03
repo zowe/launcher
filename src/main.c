@@ -215,10 +215,6 @@ static void set_sys_messages(ConfigManager *configmgr) {
 //size of "ZWE_zowe_sysMessages"
 #define ZWE_ZOWE_SYS_MESSAGES "ZWE_zowe_sysMessages"
 #define ZWE_ZOWE_SYS_MESSAGES_LEN (sizeof(ZWE_ZOWE_SYS_MESSAGES) - 1)
-/* App-server: ZWED5015I prints config as json
-All zowe.sysMessages are printed, e.g. ^      "ZWED0031I",$
-#define ZWED5015I_JSON_CONFIG_EXTRA_CHARACTERS (sizeof("      \"\",") - 1)
-*/
 
 static bool check_match_and_wto_message(const char* sys_message_id, const char* input_string, const bool other_messages) {
 

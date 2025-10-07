@@ -55,17 +55,6 @@ extern char ** environ;
 #define ZOWE_CONFIG_NAME          "ZOWEYAML"
 #define CONFIG_DEBUG_MODE_VALUE   "ON"
 
-/*
-The timezone could be set in zowe.yaml:
-  zowe.logging.timezone = UTC | LOCAL
-  But the first few messages are created before the yaml config is read,
-  so timezone is unknonw. ZLTZONE is used to unify it, however it is up to the user
-  to keep it sync.
-*/
-#define CONFIG_TIME_ZONE          "ZLTZONE"
-#define CONFIG_TIME_ZONE_LOCAL    "LOCAL"
-#define CONFIG_TIME_ZONE_UTC      "UTC"
-
 #define COMP_ID "ZWELNCH"
 
 #define CEE_ENVFILE_PREFIX        "_CEE_ENVFILE"
@@ -95,8 +84,6 @@ static bool prevent_restart = false;
 
 static char** shared_uss_env = NULL;
 
-bool zl_logging_timezone_isLocal = false;
-
 typedef struct zl_time_t {
   char value[32];
 } zl_time_t;
@@ -108,11 +95,8 @@ static zl_time_t gettime(void) {
 
   struct tm lt;
   zl_time_t result;
-  if (zl_logging_timezone_isLocal) {
-    localtime_r(&t, &lt);
-  } else {
-    gmtime_r(&t, &lt);
-  }
+
+  localtime_r(&t, &lt);
 
   strftime(result.value, sizeof(result.value), format, &lt);
 
@@ -1915,12 +1899,7 @@ int main(int argc, char **argv) {
   }
 
   setenv("_BPXK_AUTOCVT", "ON", 1);
-
-  char *stdenvLoggingTimezone = getenv(CONFIG_TIME_ZONE);
-  if (stdenvLoggingTimezone && !strcmp_pad(stdenvLoggingTimezone, CONFIG_TIME_ZONE_LOCAL)) {
-    zl_logging_timezone_isLocal = true;
-  }
-  INFO(MSG_LAUNCHER_START);       // Log with UTC (default) or LOCAL time zone
+  INFO(MSG_LAUNCHER_START);
   INFO(MSG_LINE_LENGTH);
   printf_wto(MSG_LAUNCHER_START); // Manual sys log print (messages not set here yet)
 
@@ -1978,16 +1957,6 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  // TODO:  Should we print a warning if both set, but ZLTZONE != zowe.logging.timezone?
-  Json *configLoggingTimezone;
-  int cfgGetStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &configLoggingTimezone, 3, "zowe", "logging", "timezone");
-  if (cfgGetStatus == ZCFG_SUCCESS) {
-    if (!strcmp(jsonAsString(configLoggingTimezone), CONFIG_TIME_ZONE_LOCAL)) {
-      zl_logging_timezone_isLocal = true;
-    } else {
-      zl_logging_timezone_isLocal = false;    // Schema validated value, currently only UTC | LOCAL
-    }
-  }
   
   set_shared_uss_env(configmgr);
 

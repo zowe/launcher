@@ -1,4 +1,4 @@
-//ZWESLSTC  PROC RGN=0M,HAINST='{{ha_instance_id}}'
+//ZWESLSTC  PROC RGN=0M,HAINST='__ha_instance_id__'
 //********************************************************************/
 //* This program and the accompanying materials are                  */
 //* made available under the terms of the                            */
@@ -22,26 +22,41 @@
 //********************************************************************/
 //ZWELNCH  EXEC PGM=ZWELNCH,REGION=&RGN,TIME=NOLIMIT,
 // PARM='ENVAR(_CEE_ENVFILE=DD:STDENV),POSIX(ON)/&HAINST.'
-//STEPLIB  DD   DSNAME=&SYSUID..LOADLIB,DISP=SHR
-//SYSIN    DD   DUMMY
-//SYSPRINT DD   SYSOUT=*,LRECL=1600
-//SYSERR   DD   SYSOUT=*
+//STEPLIB  DD  DSNAME={zowe.setup.dataset.authLoadlib},
+//             DISP=SHR
+//SYSIN    DD  DUMMY
+//SYSPRINT DD  SYSOUT=*,LRECL=1600
+//SYSERR   DD  SYSOUT=*
 //********************************************************************/
 //*
 //* CONFIG= can be either a single path ex.
 //*   CONFIG=/my/zowe.yaml
-//* Or a list of FILE() and colon : separated paths in the form of
+//*
+//* Or a list of FILE() or PARMLIB() and colon : separated paths
+//*   in the form of
+//*
+//*    +------------ : ------------+
+//*    V                           |
+//* >--+--FILE(ussPath)------------+--><
+//*    |                           |
+//*    +--PARMLIB(dsname(member))--+
+//*
+//* Example:
 //*   CONFIG=FILE(/my/long/path/to/1.yaml)\
-//*   :FILE(/my/long/path/to/2.yaml)
+//*   :PARMLIB(ZOWE.PARMLIB(YAML))
 //*
 //* In the above case, the \ is used as a line continuation.
 //*
 //* When using a list, files on left override properties
-//* From files to their right.
+//* from files to their right.
 //* Typically the right-most file should be the Zowe default yaml.
+//*
+//* Note: All PARMLIB() entries must all have the same member name.
 //*
 //********************************************************************/
 //STDENV   DD  *
 _CEE_ENVFILE_CONTINUATION=\
-CONFIG=#zowe_yaml
+_CEE_RUNOPTS=HEAPPOOLS(OFF),HEAPPOOLS64(OFF)
+_EDC_UMASK_DFLT=0002
+CONFIG={ZWE_CLI_PARAMETER_CONFIG}
 /*

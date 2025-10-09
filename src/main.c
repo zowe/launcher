@@ -18,8 +18,9 @@
 #include <string.h>
 #include <strings.h>
 #include <errno.h>
-
+#include <regex.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include <pthread.h>
 #include <fcntl.h>
@@ -38,6 +39,8 @@
 #include "configmgr.h"
 #include "logging.h"
 #include "stcbase.h"
+#include "zos.h"
+#include "yaml2json.h"
 
 extern char ** environ;
 /*
@@ -57,6 +60,8 @@ extern char ** environ;
 
 #define COMP_ID "ZWELNCH"
 
+#define CEE_ENVFILE_PREFIX        "_CEE_ENVFILE"
+
 #define MIN_UPTIME_SECS 90
 
 #define SHUTDOWN_GRACEFUL_PERIOD (20 * 1000)
@@ -65,15 +70,22 @@ extern char ** environ;
 
 #define COMP_LIST_SIZE 1024
 
+#define LAUNCHER_MESSAGE_LENGTH_LIMIT 512
+#define SYSLOG_MESSAGE_LENGTH_LIMIT 126
+
 #ifndef PATH_MAX
 #define PATH_MAX _POSIX_PATH_MAX
 #endif
+
+#define YAML_ERROR_MAX 1024
 
 // Progressive restart internals in seconds
 static int restart_intervals_default[] = {1, 1, 1, 5, 5, 10, 20, 60, 120, 240};
 
 // Prevents components from being restarted. Used for example when shutting down.
 static bool prevent_restart = false;
+
+static char** shared_uss_env = NULL;
 
 typedef struct zl_time_t {
   char value[32];
@@ -87,9 +99,14 @@ static zl_time_t gettime(void) {
   struct tm lt;
   zl_time_t result;
 
-  localtime_r(&t, &lt);
+  gmtime_r(&t, &lt);
 
   strftime(result.value, sizeof(result.value), format, &lt);
+
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  int milli = now.tv_usec / 1000;
+  snprintf(result.value+strlen(result.value), 5, ".%03d", milli);
 
   return result;
 }
@@ -155,11 +172,14 @@ struct {
   pthread_mutex_t event_lock;
 
   //Room for at least 16 paths
-  char yaml_file[PATH_MAX*17];
+  //config_path is what the user types in
+  char config_path[PATH_MAX*17];
+  //configmgr_path is the path in a form configmgr consumes
+  char configmgr_path[PATH_MAX*17];
   char parm_member[8+1];
   char *root_dir;
   char *workspace_dir;
-  
+  JsonArray *sys_messages;
   char ha_instance_id[64];
   
   pid_t pid;
@@ -171,30 +191,169 @@ struct {
   */
 } zl_context = {.config = {.debug_mode = false}, .userid = "(NONE)"} ;
 
+// Wrapper for wtoPrintf3
+static void printf_wto(const char *formatString, ...) {
+  va_list argPointer;
+  va_start(argPointer, formatString);
+  wtoPrintf3(formatString, argPointer);
+  va_end(argPointer);
+}
 
+static void set_sys_messages(ConfigManager *configmgr) {
+  Json *env;
+  int cfgGetStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &env, 2, "zowe", "sysMessages");
 
-#define INFO(fmt, ...)  printf("%s <%s:%d> %s INFO "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
-#define WARN(fmt, ...)  printf("%s <%s:%d> %s WARN "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
-#define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
-  printf("%s <%s:%d> %s DEBUG "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
-#define ERROR(fmt, ...) printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+  if (cfgGetStatus != ZCFG_SUCCESS) { // No sysMessages found in Zowe configuration
+    return;
+  }
+  JsonArray *sys_messages = jsonAsArray(env);
+  
+  if (sys_messages) {
+    zl_context.sys_messages = sys_messages;
+  }
+}
 
-static int mkdir_all(const char *path, mode_t mode) {
-  int path_len = strlen(path);
-  int curr_path_len = 0;
-  do {
-    const char *slash = strchr(path + curr_path_len + 1, '/');
-    char curr_path[PATH_MAX] = {0};
-    curr_path_len = slash ? (int)(slash - path) : path_len;
-    snprintf(curr_path, sizeof(curr_path), "%.*s", curr_path_len, path);
-    if (mkdir(curr_path, mode) != 0) {
-      if (errno != EEXIST) {
-        ERROR(MSG_MKDIR_ERR, curr_path, strerror(errno));
-        return -1;
+static void launcher_syslog_on_match(const char* fmt, ...) {
+  if (!zl_context.sys_messages) {
+    return;
+  }
+  
+  /* All of this stuff here is because I can't do 
+  #define INFO(fmt, ...)  check_for_and_print_sys_message(fmt, ...) so let's make a string */
+  char input_string[LAUNCHER_MESSAGE_LENGTH_LIMIT+1];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(input_string, sizeof(input_string), fmt, args);
+  va_end(args);
+    
+  int count = jsonArrayGetCount(zl_context.sys_messages);
+  for (int i = 0; i < count; i++) {
+      const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
+      if (sys_message_id && strstr(input_string, sys_message_id)) {
+          printf_wto(input_string); // Print our match to the syslog
+          break;
+      }
+  }
+  
+}
+
+static int index_of_string_limited(const char *str, int len, const char *search_string, int start_pos, int search_limit){
+  int search_len = strlen(search_string);
+  int last_possible_start = len < search_limit ? len - search_len : search_limit - search_len;
+  int pos = start_pos;
+
+  if (start_pos > last_possible_start){
+    return -1;
+  }
+  while (pos <= last_possible_start){
+    if (!memcmp(str+pos,search_string,search_len)){
+      return pos;
+    }
+    pos++;
+  }
+  return -1;
+}
+
+//size of "ZWE_zowe_sysMessages"
+#define ZWE_SYSMESSAGES_EXCLUDE_LEN 20
+
+// matches YYYY-MM-DD starting with 2xxx.
+// this regex was chosen because other patterns didnt seem to work with LE's regex library.
+#define DATE_PREFIX_REGEXP_PATTERN "^[2-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*"
+
+// zowe standard "YYYY-MM-DD HH-MM-SS.sss "
+#define DATE_PREFIX_LEN 24
+
+static void check_for_and_print_sys_message(const char* input_string) {
+  if (!zl_context.sys_messages) {
+    return;
+  }
+
+  int count = jsonArrayGetCount(zl_context.sys_messages);
+  int input_length = strlen(input_string);
+  for (int i = 0; i < count; i++) {
+    const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
+    if (sys_message_id && (index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT) != -1)) {
+
+      //exclude "ZWE_zowe_sysMessages" messages to avoid spam.
+      if (memcmp("ZWE_zowe_sysMessages", input_string, ZWE_SYSMESSAGES_EXCLUDE_LEN)){ 
+
+        //truncate match for reasonable output
+        char syslog_string[SYSLOG_MESSAGE_LENGTH_LIMIT+1] = {0};
+        regex_t time_regex;
+        int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
+        int match = regexec(&time_regex, input_string, 0, NULL, 0);
+        int offset = match == 0 ? DATE_PREFIX_LEN : 0;
+        int length = SYSLOG_MESSAGE_LENGTH_LIMIT < (input_length-offset) ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_length-offset;
+        memcpy(syslog_string, input_string+offset, length);  
+        syslog_string[length] = '\0';
+        printf_wto(syslog_string);// Print our match to the syslog
+        break;
       }
     }
-  } while (curr_path_len < path_len - 1);
-  return 0;
+  }
+  
+}
+
+#define INFO(fmt, ...)  launcher_syslog_on_match(fmt, ##__VA_ARGS__); \
+  printf("%s <%s:%d> %s INFO "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+#define WARN(fmt, ...)  launcher_syslog_on_match(fmt, ##__VA_ARGS__); \
+  printf("%s <%s:%d> %s WARN "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+#define DEBUG(fmt, ...) if (zl_context.config.debug_mode) \
+  printf("%s <%s:%d> %s DEBUG "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+#define ERROR(fmt, ...) launcher_syslog_on_match(fmt, ##__VA_ARGS__); \
+  printf("%s <%s:%d> %s ERROR "fmt, gettime().value, COMP_ID, zl_context.pid, zl_context.userid, ##__VA_ARGS__)
+
+static int mkdir_all(const char *path, mode_t mode) {
+    // test if path exists
+    struct stat info;
+    if (!stat(path, &info)) {
+        DEBUG("Directory '%s' exists\n", path);
+        return 0;
+    }
+
+    // verify path length
+    int path_len = strlen(path);
+    if (path_len >= PATH_MAX) {
+        ERROR(MSG_MKDIR_ERR, path, "The path is too long to be processed");
+        return -1;
+    }
+
+    char curr_path[PATH_MAX] = {0};
+    memcpy(curr_path, path, path_len);
+
+    // find the latest existing folder
+    int slash_index = path_len;
+    for (int i = slash_index; i > 0; i--) {
+        if (path[i] == '/') {
+            // remember the latest check slash
+            slash_index = i;
+
+            // shortcut the string before the slash
+            curr_path[i] = 0;
+
+            // if path to this slash exist continue creating subdirectories
+            DEBUG("Check if directory '%s' exists\n", curr_path);
+            if (!stat(curr_path, &info)) break;
+        }
+    }
+
+    DEBUG("Starting creating subdirectories under '%s' exists\n", curr_path);
+    do {
+        // determine next path - folder to be created
+        const char *slash = strchr(path + slash_index + 1, '/');
+        slash_index = slash ? (int)(slash - path) : path_len;
+        snprintf(curr_path, sizeof(curr_path), "%.*s", slash_index, path);
+
+        // create missing subfolder
+        if (mkdir(curr_path, mode) != 0) {
+            ERROR(MSG_MKDIR_ERR, curr_path, strerror(errno));
+            return -1;
+        }
+        DEBUG("Directory '%s' has been created\n", curr_path);
+    } while (slash_index < path_len - 1);
+
+    return 0;
 }
 
 static int get_env(const char *name, char *buf, size_t buf_size) {
@@ -240,42 +399,216 @@ static int check_if_dir_exists(const char *dir, const char *name) {
   return 0;
 }
 
+static bool arrayListContains(ArrayList *list, char *element) {
+  for (int i=0; i<list->size; i++) {
+    if (strcmp((char*) list->array[i], element) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static char* escape_string(char *input) {
+    int length = strlen(input);
+    int quotes = 0;
+    for (int i = 0; i < length; i++) {
+        if (input[i] == '\"') quotes++;
+    }
+
+    char *output = malloc(length + quotes + 2 + 1); // add quote on first and the last position and escape quotes inside
+    output[0] = '\"';
+    int j = 1;
+    for (int i = 0; i < length; i++) {
+        if (input[i] == '\"') {
+            output[j++] = '\\';
+        }
+        output[j++] = input[i];
+    }
+    output[j++] = '\"';
+    output[j++] = 0;
+
+    return output;
+}
+
+static char* jsonToString(Json *json) {
+  char *output = NULL;
+  switch (json->type) {
+    case JSON_TYPE_STRING:
+      return escape_string(jsonAsString(json));
+    case JSON_TYPE_BOOLEAN:
+      return jsonAsBoolean(json) ? "true" : "false";
+    case JSON_TYPE_NUMBER:
+    case JSON_TYPE_INT64:
+      output = malloc(21); // Longest string possible -9223372036854775807
+      snprintf(output, 21, "%ld", jsonAsInt64(json));
+      return output;
+    case JSON_TYPE_DOUBLE:
+      output = malloc(32);
+      snprintf(output, 32, "%lf", jsonAsDouble(json), DBL_DIG, output);
+      return output;
+    default:
+      return NULL;
+  }
+}
+
+static bool is_valid_key(char *key) {
+    int length = strlen(key);
+    for (int i = 0; i < length; i++) {
+        if (isalnum(key[i])) continue;
+        if (strchr("_-", key[i])) continue;
+        return false;
+    }
+    return true;
+}
+
+static void set_shared_uss_env(ConfigManager *configmgr) {
+  Json *env = NULL;
+  int cfgGetStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &env, 2, "zowe", "environments");
+  JsonObject *object = NULL;
+  ArrayList *list = makeArrayList();
+
+  if (cfgGetStatus == ZCFG_SUCCESS) {
+    object = jsonAsObject(env);
+  }
+
+  int maxRecords = 5;
+
+  for (char **env = environ; *env != 0; env++) {
+    maxRecords++;
+  }
+
+  int idx = 0;
+
+  // _BPX_SHAREAS is set on component level
+  arrayListAdd(list, "_BPX_SHAREAS");
+
+
+  //These are all properties that should not be changed by zowe.environments
+  arrayListAdd(list, "ZWE_CLI_PARAMETER_CONFIG");
+  arrayListAdd(list, "ZWE_CLI_PARAMETER_HA_INSTANCE");
+  arrayListAdd(list, "ZWE_zowe_runtimeDirectory");
+
+  if (object) { // environments block is defined in zowe.yaml
+    for (JsonProperty *property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
+      maxRecords++;
+    }
+  }
+
+  shared_uss_env = malloc(maxRecords * sizeof(char*));
+  memset(shared_uss_env, 0, maxRecords * sizeof(char*));
+
+  char *configEnv = malloc(PATH_MAX+32);
+  char *runtimeEnv = malloc(PATH_MAX+32);
+  char *haEnv = malloc(256);
+  snprintf(configEnv, PATH_MAX+32, "ZWE_CLI_PARAMETER_CONFIG=%s", zl_context.config_path);
+  shared_uss_env[idx++] = configEnv;
+  snprintf(runtimeEnv, PATH_MAX+32, "ZWE_zowe_runtimeDirectory=%s", zl_context.root_dir);
+  shared_uss_env[idx++] = runtimeEnv;
+  snprintf(haEnv, 256, "ZWE_CLI_PARAMETER_HA_INSTANCE=%s", zl_context.ha_instance_id);
+  shared_uss_env[idx++] = haEnv;  
+
+  if (object) {
+    // Get all environment variables defined in zowe.yaml and put them in the output as they are
+    for (JsonProperty *property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
+      char *key = jsonPropertyGetKey(property);
+      if (!is_valid_key(key)) {
+        WARN("Key in zowe.yaml `zowe.environments.%s` is invalid and it will be ignored\n", key);
+        continue;
+      }
+
+      if (strncmp(key, CEE_ENVFILE_PREFIX, strlen(CEE_ENVFILE_PREFIX)) == 0) {
+        DEBUG("Ignoring environment variable: %s, conflict\n", key);
+        continue;
+      }
+
+      if (!arrayListContains(list, key)) {
+        arrayListAdd(list, key);
+
+        Json *valueJ = jsonPropertyGetValue(property);
+        char *value = jsonToString(valueJ);
+
+        if (!value) {
+          continue;
+        }
+
+        char *entry = malloc(strlen(key) + strlen(value) + 2);
+
+        sprintf(entry, "%s=%s", key, value);
+        DEBUG("shared env pos %d is %s\n", idx, entry);
+        shared_uss_env[idx++] = entry;
+      }
+    }
+  }
+
+
+  // Get all environment variables defined in the system and put them in output if they were not already defined in zowe.yaml
+  for (char **env = environ; *env != 0; env++) { 
+    char *thisEnv = *env;
+    char *index = strchr(thisEnv, '=');
+    if (!index) {
+      continue;
+    }
+    if (strncmp(thisEnv, CEE_ENVFILE_PREFIX, strlen(CEE_ENVFILE_PREFIX)) == 0) {
+      DEBUG("Ignoring environment variable: %s, conflict\n", thisEnv);
+      continue;
+    }
+
+    int length = index - thisEnv;
+    char *key = malloc(length + 1);
+    memset(key, 0, length + 1);
+    strncpy(key, thisEnv, length);
+    
+    if (!arrayListContains(list, key)) {
+      arrayListAdd(list, key);
+      int new_env_length = strlen(thisEnv);
+      char *new_env = malloc(new_env_length+1);
+      memset(new_env, 0, new_env_length+1);
+      strncpy(new_env, thisEnv, strlen(thisEnv));
+      DEBUG("shared env pos %d is %s\n", idx, new_env);
+      shared_uss_env[idx++] = new_env;
+    }
+  }
+
+  shared_uss_env[idx] = NULL;
+  arrayListFree(list);
+}
+
 static int init_context(int argc, char **argv, const struct zl_config_t *cfg, ConfigManager *configmgr) {
 
-  if (get_env("CONFIG", zl_context.yaml_file, sizeof(zl_context.yaml_file))) {
+  if (get_env("CONFIG", zl_context.config_path, sizeof(zl_context.config_path))) {
     return -1;
   }
 
-  int config_len = strlen(zl_context.yaml_file);
+  int config_len = strlen(zl_context.config_path);
   bool hasMember = false;
   char member[9] = {0};
   char config_line[PATH_MAX*17] = {0};
-  if (zl_context.yaml_file[0] == '/') { // simple file case, must be absolute path.
-    snprintf(config_line, config_len+7, "FILE(%s)", zl_context.yaml_file);
-    snprintf(zl_context.yaml_file, config_len+7, "%s", config_line);
+  if (zl_context.config_path[0] == '/') { // simple file case, must be absolute path.
+    snprintf(config_line, config_len+7, "FILE(%s)", zl_context.config_path);
+    snprintf(zl_context.configmgr_path, config_len+7, "%s", config_line);
   } else { //HERE loop over input to construct new string for configmgr use.
     // It needs to strip out the (member) within each occurrence of PARMLIB()
-    int parmIndex = indexOfString(zl_context.yaml_file, config_len, "PARMLIB(", 0);
+    int parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", 0);
     int destPos = 0;
     int srcPos = 0;
-    DEBUG("Handling config=%s\n",zl_context.yaml_file);
+    DEBUG("Handling config=%s\n",zl_context.config_path);
     while (parmIndex != -1) {
-      int parenStartIndex = indexOf(zl_context.yaml_file, config_len, '(', parmIndex+9);
-      int parenEndIndex = indexOf(zl_context.yaml_file, config_len, ')', parmIndex+9);
+      int parenStartIndex = indexOf(zl_context.config_path, config_len, '(', parmIndex+9);
+      int parenEndIndex = indexOf(zl_context.config_path, config_len, ')', parmIndex+9);
       DEBUG("pStart=%d, pEnd=%d\n", parenStartIndex, parenEndIndex);
       if (parenStartIndex != -1 && parenEndIndex != -1 && (parenStartIndex < parenEndIndex)) {
-        memcpy(zl_context.parm_member, zl_context.yaml_file+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
+        memcpy(zl_context.parm_member, zl_context.config_path+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
         if (hasMember && strcmp(zl_context.parm_member, member) != 0) {
           ERROR(MSG_MEMBER_NAME_BAD);
           return -1;
         }
         hasMember = true;
-        memcpy(member, zl_context.yaml_file+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
+        memcpy(member, zl_context.config_path+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
         DEBUG("Found member=%s\n",member);
-        memcpy(config_line+destPos, zl_context.yaml_file+srcPos, parenStartIndex-srcPos);
+        memcpy(config_line+destPos, zl_context.config_path+srcPos, parenStartIndex-srcPos);
         destPos+= parenStartIndex-srcPos;
         srcPos=parenEndIndex+1;
-        parmIndex = indexOfString(zl_context.yaml_file, config_len, "PARMLIB(", parenEndIndex+2);
+        parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", parenEndIndex+2);
       } else {
         ERROR(MSG_MEMBER_MISSING);
         return -1;
@@ -284,20 +617,21 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
       DEBUG("src=%d, dst=%d, pNext=%d\n",srcPos,destPos,parmIndex);
     }
 
-    if (destPos > 0) {
-      memcpy(config_line+destPos, zl_context.yaml_file+srcPos, config_len - srcPos);
+    if (destPos >= 0) {
+      memcpy(config_line+destPos, zl_context.config_path+srcPos, config_len - srcPos);
       destPos+= config_len - srcPos;
-      memcpy(zl_context.yaml_file, config_line, destPos);
-      zl_context.yaml_file[destPos]='\0';
-    } else {
+      memcpy(zl_context.configmgr_path, config_line, destPos);
+      zl_context.configmgr_path[destPos]='\0';
+    }
+    if (!hasMember) {
       zl_context.parm_member[0] = '\0';
     }
   
   }
 
 
-  setenv("CONFIG", zl_context.yaml_file, 1);
-  INFO(MSG_YAML_FILE, zl_context.yaml_file);
+  setenv("CONFIG", zl_context.config_path, 1);
+  INFO(MSG_YAML_FILE, zl_context.configmgr_path);
 
   zl_context.config = *cfg;
 
@@ -332,18 +666,28 @@ static void snprint_int_array(zl_int_array_t *array, char *buf, size_t buf_size)
 static void init_component_restart_intervals(zl_comp_t *comp, ConfigManager *configmgr) {
   DEBUG ("loading restart intervals for component '%s'\n", comp->name);
   Json *restartIntArray;
+
+  // if haInstances.<haInstanceId>.components.<componentName>.launcher.restartIntervals is defined use it
   int getStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &restartIntArray, 6, "haInstances", zl_context.ha_instance_id, "components", comp->name, "launcher", "restartIntervals");
+
+  // if no restartIntervals configuration found, try to use components.<componentName>.launcher.restartIntervals
   if (getStatus != ZCFG_SUCCESS) {
     getStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &restartIntArray, 4, "components", comp->name, "launcher", "restartIntervals");
-    if (getStatus != ZCFG_SUCCESS) {
-      getStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &restartIntArray, 3, "zowe", "launcher", "restartIntervals");
-    } else {
-      memcpy(&comp->restart_intervals.data, restart_intervals_default, sizeof(restart_intervals_default));
-      comp->restart_intervals.count = sizeof(restart_intervals_default)/sizeof(restart_intervals_default[0]);      
-      return;
-    }
   }
 
+  // if no restartIntervals configuration found, try to use zowe.launcher.restartIntervals
+  if (getStatus != ZCFG_SUCCESS) {
+    getStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &restartIntArray, 3, "zowe", "launcher", "restartIntervals");
+  }
+
+  // if there is no configuration of restartIntervals, use the default (defined above)
+  if (getStatus != ZCFG_SUCCESS) {
+    memcpy(&comp->restart_intervals.data, restart_intervals_default, sizeof(restart_intervals_default));
+    comp->restart_intervals.count = sizeof(restart_intervals_default)/sizeof(restart_intervals_default[0]);
+    return;
+  }
+
+  // load restartIntervals from the configuration
   JsonArray *intArray = jsonAsArray(restartIntArray);
   int count = jsonArrayGetCount(intArray);
   comp->restart_intervals.count = count;
@@ -457,7 +801,7 @@ static int init_components(char *components, ConfigManager *configmgr) {
       break;
     }
     name = strtok(NULL, ",");
-	}
+  }
   return 0;
 }
 
@@ -516,6 +860,7 @@ static void *handle_comp_comm(void *args) {
 
         while (next_line) {
           printf("%s\n", next_line);
+          check_for_and_print_sys_message(next_line); 
           next_line = strtok(NULL, "\n");
         }
 
@@ -533,6 +878,42 @@ static void *handle_comp_comm(void *args) {
   }
 
   return NULL;
+}
+
+/**
+ * @brief Copy environment variables + _BPX_SHAREAS for the specified component
+ * 
+ * @param comp The component
+ * @return const char** environment strings list
+ */
+static const char **env_comp(zl_comp_t *comp) {
+  const char *shareas = get_shareas_env(comp);
+
+  int env_records = 0;
+  for (char **env = shared_uss_env; *env != 0; env++) {
+    env_records++;
+  }
+
+  const char **env_comp = malloc((env_records + 3) * sizeof(char*));
+
+  char *componentEnv = malloc(256);
+  snprintf(componentEnv, 256, "ZWE_CLI_PARAMETER_COMPONENT=%s", comp->name);
+
+
+  int i = 0;
+  env_comp[i++] = shareas;
+  env_comp[i++] = componentEnv;
+  for (char **env = shared_uss_env; *env != 0 && i < env_records; env++) {
+    char *thisEnv = *env;
+    char *aux = malloc(strlen(thisEnv) + 1);
+    strncpy(aux, thisEnv, strlen(thisEnv));
+    aux[strlen(thisEnv)] = '\0';
+    trimRight(aux, strlen(aux));
+    env_comp[i] = aux;
+    i++;
+  }
+  env_comp[i] = NULL;
+  return env_comp;
 }
 
 static int start_component(zl_comp_t *comp) {
@@ -566,8 +947,11 @@ static int start_component(zl_comp_t *comp) {
   int fd_count = 3;
   int fd_map[3];
   char bin[PATH_MAX];
+  char js_path[PATH_MAX];
+  snprintf(bin, sizeof(bin), "%s/bin/utils/configmgr", zl_context.root_dir);
+  snprintf(js_path, sizeof(js_path), "%s/bin/commands/internal/start/component/cli.js", zl_context.root_dir);
+ 
 
-  snprintf(bin, sizeof(bin), "%s/bin/zwe", zl_context.root_dir);
   script = fopen(bin, "r");
   if (script == NULL) {
     DEBUG("script not open for %s - %s\n", comp->name, strerror(errno));
@@ -581,18 +965,29 @@ static int start_component(zl_comp_t *comp) {
   DEBUG("%s fd_map[0]=%d, fd_map[1]=%d, fd_map[2]=%d\n",
         comp->name, fd_map[0], fd_map[1], fd_map[2]);
 
-  const char *c_envp[2] = {get_shareas_env(comp), NULL};
   const char *c_args[] = {
     bin,
-    "internal",
-    "start",
-    "component",
-    "--config", zl_context.yaml_file,
-    "--ha-instance", zl_context.ha_instance_id,
-    "--component", comp->name, 
+    "-script",
+    js_path,
     NULL
   };
-  
+
+  const char **c_envp = env_comp(comp);
+
+  if (zl_context.config.debug_mode) {
+    DEBUG("params for %s:\n", bin);
+    for (const char **parm = c_args; *parm != 0; parm++) {
+      const char *thisParm = *parm;
+      DEBUG("for %s, include param: %s\n", bin, thisParm);
+    }
+
+    DEBUG("environment for %s: \n", bin);
+    for (const char **env = c_envp; *env != 0; env++) {
+      const char *thisEnv = *env;
+      DEBUG("for %s, include env: %s\n", bin, thisEnv);
+    }
+  }
+
   comp->pid = spawn(bin, fd_count, fd_map, &inherit, c_args, c_envp);
   if (comp->pid == -1) {
     DEBUG("spawn() failed for %s - %s\n", comp->name, strerror(errno));
@@ -1072,21 +1467,249 @@ static void handle_get_component_line(void *data, const char *line) {
   }
 }
 
-static int get_component_list(char *buf, size_t buf_size) {
-  char command[4*PATH_MAX];
-  snprintf (command, sizeof(command), "%s/bin/zwe internal get-launch-components --config \"%s\" --ha-instance %s",
-            zl_context.root_dir, zl_context.yaml_file, zl_context.ha_instance_id);
-  DEBUG("about to get component list\n");
-  char comp_list[COMP_LIST_SIZE] = {0};
-  if (run_command(command, handle_get_component_line, (void*)comp_list)) {
-    ERROR(MSG_COMP_LIST_ERR);
+static char* get_launch_components_cmd(char* sharedenv) {
+  const char basecmd[] = "%s ZWE_CLI_PARAMETER_CONFIG=\"%s\" %s/bin/utils/configmgr -script %s/bin/commands/internal/get-launch-components/cli.js 2>&1";
+  int size = (strlen(zl_context.root_dir) * 2) + strlen(zl_context.config_path) + strlen(sharedenv) + sizeof(basecmd) + 1;
+  char *command = malloc(size);
+
+  snprintf(command, size, basecmd,
+           sharedenv, zl_context.config_path, zl_context.root_dir, zl_context.root_dir);
+  return command;
+}
+
+/**
+ * @brief Get the sharedenv. The function contemplates enclosing in quotes the values of the variables.
+ * 
+ * @return char* string representation of the shared_uss_env variable, e.g. VAR1="sample" VAR2=12345
+ */
+static char* get_sharedenv(void) {
+  char *output = NULL;
+  char *aux = NULL;
+
+  int required = 0;
+  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
+    char *thisEnv = *env;
+    required += (strlen(thisEnv) + 3); // space + quotes
   }
+
+  required++;
+  output = malloc(required);
+  aux = malloc(required);
+  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
+    char *thisEnv = *env;
+    strcat(aux, thisEnv);
+    char *envName = strtok(aux, "=");
+    if (envName) {
+      strcat(output, envName);
+      char *envValue = &thisEnv[strlen(envName) + 1];
+      if (*envValue == '"') { // Env value is already enclosed in quotes
+        strcat(output, "=");
+        strcat(output, envValue);
+        trimRight(output, strlen(output));
+        strcat(output, " ");
+      } else {
+        strcat(output, "=\"");
+        strcat(output, envValue);
+        trimRight(output, strlen(output));
+        strcat(output, "\" ");
+      }
+    }
+    aux[0] = 0;
+  }
+  trimRight(output, strlen(output));
+  free(aux);
+  return output;
+}
+
+static int check_if_yaml_exists(const char *yaml, const char *name) {
+  struct stat s;
+  if (stat(yaml, &s) != 0) {
+    DEBUG("failed to get properties for file %s='%s' - %s\n", name, yaml, strerror(errno));
+    return -1;
+  }
+  return 0;
+}
+
+static void get_yaml_pair_key(yaml_document_t *document, yaml_node_pair_t *pair, char *buf, size_t buf_size) {
+  yaml_node_t *node = yaml_document_get_node(document, pair->key);
+  if (node) {
+    snprintf(buf, buf_size, "%.*s", (int)node->data.scalar.length, (const char *)node->data.scalar.value);
+#ifdef __MVS__
+    __atoe(buf);
+#endif
+  } else {
+    snprintf(buf, buf_size, "");
+    DEBUG ("key node not found\n");
+  }
+}
+
+static yaml_node_t *get_child_node(yaml_document_t *doc, yaml_node_t *node, const char *name) {
+  char key[ZL_YAML_KEY_LEN + 1];
+  yaml_node_t *value_node = NULL;
+  for (yaml_node_pair_t *pair = node->data.mapping.pairs.start; pair != node->data.mapping.pairs.top; pair++) {
+    get_yaml_pair_key(doc, pair, key, sizeof(key));
+    if (0 == strcmp(key, name)) {
+      value_node = yaml_document_get_node(doc, pair->value);
+      break;
+    }
+  }
+  return value_node;
+}
+
+static void get_yaml_scalar(yaml_document_t *doc, yaml_node_t *node, char *buf, size_t buf_size) {
+  char *value = (char *)node->data.scalar.value;
+  snprintf(buf, buf_size, "%s", value);
+#ifdef __MVS__
+  __atoe(buf);
+#endif
+}
+
+static yaml_node_t *get_node_by_path(yaml_document_t *doc, yaml_node_t *node, const char **path, size_t path_len) {
+  for (size_t i = 0; i < path_len; i++) {
+    node = get_child_node(doc, node, path[i]);
+    if (!node) {
+      break;
+    }
+  }
+  return node;
+}
+
+static int get_string_by_yaml_path(yaml_document_t *doc, yaml_node_t *root, const char **path, size_t path_len, char *buf, int buf_size) {
+  yaml_node_t *node = get_node_by_path(doc, root, path, path_len);
+  if (node && node->type == YAML_SCALAR_NODE) {
+    get_yaml_scalar(doc, node, buf, buf_size);
+    return 0;
+  }
+  return -1;
+}
+
+static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmgr) {
+  char comp_list[COMP_LIST_SIZE] = {0};
+  Json *result = NULL;
+  char manifestPath[PATH_MAX]={0};
+  char *runtimeDirectory=NULL;
+  char *extensionDirectory=NULL;
+  char item[128] = {0};
+  const char *start_path[] = {"commands", "start"};
+  int len = 0;
+  char errorBuffer[YAML_ERROR_MAX];
+  bool yamlExists;
+  bool startScript;
+  bool enabled;
+  bool wasMissing = false;
+
+  bool checkHaSection = false;
+
+  Json *haInstancesJson = NULL;
+  int getStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &haInstancesJson, 1, "haInstances");
+  if (!getStatus) {
+    if ((!strcmp(zl_context.ha_instance_id, "__ha_instance_id__")) || (!strcmp(zl_context.ha_instance_id, "{{ha_instance_id}}"))) {
+      int rc = 0;
+      int rsn = 0;
+      char *resolvedName = resolveSymbol("&SYSNAME", &rc, &rsn);
+      if (!rc) {
+        //ha instance name is always lowercase if derived from sysname automatically.
+        int nameLength = strlen(resolvedName);
+        for(int i = 0; i < nameLength; i++){
+          resolvedName[i] = tolower(resolvedName[i]);
+        }
+
+        // Resolves ha instance id for downstream as well.
+        snprintf(zl_context.ha_instance_id, 8+1, "%s", resolvedName);
+        checkHaSection = true;
+      } else {
+        ERROR("Could not resolve SYSNAME for HA instance lookup, rc=0x%x, rsn=0x%x\n", rc, rsn);
+      }
+    } else {
+      checkHaSection = true;
+    }
+  }
+
+  DEBUG("about to get component list\n");
+  int rc = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &result, 1, "components");
+  if (jsonIsObject(result)) {
+    JsonObject *resultObj = jsonAsObject(result);
+    JsonProperty *prop = resultObj->firstProperty;
+    getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &runtimeDirectory, 2, "zowe", "runtimeDirectory");
+    if (!getStatus) {
+      getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &extensionDirectory, 2, "zowe", "extensionDirectory");
+      if (getStatus) {
+        ERROR("failed to get extensionDirectory\n");
+        return -1;
+      }
+    } else {
+      ERROR("failed to get runtimeDirectory\n");
+      return -1;
+    }
+
+    
+
+    while (prop!=NULL) {
+      enabled = false;
+      // check if component is enabled
+      if (checkHaSection) {
+        getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled, 5, "haInstances", zl_context.ha_instance_id, "components", prop->key, "enabled");
+        if (getStatus) {
+          getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
+        }
+      } else {
+        getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
+      }
+      
+      if (getStatus) { // failed to get enabled value of the component
+        DEBUG("failed to get enabled value of the component %s\n", prop->key);
+        prop = prop->next;
+        continue;
+      }
+
+      yamlExists = true; //unused if not enabled. otherwise set to false if not found.
+      if (enabled) {
+        snprintf(manifestPath, PATH_MAX, "%s/components/%s/manifest.yaml", runtimeDirectory, prop->key);
+        DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
+  
+        // check if manifest.yaml is in <runtimeDirectory>/components/<component-name>/manifest.yaml
+        if (check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
+          yamlExists = false;
+          // if not check <extensionDirectory>/<component-name>/manifest.yaml
+          snprintf(manifestPath, PATH_MAX, "%s/%s/manifest.yaml", extensionDirectory, prop->key);
+          DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
+          if(!check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
+             yamlExists = true;
+          }
+        }
+      }
+
+      // read the yaml and check for item 'commands.start', if present then add enabled component to component list
+      startScript = false;
+      if(enabled && yamlExists) {
+        yaml_document_t *document = readYAML2(manifestPath, errorBuffer, YAML_ERROR_MAX, &wasMissing);
+        yaml_node_t *root =  yaml_document_get_root_node(document);
+        if (root) {
+            getStatus = get_string_by_yaml_path(document, root, start_path, sizeof(start_path)/sizeof(start_path[0]), item, sizeof(item));
+            memset(item, 0, sizeof(item));
+            if(!getStatus)
+              startScript = true;
+        }
+        if (startScript) {
+          strncpy(comp_list + len, prop->key, strlen(prop->key));
+          strncpy(comp_list + len + strlen(prop->key), ",", 1);
+          len += (strlen(prop->key)+1);
+        }
+      }
+      prop = prop->next;
+    }
+    if (len)
+      comp_list[len-1] = '\0';
+  }
+
   if (strlen(comp_list) == 0) {
     ERROR(MSG_COMP_LIST_EMPTY);
     return -1;
   }
+
   snprintf(buf, buf_size, "%s", comp_list);
   INFO(MSG_START_COMP_LIST, buf);
+
   return 0;
 }
 
@@ -1174,13 +1797,26 @@ static int process_workspace_dir(ConfigManager *configmgr) {
 
 static void print_line(void *data, const char *line) {
   printf("%s", line);
+  check_for_and_print_sys_message(line);
+}
+
+static char* get_start_prepare_cmd(char *sharedenv) {
+  const char basecmd[] = "%s ZWE_CLI_PARAMETER_CONFIG=\"%s\" %s/bin/utils/configmgr -script %s/bin/commands/internal/start/prepare/cli.js 2>&1";
+  int size = (strlen(zl_context.root_dir) * 2) + strlen(zl_context.config_path) + strlen(sharedenv) + sizeof(basecmd) + 1;
+  char *command = malloc(size);
+
+  snprintf(command, size, basecmd,
+           sharedenv, zl_context.config_path, zl_context.root_dir, zl_context.root_dir);
+  return command;
 }
 
 static int prepare_instance() {
-  char command[4*PATH_MAX];
+  char *sharedenv = get_sharedenv();
+  char *command = get_start_prepare_cmd(sharedenv);
+
+  free(sharedenv);
+
   DEBUG("about to prepare Zowe instance\n");
-  snprintf(command, sizeof(command), "%s/bin/zwe internal start prepare --config \"%s\" --ha-instance %s 2>&1",
-           zl_context.root_dir, zl_context.yaml_file, zl_context.ha_instance_id);
   if (run_command(command, print_line, NULL)) {
     ERROR(MSG_INST_PREP_ERR);
     return -1;
@@ -1259,22 +1895,29 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
+  setenv("_BPXK_AUTOCVT", "ON", 1);
   INFO(MSG_LAUNCHER_START);
+  INFO(MSG_LINE_LENGTH);
+  printf_wto(MSG_LAUNCHER_START); // Manual sys log print (messages not set here yet)
 
   zl_config_t config = read_config(argc, argv);
+  zl_context.config = config;
 
   LoggingContext *logContext = makeLoggingContext();
+  if (!logContext) {
+    ERROR(MSG_NO_LOG_CONTEXT);
+    printf_wto(MSG_NO_LOG_CONTEXT); // Manual sys log print (messages not set here yet)
+    exit(EXIT_FAILURE);
+  }
   logConfigureStandardDestinations(logContext);
 
   ConfigManager *configmgr = makeConfigManager(); /* configs,schemas,1,stderr); */
   CFGConfig *theConfig = addConfig(configmgr,ZOWE_CONFIG_NAME);
   cfgSetTraceStream(configmgr,stderr);
-
-  INFO("configmgr debug=%d\n",config.debug_mode);
-  cfgSetTraceLevel(configmgr, config.debug_mode ? 2 : 0);
-  
+  cfgSetTraceLevel(configmgr, zl_context.config.debug_mode ? 2 : 0);
   if (init_context(argc, argv, &config, configmgr)) {
     ERROR(MSG_CTX_INIT_FAILED);
+    printf_wto(MSG_CTX_INIT_FAILED); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
   
@@ -1284,7 +1927,7 @@ int main(int argc, char **argv) {
     INFO("Launcher is not using sleeps\n");
   }
 
-  cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.yaml_file);
+  cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.configmgr_path);
   int parm_member_len = strlen(zl_context.parm_member);
   if (parm_member_len > 0 && parm_member_len < 9) {
     cfgSetParmlibMemberName(configmgr, ZOWE_CONFIG_NAME, zl_context.parm_member);
@@ -1292,17 +1935,21 @@ int main(int argc, char **argv) {
 
   if (cfgLoadConfiguration(configmgr, ZOWE_CONFIG_NAME) != 0){
     ERROR(MSG_CFG_LOAD_FAIL);
+    printf_wto(MSG_CFG_LOAD_FAIL); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
   
   if (setup_signal_handlers()) {
     ERROR(MSG_SIGNAL_ERR);
+    printf_wto(MSG_SIGNAL_ERR); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
 
   if (process_root_dir(configmgr)) {
     exit(EXIT_FAILURE);
   }
+  
+  set_sys_messages(configmgr);
 
   //got root dir, can now load up the schemas from it
   char schemaList[PATH_MAX*2 + 4] = {0};
@@ -1313,11 +1960,12 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-
   if (!validateConfiguration(configmgr, stdout)){
     exit(EXIT_FAILURE);
   }
 
+  
+  set_shared_uss_env(configmgr);
 
   if (process_workspace_dir(configmgr)) {
     exit(EXIT_FAILURE);
@@ -1329,7 +1977,7 @@ int main(int argc, char **argv) {
   if (prepare_instance()) {
     exit(EXIT_FAILURE);
   }
-  if (get_component_list(comp_buf, sizeof(comp_buf))) {
+  if (get_component_list(comp_buf, sizeof(comp_buf), configmgr)) {
     exit(EXIT_FAILURE);
   }
   component_list = comp_buf;
@@ -1342,6 +1990,7 @@ int main(int argc, char **argv) {
 
   if (start_console_tread()) {
     ERROR(MSG_CONS_START_ERR);
+    free(shared_uss_env);
     exit(EXIT_FAILURE);
   }
 
@@ -1349,6 +1998,7 @@ int main(int argc, char **argv) {
 
   if (stop_console_thread()) {
     ERROR(MSG_CONS_STOP_ERR);
+    free(shared_uss_env);
     exit(EXIT_FAILURE);
   }
 
@@ -1356,6 +2006,7 @@ int main(int argc, char **argv) {
 
   INFO(MSG_LAUNCHER_STOPPED);
 
+  free(shared_uss_env);
   exit(EXIT_SUCCESS);
 }
 
@@ -1364,7 +2015,7 @@ int main(int argc, char **argv) {
   This program and the accompanying materials are
   made available under the terms of the Eclipse Public License v2.0 which accompanies
   this distribution, and is available at https://www.eclipse.org/legal/epl-v20.html
-
+  
   SPDX-License-Identifier: EPL-2.0
 
   Copyright Contributors to the Zowe Project.

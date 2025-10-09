@@ -8,7 +8,10 @@ Copyright Contributors to the Zowe Project.
 
 <h1 align="center">Zowe Launcher</h1>
 
-This is a POC project with the goal to provide an advanced launcher for Zowe components.
+The Zowe launcher is a part of the Zowe server architecture that was added as an optional program for HA/FT usage in v1.
+In v2, the Zowe laucher became the sole way to start the Zowe servers.
+The launcher's purpose is to start, restart, and stop each Zowe server component which has a `start` command,
+And in doing so it watches over such components for health (restarting them if they crash) and log management.
 
 ## Current features
 * Stopping Zowe using the conventional `P` operator command
@@ -35,14 +38,12 @@ The launcher binary will be saved into the bin directory.
 
 ## Deployment
 
-* Specify the Zowe installation and instance directories in `zowe.conf`
-* Run `patch-zowe.sh` to apply the require Zowe changes
-* Copy the launcher JCL (`samplib/ZWELNCH`) to your PROCLIB
-* Edit the JCL and specify the launcher directory in the WORKDIR variable
-
-## Component configuration
-
-Edit `components.conf` to add and remove components. The configuration consists of key-value pairs, where a key is a component name and a value is the path to the component binary.
+* Find the JCL used to start your Zowe instance (ZWESLSTC)
+* Stop that Zowe instance
+* Find the dataset used by that STC
+* Copy the binary from the bin directory into that dataset with whatever name you want
+* If necessary, update the PGM name to match the name of the resulting copy you just did
+* Restart that Zowe instance
 
 ## Operating the launcher
 
@@ -67,6 +68,6 @@ F ZWELNCH,APPL=START(component_name)
 F ZWELNCH,APPL=DISP
 ```
 
-## The project should fix the following issues
-* https://github.com/zowe/zowe-install-packaging/issues/1137
-* https://github.com/zowe/zowe-install-packaging/issues/790
+## Community
+
+This part of Zowe is currently developed by the zOS squad, which you can find on Slack at #zowe-zos-interface or 

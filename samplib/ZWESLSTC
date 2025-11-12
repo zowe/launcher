@@ -51,8 +51,6 @@
 //* from files to their right.
 //* Typically the right-most file should be the Zowe default yaml.
 //*
-//* Note: All PARMLIB() entries must all have the same member name.
-//*
 //********************************************************************/
 //STDENV   DD  *
 _CEE_ENVFILE_CONTINUATION=\

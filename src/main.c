@@ -76,6 +76,20 @@ extern char ** environ;
 
 #define YAML_ERROR_MAX 1024
 
+#ifndef LAUNCHER_VERSION_MAJOR
+#define LAUNCHER_VERSION_MAJOR 0
+#endif
+#ifndef LAUNCHER_VERSION_MINOR
+#define LAUNCHER_VERSION_MINOR 0
+#endif
+#ifndef LAUNCHER_VERSION_PATCH
+#define LAUNCHER_VERSION_PATCH 0
+#endif
+#ifndef LAUNCHER_VERSION_DATE_STAMP
+#define LAUCHNER_VERSION_DATE_STAMP 0
+#endif
+char launcherVersion[40];
+
 // Progressive restart internals in seconds
 static int restart_intervals_default[] = {1, 1, 1, 5, 5, 10, 20, 60, 120, 240};
 
@@ -1899,9 +1913,10 @@ int main(int argc, char **argv) {
   }
 
   setenv("_BPXK_AUTOCVT", "ON", 1);
-  INFO(MSG_LAUNCHER_START);
+  sprintf(launcherVersion, "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
+  INFO(MSG_LAUNCHER_START, launcherVersion);
   INFO(MSG_LINE_LENGTH);
-  printf_wto(MSG_LAUNCHER_START); // Manual sys log print (messages not set here yet)
+  printf_wto(MSG_LAUNCHER_START, launcherVersion); // Manual sys log print (messages not set here yet)
 
   zl_config_t config = read_config(argc, argv);
   zl_context.config = config;

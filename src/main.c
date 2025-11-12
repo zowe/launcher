@@ -1105,7 +1105,6 @@ static int start_component(zl_comp_t *comp, ConfigManager *configmgr) {
 
   if (!getStatus) {
     DEBUG("Creating log file %s\n", log_name);
-    printf("Creating log file %s\n", log_name);
     comp->log_file = fopen(log_name, "w");
     if (!comp->log_file) {
       ERROR(MSG_NO_LOG_FILE, comp->name);
@@ -1270,7 +1269,7 @@ static int stop_component(zl_comp_t *comp) {
   return 0;
 }
 
-static int stop_components() {
+static int stop_components(void) {
 
   INFO(MSG_STOPING_COMPS);
   prevent_restart=true;

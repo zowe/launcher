@@ -1939,9 +1939,12 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.configmgr_path);
+  FILE *backupTrace = configmgr->traceOut;
+  configmgr->traceOut = stdout;
+  int resultCfgLoad = cfgLoadConfiguration(configmgr, ZOWE_CONFIG_NAME);
+  configmgr->traceOut = backupTrace;
 
-  if (cfgLoadConfiguration(configmgr, ZOWE_CONFIG_NAME) != 0){
+  if (resultCfgLoad != 0) {
     ERROR(MSG_CFG_LOAD_FAIL);
     printf_wto(MSG_CFG_LOAD_FAIL); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);

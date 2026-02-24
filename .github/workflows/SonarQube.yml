@@ -31,18 +31,18 @@ jobs:
 
       - name: SonarQube Scan
         continue-on-error: false
-        uses: sonarsource/sonarqube-scan-action@v5
+        uses: sonarsource/sonarqube-scan-action@v6
         env:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
-            -Dsonar.projectKey=zowe_launcher
-            -Dsonar.organization=zowe
-            -Dsonar.sources=.
-            -Dsonar.language=c
-            -Dsonar.cfamily.build-wrapper-output=bw-output
-            -Dsonar.cfamily.gcov.reportsPath=.
-            -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/build/**
-            -Dsonar.qualitygate.wait=true
-            -Dsonar.qualitygate.timeout=600
+            "-Dsonar.projectKey=zowe_launcher"
+            "-Dsonar.organization=zowe"
+            "-Dsonar.sources=."
+            "-Dsonar.language=c"
+            "-Dsonar.cfamily.build-wrapper-output=bw-output"
+            "-Dsonar.cfamily.gcov.reportsPath=."
+            "-Dsonar.exclusions=**/node_modules/**,**/dist/**,**/build/**"
+            "-Dsonar.qualitygate.wait=true"
+            "-Dsonar.qualitygate.timeout=600"

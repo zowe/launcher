@@ -1952,7 +1952,7 @@ int main(int argc, char **argv) {
   sprintf(launcherVersion, "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
   INFO(MSG_LAUNCHER_START, launcherVersion, manifestVersion);
   INFO(MSG_LINE_LENGTH);
-  printf_wto(MSG_LAUNCHER_START, launcherVersion, manifestVersion);
+  printf_wto(MSG_LAUNCHER_START, launcherVersion, manifestVersion);  // Manual sys log print (messages not set here yet)
 
   zl_config_t config = read_config(argc, argv);
   zl_context.config = config;
@@ -1993,8 +1993,6 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-
-
   set_sys_messages(configmgr);
 
   //got root dir, can now load up the schemas from it
@@ -2010,7 +2008,6 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  
   set_shared_uss_env(configmgr);
 
   if (process_workspace_dir(configmgr)) {

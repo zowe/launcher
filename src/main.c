@@ -1945,14 +1945,13 @@ int main(int argc, char **argv) {
   }
 
   setenv("_BPXK_AUTOCVT", "ON", 1);
-  sprintf(launcherVersion, "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
-
-  INFO(MSG_LAUNCHER_START, launcherVersion, manifestVersion);
-  INFO(MSG_LINE_LENGTH);
 
   char manifestVersion[64] = {0};
   get_manifest_version(manifestVersion, sizeof(manifestVersion));
-
+  
+  sprintf(launcherVersion, "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
+  INFO(MSG_LAUNCHER_START, launcherVersion, manifestVersion);
+  INFO(MSG_LINE_LENGTH);
   printf_wto(MSG_LAUNCHER_START, launcherVersion, manifestVersion);
 
   zl_config_t config = read_config(argc, argv);

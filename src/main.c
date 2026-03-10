@@ -1946,6 +1946,9 @@ int main(int argc, char **argv) {
 
   setenv("_BPXK_AUTOCVT", "ON", 1);
 
+  zl_config_t config = read_config(argc, argv);
+  zl_context.config = config;
+
   char manifestVersion[64] = {0};
   get_manifest_version(manifestVersion, sizeof(manifestVersion));
   
@@ -1953,9 +1956,6 @@ int main(int argc, char **argv) {
   INFO(MSG_LAUNCHER_START, launcherVersion, manifestVersion);
   INFO(MSG_LINE_LENGTH);
   printf_wto(MSG_LAUNCHER_START, launcherVersion, manifestVersion);  // Manual sys log print (messages not set here yet)
-
-  zl_config_t config = read_config(argc, argv);
-  zl_context.config = config;
 
   LoggingContext *logContext = makeLoggingContext();
   if (!logContext) {

@@ -642,13 +642,13 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
     return -1;
   }
   snprintf (zl_context.ha_instance_id, sizeof(zl_context.ha_instance_id), "%s", argv[1]);
-  to_lower(zl_context.ha_instance_id);
   for (int i = 0; i < strlen(zl_context.ha_instance_id); i++) {
     if (zl_context.ha_instance_id[i] == ',') {
       zl_context.ha_instance_id[i] = 0;
       break;
     }
   }
+  to_lower(zl_context.ha_instance_id);
   INFO(MSG_HA_INST_ID, zl_context.ha_instance_id);
 
   if (pthread_cond_init(&zl_context.event_cv, NULL) != 0) {

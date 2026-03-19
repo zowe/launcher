@@ -21,7 +21,7 @@ fi
 LAUNCHER='../bin/zowe_launcher'
 if [ ! -f "${LAUNCHER}" ]; then
     echo "Executable \"${LAUNCHER}\" not found."
-    exit 1
+    exit 255
 fi
 
 ABS_PATH=$(cd .; pwd)

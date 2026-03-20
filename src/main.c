@@ -31,6 +31,7 @@
 #include <sys/__messag.h>
 #include <unistd.h>
 #include "msg.h"
+#include "dep_graph.h"
 
 #include "collections.h"
 #include "alloc.h"
@@ -133,6 +134,17 @@ typedef struct zl_config_t {
   bool debug_mode;
 } zl_config_t;
 
+/* Maximum number of declared dependencies per component. */
+#define ZL_MAX_DEPS        32
+/* Maximum length of a dependency component name. */
+#define ZL_DEP_NAME_LEN    256
+/* Maximum length of a dependency versionRange expression. */
+#define ZL_DEP_VER_LEN     64
+/* Maximum number of ready-message patterns per component. */
+#define ZL_MAX_READY_MSGS  32
+/* Maximum length of a single ready-message pattern. */
+#define ZL_READY_MSG_LEN   256
+
 typedef struct zl_comp_t {
 
   char name[32];
@@ -154,6 +166,31 @@ typedef struct zl_comp_t {
 
   zl_int_array_t restart_intervals;
   int min_uptime; // secs
+
+  /* --- Dependency-ordering fields (populated from manifest.yaml) --- */
+
+  /* Components this component depends upon for initial startup. */
+  char dep_names[ZL_MAX_DEPS][ZL_DEP_NAME_LEN];
+  /* Optional semver versionRange per dependency (empty string = unconstrained). */
+  char dep_version_ranges[ZL_MAX_DEPS][ZL_DEP_VER_LEN];
+  int  dep_count;
+
+  /* Substrings to watch for in stdout that signal this component is ready.
+   * Any one match is sufficient.  If empty the component is considered
+   * ready immediately after its process is spawned. */
+  char ready_messages[ZL_MAX_READY_MSGS][ZL_READY_MSG_LEN];
+  int  ready_msg_count;
+
+  /* Set to true once this component has emitted a ready message (or
+   * immediately if no ready_messages are configured).  Read by the main
+   * startup thread; written by the component communication thread. Both
+   * accesses are guarded by zl_context.comp_ready_lock. */
+  bool is_ready;
+
+  /* Set to true once start_component() has been called for this component
+   * during the initial ordered startup.  Prevents double-starts in the
+   * dep-ordering loop.  Not used for restarts. */
+  bool dep_started;
 
 } zl_comp_t;
 
@@ -194,6 +231,13 @@ struct {
   
   pid_t pid;
   char userid[9];
+
+  /* Condition variable + mutex used to broadcast when a component transitions
+   * to is_ready == true during the initial ordered startup sequence.
+   * The main thread (start_components) waits here; component communication
+   * threads signal here. */
+  pthread_cond_t  comp_ready_cv;
+  pthread_mutex_t comp_ready_lock;
   
 } zl_context = {.config = {.debug_mode = false}, .trim_sys_message = false, .userid = "(NONE)"} ;
 
@@ -655,6 +699,16 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
     return -1;
   }
 
+  if (pthread_cond_init(&zl_context.comp_ready_cv, NULL) != 0) {
+    DEBUG("pthread_cond_init() comp_ready_cv error - %s\n", strerror(errno));
+    return -1;
+  }
+
+  if (pthread_mutex_init(&zl_context.comp_ready_lock, NULL) != 0) {
+    DEBUG("pthread_mutex_init() comp_ready_lock error - %s\n", strerror(errno));
+    return -1;
+  }
+
   return 0;
 }
 
@@ -696,6 +750,19 @@ static void init_component_restart_intervals(zl_comp_t *comp, ConfigManager *con
   for (int i = 0; i < count; i++) {
     comp->restart_intervals.data[i] = jsonArrayGetNumber(intArray, i);
   }
+}
+
+static void init_dep_ready_timeout(ConfigManager *configmgr) {
+  int timeout = DEP_READY_TIMEOUT_SECS_DEFAULT;
+  int getStatus = cfgGetIntC(configmgr, ZOWE_CONFIG_NAME, &timeout,
+                             3, "zowe", "launchScript",
+                             "dependencyReadyTimeoutSeconds");
+  if (getStatus == ZCFG_SUCCESS && timeout > 0) {
+    dep_ready_timeout_secs = timeout;
+  } else {
+    dep_ready_timeout_secs = DEP_READY_TIMEOUT_SECS_DEFAULT;
+  }
+  DEBUG("dependency ready timeout set to %d seconds\n", dep_ready_timeout_secs);
 }
 
 static void init_component_min_uptime(zl_comp_t *comp, ConfigManager *configmgr) {
@@ -808,6 +875,7 @@ static int init_components(char *components, ConfigManager *configmgr) {
 }
 
 static int send_event(enum zl_event_t event_type, void *event_data);
+static bool check_ready_message(const zl_comp_t *comp, const char *line);
 
 static void *handle_comp_comm(void *args) {
 
@@ -862,7 +930,23 @@ static void *handle_comp_comm(void *args) {
 
         while (next_line) {
           printf("%s\n", next_line);
-          check_for_and_print_sys_message(next_line); 
+          check_for_and_print_sys_message(next_line);
+
+          /* Ready-message detection: only relevant while the component has
+           * not yet been declared ready (is_ready guarded by comp_ready_lock).
+           * Restarts reuse the same flag; because start_components() has
+           * already completed by the time a restart occurs, a re-signalled
+           * ready message is harmless – nobody is waiting. */
+          if (!comp->is_ready && check_ready_message(comp, next_line)) {
+            pthread_mutex_lock(&zl_context.comp_ready_lock);
+            if (!comp->is_ready) {          /* double-check inside lock */
+              comp->is_ready = true;
+              pthread_cond_broadcast(&zl_context.comp_ready_cv);
+              INFO(MSG_COMP_READY, comp->name);
+            }
+            pthread_mutex_unlock(&zl_context.comp_ready_lock);
+          }
+
           next_line = strtok(NULL, "\n");
         }
 
@@ -1012,18 +1096,370 @@ static int start_component(zl_comp_t *comp) {
   return 0;
 }
 
+/*
+ * validate_component_deps - verify that every dependency named in each
+ * component's dep_names[] array is present in the active component list
+ * (i.e. was found, enabled, and initialised by init_components()).
+ *
+ * Returns 0 if all dependencies are satisfied, -1 if any are missing.
+ * All missing dependencies are reported before returning so the operator
+ * sees the complete picture in a single startup attempt.
+ */
+static int validate_component_deps(void) {
+  int rc = 0;
+  for (size_t i = 0; i < zl_context.child_count; i++) {
+    zl_comp_t *comp = &zl_context.children[i];
+    for (int di = 0; di < comp->dep_count; di++) {
+      bool found = false;
+      for (size_t j = 0; j < zl_context.child_count; j++) {
+        if (strcasecmp(comp->dep_names[di], zl_context.children[j].name) == 0) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        ERROR(MSG_DEP_MISSING, comp->name, comp->dep_names[di]);
+        rc = -1;
+      }
+    }
+  }
+  return rc;
+}
+
+
+static bool check_ready_message(const zl_comp_t *comp, const char *line) {
+  for (int i = 0; i < comp->ready_msg_count; i++) {
+    if (strstr(line, comp->ready_messages[i]) != NULL) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/*
+ * dep_all_deps_ready - return true if every declared dependency of 'comp'
+ * is present in the launch list and has is_ready == true, OR is not in
+ * the launch list at all (treated as externally satisfied).
+ *
+ * Must be called with zl_context.comp_ready_lock held (reads is_ready).
+ */
+static bool dep_all_deps_ready(const zl_comp_t *comp) {
+  for (int di = 0; di < comp->dep_count; di++) {
+    bool dep_found = false;
+    for (size_t ci = 0; ci < zl_context.child_count; ci++) {
+      if (strcasecmp(comp->dep_names[di], zl_context.children[ci].name) == 0) {
+        dep_found = true;
+        if (!zl_context.children[ci].is_ready) {
+          return false;
+        }
+        break;
+      }
+    }
+    /* If the named dependency is not in our component list we cannot wait
+     * for it; treat it as satisfied so startup is not permanently blocked. */
+    (void)dep_found;
+  }
+  return true;
+}
+
+/*
+ * load_comp_deps - read each component's manifest.yaml and populate the
+ * dep_names / ready_messages fields on the corresponding zl_comp_t.
+ *
+ * This is called once after init_components(), before start_components().
+ * Errors are non-fatal: a missing or unreadable field is simply skipped.
+ */
+static void load_comp_deps(ConfigManager *configmgr) {
+  char *runtimeDirectory = NULL;
+  char *extensionDirectory = NULL;
+  int getStatus;
+
+  getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &runtimeDirectory,
+                            2, "zowe", "runtimeDirectory");
+  if (getStatus) {
+    DEBUG("load_comp_deps: failed to get runtimeDirectory\n");
+    return;
+  }
+  getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &extensionDirectory,
+                            2, "zowe", "extensionDirectory");
+  if (getStatus) {
+    DEBUG("load_comp_deps: failed to get extensionDirectory\n");
+    return;
+  }
+
+  const char *deps_key[]  = {"dependencies", "components"};
+  const char *ready_key[] = {"messages", "ready"};
+  char errorBuffer[YAML_ERROR_MAX];
+  bool wasMissing = false;
+
+  for (size_t ci = 0; ci < zl_context.child_count; ci++) {
+    zl_comp_t *comp = &zl_context.children[ci];
+
+    /* Locate the manifest – check runtime dir first, then extension dir. */
+    char manifestPath[PATH_MAX];
+    snprintf(manifestPath, sizeof(manifestPath),
+             "%s/components/%s/manifest.yaml", runtimeDirectory, comp->name);
+
+    if (check_if_yaml_exists(manifestPath, "MANIFEST.YAML") != 0) {
+      snprintf(manifestPath, sizeof(manifestPath),
+               "%s/%s/manifest.yaml", extensionDirectory, comp->name);
+      if (check_if_yaml_exists(manifestPath, "MANIFEST.YAML") != 0) {
+        DEBUG("load_comp_deps: no manifest found for %s\n", comp->name);
+        continue;
+      }
+    }
+
+    yaml_document_t *document = readYAML2(manifestPath, errorBuffer,
+                                          YAML_ERROR_MAX, &wasMissing);
+    if (!document) {
+      DEBUG("load_comp_deps: failed to parse manifest for %s: %s\n",
+            comp->name, errorBuffer);
+      continue;
+    }
+
+    yaml_node_t *root = yaml_document_get_root_node(document);
+    if (!root) {
+      continue;
+    }
+
+    /* ---- dependencies.components: sequence of {name, versionRange?} objects ---- */
+    yaml_node_t *deps_node = get_node_by_path(document, root, deps_key,
+                                              sizeof(deps_key)/sizeof(deps_key[0]));
+    if (deps_node && deps_node->type == YAML_SEQUENCE_NODE) {
+      for (yaml_node_item_t *item = deps_node->data.sequence.items.start;
+           item != deps_node->data.sequence.items.top; item++) {
+        if (comp->dep_count >= ZL_MAX_DEPS) {
+          WARN("component %s: dependency list truncated at %d entries\n",
+               comp->name, ZL_MAX_DEPS);
+          break;
+        }
+        yaml_node_t *item_node = yaml_document_get_node(document, *item);
+        if (item_node && item_node->type == YAML_MAPPING_NODE) {
+          yaml_node_t *name_node = get_child_node(document, item_node, "name");
+          if (!name_node || name_node->type != YAML_SCALAR_NODE) {
+            WARN("component %s: dependency entry missing 'name', skipping\n",
+                 comp->name);
+            continue;
+          }
+          get_yaml_scalar(document, name_node,
+                          comp->dep_names[comp->dep_count], ZL_DEP_NAME_LEN);
+
+          /* versionRange is optional; leave empty string if absent. */
+          comp->dep_version_ranges[comp->dep_count][0] = '\0';
+          yaml_node_t *ver_node = get_child_node(document, item_node, "versionRange");
+          if (ver_node && ver_node->type == YAML_SCALAR_NODE) {
+            get_yaml_scalar(document, ver_node,
+                            comp->dep_version_ranges[comp->dep_count],
+                            ZL_DEP_VER_LEN);
+          }
+
+          DEBUG("component %s depends on %s (versionRange='%s')\n",
+                comp->name, comp->dep_names[comp->dep_count],
+                comp->dep_version_ranges[comp->dep_count]);
+          comp->dep_count++;
+        }
+      }
+    }
+
+    /* ---- messages.ready: sequence of ready-message substrings ---- */
+    yaml_node_t *ready_node = get_node_by_path(document, root, ready_key,
+                                               sizeof(ready_key)/sizeof(ready_key[0]));
+    if (ready_node && ready_node->type == YAML_SEQUENCE_NODE) {
+      for (yaml_node_item_t *item = ready_node->data.sequence.items.start;
+           item != ready_node->data.sequence.items.top; item++) {
+        if (comp->ready_msg_count >= ZL_MAX_READY_MSGS) {
+          WARN("component %s: messages.ready list truncated at %d entries\n",
+               comp->name, ZL_MAX_READY_MSGS);
+          break;
+        }
+        yaml_node_t *item_node = yaml_document_get_node(document, *item);
+        if (item_node && item_node->type == YAML_SCALAR_NODE) {
+          get_yaml_scalar(document, item_node,
+                          comp->ready_messages[comp->ready_msg_count],
+                          ZL_READY_MSG_LEN);
+          comp->ready_msg_count++;
+        }
+      }
+    }
+
+    if (comp->dep_count > 0 || comp->ready_msg_count > 0) {
+      DEBUG("component %s: %d dep(s), %d messages.ready entry(s)\n",
+            comp->name, comp->dep_count, comp->ready_msg_count);
+    }
+  }
+}
+
+/*
+ * start_components - start all registered components in dependency order.
+ *
+ * Components whose manifest declares 'dependencies' will wait (up to
+ * dep_ready_timeout_secs seconds per wait) until every named dependency has
+ * signalled readiness.  Components with no 'dependencies' entry, or whose
+ * dependencies are already satisfied, are started immediately.
+ *
+ * The ordering is computed with a topological sort so independent components
+ * are eligible to start as early as possible.  If a cycle is detected the
+ * original declaration order is used and a warning is emitted.
+ *
+ * This function has NO effect on restarts; restart_component() calls
+ * start_component() directly and bypasses all dependency logic.
+ */
+
+/* Default number of seconds start_components will wait for a dependency to
+ * become ready before issuing a warning and forcing the dependent to start.
+ * Overridable at runtime via zowe.launchScript.dependencyReadyTimeoutSeconds. */
+#define DEP_READY_TIMEOUT_SECS_DEFAULT 600
+static int dep_ready_timeout_secs = DEP_READY_TIMEOUT_SECS_DEFAULT;
+
 static int start_components(void) {
 
   INFO(MSG_STARTING_COMPS);
 
-  int rc = 0;
+  int n = (int)zl_context.child_count;
 
-  for (size_t i = 0; i < zl_context.child_count; i++) {
-    if (start_component(&zl_context.children[i])) {
-      ERROR(MSG_COMP_START_FAILED, zl_context.children[i].name);
-      rc = -1;
+  /* Build adjacency matrix: depends[i*n + j] = 1 means child[i] depends on
+   * child[j] (child[j] must be ready before child[i] starts). */
+  int *depends = (int *)safeMalloc(n * n * sizeof(int), "dep matrix");
+  if (!depends) {
+    WARN("failed to alloc dependency matrix, starting in declaration order\n");
+    int rc = 0;
+    for (size_t i = 0; i < zl_context.child_count; i++) {
+      if (start_component(&zl_context.children[i])) {
+        ERROR(MSG_COMP_START_FAILED, zl_context.children[i].name);
+        rc = -1;
+      }
+    }
+    if (rc) WARN(MSG_NOT_ALL_STARTED); else INFO(MSG_COMPS_STARTED);
+    return rc;
+  }
+  memset(depends, 0, n * n * sizeof(int));
+
+  for (int i = 0; i < n; i++) {
+    zl_comp_t *comp = &zl_context.children[i];
+    for (int di = 0; di < comp->dep_count; di++) {
+      for (int j = 0; j < n; j++) {
+        if (strcasecmp(comp->dep_names[di], zl_context.children[j].name) == 0) {
+          depends[i * n + j] = 1;
+          break;
+        }
+      }
     }
   }
+
+  /* Topological sort – fall back to declaration order on cycle. */
+  int order[MAX_CHILD_COUNT];
+  if (dep_topo_sort(n, depends, order) != 0) {
+    ERROR(MSG_DEP_CYCLE);
+    for (int i = 0; i < n; i++) order[i] = i;
+  }
+  safeFree((char *)depends, n * n * sizeof(int));
+
+  int rc = 0;
+  int started_count = 0;
+
+  /* Main startup loop.  We hold comp_ready_lock while inspecting is_ready
+   * flags and while waiting on comp_ready_cv.  We release it around the
+   * actual start_component() call to avoid deadlock with the comm thread. */
+  if (pthread_mutex_lock(&zl_context.comp_ready_lock) != 0) {
+    DEBUG("start_components: pthread_mutex_lock error - %s\n", strerror(errno));
+  }
+
+  while (started_count < n) {
+    int batch_count = 0;
+
+    /* Launch every component whose dependencies are currently satisfied. */
+    for (int oi = 0; oi < n; oi++) {
+      int i = order[oi];
+      zl_comp_t *comp = &zl_context.children[i];
+
+      if (comp->dep_started) continue;
+      if (!dep_all_deps_ready(comp)) continue;
+
+      comp->dep_started = true;
+
+      /* Release lock before spawning so the new comm thread can acquire it
+       * immediately (e.g. to signal ready for zero-dep components). */
+      pthread_mutex_unlock(&zl_context.comp_ready_lock);
+
+      if (comp->dep_count > 0) {
+        INFO(MSG_DEP_STARTING, comp->name);
+      }
+
+      if (start_component(comp) != 0) {
+        ERROR(MSG_COMP_START_FAILED, comp->name);
+        rc = -1;
+      }
+
+      started_count++;
+      batch_count++;
+
+      /* Components with no readyMessage are considered ready the moment
+       * their process has been spawned; signal any thread waiting below. */
+      pthread_mutex_lock(&zl_context.comp_ready_lock);
+      if (comp->ready_msg_count == 0) {
+        comp->is_ready = true;
+        pthread_cond_broadcast(&zl_context.comp_ready_cv);
+      }
+    }
+
+    if (started_count >= n) break;
+
+    if (batch_count == 0) {
+      /* No component could be started this iteration – we must wait for one
+       * or more running components to emit their ready message. */
+
+      /* Log which blocker we are waiting on (first unstarted component). */
+      for (int oi = 0; oi < n; oi++) {
+        int i = order[oi];
+        zl_comp_t *comp = &zl_context.children[i];
+        if (!comp->dep_started) {
+          for (int di = 0; di < comp->dep_count; di++) {
+            INFO(MSG_DEP_WAIT, comp->name, comp->dep_names[di]);
+          }
+          break;
+        }
+      }
+
+      struct timespec ts;
+      {
+        struct timeval now;
+        gettimeofday(&now, NULL);
+        ts.tv_sec  = now.tv_sec + dep_ready_timeout_secs;
+        ts.tv_nsec = now.tv_usec * 1000;
+      }
+
+      int wait_rc = pthread_cond_timedwait(&zl_context.comp_ready_cv,
+                                           &zl_context.comp_ready_lock, &ts);
+
+      if (wait_rc == ETIMEDOUT) {
+        /* Force-start every remaining component so the launcher does not
+         * hang indefinitely due to a misconfigured dependency. */
+        for (int oi = 0; oi < n; oi++) {
+          int i = order[oi];
+          zl_comp_t *comp = &zl_context.children[i];
+          if (!comp->dep_started) {
+            WARN(MSG_DEP_TIMEOUT, comp->name);
+            comp->dep_started = true;
+            pthread_mutex_unlock(&zl_context.comp_ready_lock);
+
+            if (start_component(comp) != 0) {
+              ERROR(MSG_COMP_START_FAILED, comp->name);
+              rc = -1;
+            }
+            started_count++;
+
+            pthread_mutex_lock(&zl_context.comp_ready_lock);
+            if (comp->ready_msg_count == 0) {
+              comp->is_ready = true;
+              pthread_cond_broadcast(&zl_context.comp_ready_cv);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  pthread_mutex_unlock(&zl_context.comp_ready_lock);
 
   if (rc) {
     WARN(MSG_NOT_ALL_STARTED);
@@ -1991,6 +2427,18 @@ int main(int argc, char **argv) {
   component_list = comp_buf;
 
   if (init_components(component_list, configmgr)) {
+    exit(EXIT_FAILURE);
+  }
+
+  /* Load dependency and ready-message info from each component's
+   * manifest.yaml.  This must run after init_components() (so the
+   * zl_comp_t array is populated) but before start_components().
+   * Errors inside load_comp_deps are non-fatal: missing fields simply
+   * mean the component has no declared dependencies or ready messages. */
+  init_dep_ready_timeout(configmgr);
+  load_comp_deps(configmgr);
+
+  if (validate_component_deps()) {
     exit(EXIT_FAILURE);
   }
 

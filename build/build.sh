@@ -144,6 +144,7 @@ xlclang \
   libregexp.o \
   polyfill.o \
   ${LAUNCHER_DIR}/src/main.c \
+  ${LAUNCHER_DIR}/src/dep_graph.c \
   ${DEPS_DESTINATION}/${COMMON}/c/alloc.c \
   ${DEPS_DESTINATION}/${COMMON}/c/bpxskt.c \
   ${DEPS_DESTINATION}/${COMMON}/c/charsets.c \

@@ -967,7 +967,7 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
   UnixFile *directory = NULL;
 
   int entries_found = 0;
-  int *newest_timestamps = malloc(sizeof(int)*rollover_count);
+  int *newest_timestamps = safeMalloc(sizeof(int)*rollover_count, "componentTimestamp");
   for (int i = 0; i < rollover_count; i++) {
     newest_timestamps[i] = 0;
   }
@@ -996,7 +996,7 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
         if (0 == indexOfString(name, strlen(name), search_string, 0)) {
           entries_found++;
           char file_path[PATH_MAX];
-          FileInfo *file_info = malloc(sizeof(FileInfo));
+          FileInfo *file_info = safeMalloc(sizeof(FileInfo), "logFileInfo");
           snprintf(file_path, PATH_MAX, "%s/%s", log_directory, name);
           fileInfo(file_path, file_info, &returnCode, &reasonCode);
           if (!returnCode) { 
@@ -1018,7 +1018,7 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
           } else {
             WARN("stat failed for %s, rc=0x%x, rsn=0x%x\n", name, returnCode, reasonCode);
           }
-          free(file_info);
+          safeFree(file_info, sizeof(FileInfo));
         }
       }
     }
@@ -1044,7 +1044,7 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
           entryStart += entryLength;
           if (0 == indexOfString(name, strlen(name), search_string, 0)) {
             char file_path[PATH_MAX];
-            FileInfo *file_info = malloc(sizeof(FileInfo));
+            FileInfo *file_info = safeMalloc(sizeof(FileInfo), "logFileInfo2");
             snprintf(file_path, PATH_MAX, "%s/%s", log_directory, name);
             fileInfo(file_path, file_info, &returnCode, &reasonCode);
             if (!returnCode) { 
@@ -1064,7 +1064,7 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
             } else {
               WARN("stat failed for %s, rc=0x%x, rsn=0x%x\n", name, returnCode, reasonCode);
             }
-            free(file_info);
+            safeFree(file_info, sizeof(FileInfo));
           }
         }
       }
@@ -1076,7 +1076,7 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
     }
   }
 
-  free(newest_timestamps);
+  safeFree(newest_timestamps, sizeof(int)*rollover_count);
 
   time_t t = time(NULL);
   char log_timestamp[32];

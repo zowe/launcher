@@ -944,6 +944,7 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
 
   int rollover_count = 4;
   int getStatus = cfgGetIntC(configmgr, ZOWE_CONFIG_NAME, &rollover_count, 3, "zowe", "logging", "rolloverCount");
+  INFO("get_component_log_name rolloverCount = %i", getStatus);
   if (getStatus) {
     rollover_count = 4;
     getStatus = 0;
@@ -951,12 +952,14 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
 
   char *log_directory = NULL;
   getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &log_directory, 2, "zowe", "logDirectory");
+  INFO("get_component_log_name logDirectory = %i", getStatus);
   if (getStatus) {
     return getStatus;
   }
 
   char *job_prefix = NULL;
   getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &job_prefix, 3, "zowe", "job", "prefix");
+  INFO("get_component_log_name jobPrefix = %i", getStatus);
   if (getStatus) {
     job_prefix = "ZWE1";
     getStatus = 0;

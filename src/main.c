@@ -1103,6 +1103,8 @@ static int start_component(zl_comp_t *comp, ConfigManager *configmgr) {
   char log_name[PATH_MAX];
   int getStatus = get_component_log_name(comp, configmgr, log_name);
 
+  INFO("getStatus = %i\n", getStatus);
+  
   if (!getStatus) {
     DEBUG("Creating log file %s\n", log_name);
     comp->log_file = fopen(log_name, "w");

@@ -1077,6 +1077,7 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
         WARN(MSG_LOG_DIR_CLOSE, returnCode, reasonCode, log_directory);
       }
     }
+    INFO("get_component_log_name END\n");
   }
 
   safeFree(newest_timestamps, sizeof(int)*rollover_count);

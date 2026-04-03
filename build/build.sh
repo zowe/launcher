@@ -60,6 +60,7 @@ echo "Compiling qascii libyaml and quickjs"
 
 xlclang \
   -c \
+  ${ZWE_XLCLANG_FLAGS} \
   -q64 \
   -qascii \
   "-Wc,float(ieee),longname,langlvl(extc99),gonum,goff,ASM,asmlib('CEE.SCEEMAC','SYS1.MACLIB','SYS1.MODGEN')" \
@@ -97,6 +98,7 @@ fi
 echo "Compiling zowe_launcher"
 
 xlclang \
+  ${ZWE_XLCLANG_FLAGS} \
   -q64 \
   "-Wa,goff" \
   "-Wc,float(ieee),langlvl(extc99),agg,list()" \

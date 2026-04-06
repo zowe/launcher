@@ -143,7 +143,7 @@ jobs:
           ref: 'v3.x/staging'
 
       - name: '[Prep 2] Setup jFrog CLI'
-        uses: jfrog/setup-jfrog-cli@v2
+        uses: jfrog/setup-jfrog-cli@v5
         env:
           JF_ENV_1: ${{ secrets.JF_ARTIFACTORY_TOKEN }}
           

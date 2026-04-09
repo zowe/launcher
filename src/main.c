@@ -39,6 +39,7 @@
 #include "configmgr.h"
 #include "logging.h"
 #include "stcbase.h"
+#include "unixfile.h"
 #include "zos.h"
 #include "yaml2json.h"
 
@@ -76,6 +77,12 @@ extern char ** environ;
 
 #define YAML_ERROR_MAX 1024
 
+#ifndef DIR_BUFFER_SIZE
+#define DIR_BUFFER_SIZE 1024
+#endif
+
+
+#define LOGFILE_TIMESTAMP_FORMAT "%Y-%m-%d-%H-%M"
 #ifndef LAUNCHER_VERSION_MAJOR
 #define LAUNCHER_VERSION_MAJOR 0
 #endif
@@ -155,6 +162,9 @@ typedef struct zl_comp_t {
   zl_int_array_t restart_intervals;
   int min_uptime; // secs
 
+
+  FILE *log_file;
+
 } zl_comp_t;
 
 enum zl_event_t {
@@ -196,6 +206,9 @@ struct {
   char userid[9];
   
 } zl_context = {.config = {.debug_mode = false}, .trim_sys_message = false, .userid = "(NONE)"} ;
+
+// Forward declarations
+static void comp_log(zl_comp_t *comp, char *msg);
 
 // Wrapper for wtoPrintf3
 static void printf_wto(const char *formatString, ...) {
@@ -862,7 +875,8 @@ static void *handle_comp_comm(void *args) {
 
         while (next_line) {
           printf("%s\n", next_line);
-          check_for_and_print_sys_message(next_line); 
+          check_for_and_print_sys_message(next_line);
+          comp_log(comp, next_line);
           next_line = strtok(NULL, "\n");
         }
 
@@ -918,7 +932,166 @@ static const char **env_comp(zl_comp_t *comp) {
   return env_comp;
 }
 
-static int start_component(zl_comp_t *comp) {
+static void comp_log(zl_comp_t *comp, char *msg) {
+  if (comp->log_file) {
+    fprintf(comp->log_file, "%s\n", msg);
+    fflush(comp->log_file);
+  }
+}
+
+static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, char *log_name) {
+  int returnCode, reasonCode;
+
+  int rollover_count = 4;
+  int getStatus = cfgGetIntC(configmgr, ZOWE_CONFIG_NAME, &rollover_count, 3, "zowe", "logging", "rolloverCount");
+  if (getStatus) {
+    rollover_count = 4;
+    getStatus = 0;
+  }
+
+  char *log_directory = NULL;
+  getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &log_directory, 2, "zowe", "logDirectory");
+  if (getStatus) {
+    return getStatus;
+  }
+
+  char *job_prefix = NULL;
+  getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &job_prefix, 3, "zowe", "job", "prefix");
+  if (getStatus) {
+    job_prefix = "ZWE1";
+    getStatus = 0;
+  }
+
+  
+  char directoryDataBuffer[DIR_BUFFER_SIZE];
+  UnixFile *directory = NULL;
+
+  int entries_found = 0;
+  int *newest_timestamps = safeMalloc(sizeof(int)*rollover_count, "componentTimestamp");
+  for (int i = 0; i < rollover_count; i++) {
+    newest_timestamps[i] = 0;
+  }
+
+  if ((directory = directoryOpen(log_directory, &returnCode, &reasonCode)) == NULL) {
+    ERROR(MSG_LOG_DIR_PERM, returnCode, reasonCode, log_directory);
+    safeFree(log_directory, strlen(log_directory));
+    return returnCode;
+  } else {
+    char search_string[PATH_MAX];
+    snprintf(search_string, PATH_MAX, "%s_%s_%s_", job_prefix, zl_context.ha_instance_id, comp->name);
+
+    int entriesRead = 0;
+    while ((entriesRead = directoryRead(directory, directoryDataBuffer, DIR_BUFFER_SIZE, &returnCode, &reasonCode)) > 0) {
+      char *entryStart = directoryDataBuffer;
+      for (int e = 0; e < entriesRead; e++) {
+        int entryLength = ((short*)entryStart)[0];  /* entry names are null-terminated */
+        int nameLength = ((short*)entryStart)[1];
+        if(entryLength == 4 && nameLength == 0) { /* Null directory entry */
+          break;
+        }
+        char *name = entryStart+4;
+        entryStart += entryLength;
+
+        /* For old files of same type, capture [rollover_count] newest timestamps */
+        if (0 == indexOfString(name, strlen(name), search_string, 0)) {
+          entries_found++;
+          char file_path[PATH_MAX];
+          FileInfo *file_info = safeMalloc(sizeof(FileInfo), "logFileInfo");
+          snprintf(file_path, PATH_MAX, "%s/%s", log_directory, name);
+          fileInfo(file_path, file_info, &returnCode, &reasonCode);
+          if (!returnCode) { 
+            int timestamp = file_info->creationTime;
+            /* search newest timestamp list for an older timestamp
+               if found, shift list to bump out oldest */
+            for (int r = 0; r < rollover_count; r++) {
+              if (timestamp > newest_timestamps[r]) {
+                if (r != (rollover_count-1)) {
+                  for (int s = rollover_count-1; s > r; s--) {
+                    newest_timestamps[s] = newest_timestamps[s-1];
+                  }
+                }
+
+                newest_timestamps[r] = timestamp;
+                break;      
+              }
+            }
+          } else {
+            WARN("stat failed for %s, rc=0x%x, rsn=0x%x\n", name, returnCode, reasonCode);
+          }
+          safeFree(file_info, sizeof(FileInfo));
+        }
+      }
+    }
+    directoryClose(directory, &returnCode, &reasonCode);
+
+    if (returnCode) {
+      WARN(MSG_LOG_DIR_CLOSE, returnCode, reasonCode, log_directory);
+    } else if (entries_found > rollover_count) {
+      /* If found more files than limit, go through files again, deleting those that arent in newest list */
+
+      DEBUG("Found %d files for component %s, removing %d oldest files\n", entries_found, comp->name, entries_found - rollover_count);
+      directory = directoryOpen(log_directory, &returnCode, &reasonCode);
+
+      while ((entriesRead = directoryRead(directory, directoryDataBuffer, DIR_BUFFER_SIZE, &returnCode, &reasonCode)) > 0) {
+        char *entryStart = directoryDataBuffer;
+        for (int e = 0; e < entriesRead; e++) {
+          int entryLength = ((short*)entryStart)[0];  /* entry names are null-terminated */
+          int nameLength = ((short*)entryStart)[1];
+          if(entryLength == 4 && nameLength == 0) { /* Null directory entry */
+            break;
+          }
+          char *name = entryStart+4;
+          entryStart += entryLength;
+          if (0 == indexOfString(name, strlen(name), search_string, 0)) {
+            char file_path[PATH_MAX];
+            FileInfo *file_info = safeMalloc(sizeof(FileInfo), "logFileInfo2");
+            snprintf(file_path, PATH_MAX, "%s/%s", log_directory, name);
+            fileInfo(file_path, file_info, &returnCode, &reasonCode);
+            if (!returnCode) { 
+              bool found = false;
+              for (int r = 0; r < rollover_count; r++) {
+                if (file_info->creationTime == newest_timestamps[r]) {
+                  found = true;
+                } 
+              }
+              if (!found) {
+                DEBUG("%s has over %d old log files, removing %s\n", comp->name, rollover_count, file_path);
+                fileDelete(file_path, &returnCode, &reasonCode);
+                if (returnCode) {
+                  WARN("could not remove old log file %s, rc=0x%x, rsn=0x%x\n", name, returnCode, reasonCode);
+                }
+              } 
+            } else {
+              WARN("stat failed for %s, rc=0x%x, rsn=0x%x\n", name, returnCode, reasonCode);
+            }
+            safeFree(file_info, sizeof(FileInfo));
+          }
+        }
+      }
+      directoryClose(directory, &returnCode, &reasonCode);
+
+      if (returnCode) {
+        WARN(MSG_LOG_DIR_CLOSE, returnCode, reasonCode, log_directory);
+      }
+    }
+  }
+
+  safeFree(newest_timestamps, sizeof(int)*rollover_count);
+
+  time_t t = time(NULL);
+  char log_timestamp[32];
+
+  struct tm lt;
+  gmtime_r(&t, &lt);
+
+  strftime(log_timestamp, sizeof(log_timestamp), LOGFILE_TIMESTAMP_FORMAT, &lt);
+
+  snprintf(log_name, PATH_MAX, "%s/%s_%s_%s_%s.log", log_directory, job_prefix, zl_context.ha_instance_id, comp->name, log_timestamp);
+  safeFree(log_directory, strlen(log_directory));
+  return getStatus;
+}
+
+static int start_component(zl_comp_t *comp, ConfigManager *configmgr) {
 
   if (comp->pid != -1) {
     ERROR(MSG_COMP_ALREADY_RUN, comp->name);
@@ -926,6 +1099,21 @@ static int start_component(zl_comp_t *comp) {
   }
 
   DEBUG("about to start component %s\n", comp->name);
+
+  char log_name[PATH_MAX];
+  int getStatus = get_component_log_name(comp, configmgr, log_name);
+
+  if (!getStatus) {
+    DEBUG("Creating log file %s\n", log_name);
+    comp->log_file = fopen(log_name, "w");
+    if (!comp->log_file) {
+      ERROR(MSG_NO_LOG_FILE, comp->name);
+    }
+    DEBUG("Opened %s for %s\n", log_name, comp->name);
+  } else { //TODO better and different message from above
+    ERROR(MSG_NO_LOG_FILE, comp->name);
+    comp->log_file = 0; //To be clear that there is no file.
+  }
 
   // ensure the new process has its own process group ID so we can terminate
   // the entire process tree
@@ -1012,14 +1200,14 @@ static int start_component(zl_comp_t *comp) {
   return 0;
 }
 
-static int start_components(void) {
+static int start_components(ConfigManager *configmgr) {
 
   INFO(MSG_STARTING_COMPS);
 
   int rc = 0;
 
   for (size_t i = 0; i < zl_context.child_count; i++) {
-    if (start_component(&zl_context.children[i])) {
+    if (start_component(&zl_context.children[i], configmgr)) {
       ERROR(MSG_COMP_START_FAILED, zl_context.children[i].name);
       rc = -1;
     }
@@ -1038,6 +1226,14 @@ static int stop_component(zl_comp_t *comp) {
 
   if (comp->pid == -1) {
     return 0;
+  }
+
+  if (comp->log_file) {
+    if (fclose(comp->log_file)) {
+      ERROR("fclose() failed for %s - %s\n", comp->name, strerror(errno));
+    } else {
+      comp->log_file = 0;
+    }
   }
 
   comp->clean_stop = true;
@@ -1118,7 +1314,12 @@ static int stop_components(void) {
         WARN("kill() failed for %s - %s\n", compkill->name, strerror(errno));
       }
       rc = -1;
-    }  
+    }
+    if (fclose(compkill->log_file)) {
+      ERROR("fclose() failed for %s - %s\n", compkill->name, strerror(errno));
+    } else {
+      compkill->log_file = 0;
+    }
   }
 
   if (rc) {
@@ -1145,7 +1346,7 @@ static zl_comp_t *find_comp(const char *name) {
 #define CMD_STOP  "STOP"
 #define CMD_DISP  "DISP"
 
-static int handle_start(const char *comp_name) {
+static int handle_start(const char *comp_name, ConfigManager *configmgr) {
 
   zl_comp_t *comp = find_comp(comp_name);
   if (comp == NULL) {
@@ -1154,7 +1355,7 @@ static int handle_start(const char *comp_name) {
   }
 
   comp->fail_cnt = 0;
-  start_component(comp);
+  start_component(comp, configmgr);
 
   return 0;
 }
@@ -1209,7 +1410,8 @@ static char *get_cmd_val(const char *cmd, char *buff, size_t buff_len) {
   return buff;
 }
 
-static void *handle_console(void *args) {
+static void *handle_console(void *parm) {
+  ConfigManager *configmgr = (ConfigManager *)parm;
 
   INFO(MSG_START_CONSOLE);
 
@@ -1235,7 +1437,7 @@ static void *handle_console(void *args) {
       if (strstr(mod_cmd, CMD_START) == mod_cmd) {
         char *val = get_cmd_val(mod_cmd, cmd_val, sizeof(cmd_val));
         if (val != NULL) {
-          handle_start(val);
+          handle_start(val, configmgr);
         } else {
           ERROR(MSG_BAD_CMD_VAL);
         }
@@ -1265,11 +1467,11 @@ static void *handle_console(void *args) {
   return NULL;
 }
 
-static int start_console_tread(void) {
+static int start_console_thread(ConfigManager *configmgr) {
 
   DEBUG("starting console thread\n");
 
-  if (pthread_create(&zl_context.console_thid, NULL, handle_console, NULL) != 0) {
+  if (pthread_create(&zl_context.console_thid, NULL, handle_console, configmgr) != 0) {
     DEBUG("pthread_created() for console listener - %s\n", strerror(errno));
     return -1;
   }
@@ -1329,15 +1531,15 @@ static zl_config_t read_config(int argc, char **argv) {
   return result;
 }
 
-static int restart_component(zl_comp_t *comp) {
+static int restart_component(zl_comp_t *comp, ConfigManager *configmgr) {
   int stop_rc = stop_component(comp);
   if (stop_rc) {
     return stop_rc;
   }
-  return start_component(comp);
+  return start_component(comp, configmgr);
 }
 
-static void monitor_events(void) {
+static void monitor_events(ConfigManager *configmgr) {
 
   if (pthread_mutex_lock(&zl_context.event_lock) != 0) {
     DEBUG("monitor_events: pthread_mutex_lock() error - %s\n", strerror(errno));
@@ -1363,7 +1565,7 @@ static void monitor_events(void) {
       break;
     } else if (zl_context.event_type == ZL_EVENT_COMP_RESTART) {
       zl_comp_t* comp = zl_context.event_data;
-      int restart_rc = restart_component(comp);
+      int restart_rc = restart_component(comp, configmgr);
       if (restart_rc) {
         ERROR(MSG_COMP_RESTART_FAILED, comp->name);
       }
@@ -1994,15 +2196,15 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  start_components();
+  start_components(configmgr);
 
-  if (start_console_tread()) {
+  if (start_console_thread(configmgr)) {
     ERROR(MSG_CONS_START_ERR);
     free(shared_uss_env);
     exit(EXIT_FAILURE);
   }
 
-  monitor_events();
+  monitor_events(configmgr);
 
   if (stop_console_thread()) {
     ERROR(MSG_CONS_STOP_ERR);

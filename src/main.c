@@ -1112,6 +1112,7 @@ static int start_component(zl_comp_t *comp, ConfigManager *configmgr) {
     DEBUG("Opened %s for %s\n", log_name, comp->name);
   } else { //TODO better and different message from above
     ERROR(MSG_NO_LOG_FILE, comp->name);
+    comp->log_file = 0; //To be clear that there is no file.
   }
 
   // ensure the new process has its own process group ID so we can terminate

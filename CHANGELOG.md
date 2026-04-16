@@ -3,6 +3,9 @@
 All notable changes to the Zowe Launcher package will be documented in this file.
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
+## 3.5.0
+- Enhancement: Launcher makes a log file for every component ([#173](https://github.com/zowe/launcher/pull/173))
+
 ## 3.4.0
 - Enhancement: Message `ZWEL0021I` includes the version of launcher ([#167](https://github.com/zowe/launcher/pull/167))
 

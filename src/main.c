@@ -1958,6 +1958,38 @@ static int check_root_dir() {
   TODO: resolve template... right now we take the first value for runtimeDirectory we find and assume it to be a path
   TODO: allow parmlib to be the one that has runtimeDirectory. right now a FILE must be found prior to encountering a LIB entry, or the code will attempt an fopen() and fail.
 */
+static void get_manifest_version(char *buf, size_t buf_size) {
+  char manifest_path[PATH_MAX + 1];
+  snprintf(manifest_path, sizeof(manifest_path), "%s/manifest.json", zl_context.root_dir);
+
+  ShortLivedHeap *slh = makeShortLivedHeap(8192, 64);
+  if (!slh) {
+    WARN(MSG_MANIFEST_READ_WARN, "failed to allocate memory");
+    snprintf(buf, buf_size, "unknown");
+    return;
+  }
+
+  char error_buf[256] = {0};
+  Json *manifest_json = jsonParseFile(slh, manifest_path, error_buf, sizeof(error_buf));
+  if (!manifest_json || !jsonIsObject(manifest_json)) {
+    WARN(MSG_MANIFEST_READ_WARN, error_buf[0] ? error_buf : "failed to parse manifest.json");
+    SLHFree(slh);
+    snprintf(buf, buf_size, "unknown");
+    return;
+  }
+
+  JsonObject *manifest_root = jsonAsObject(manifest_json);
+  char *manifest_version = jsonObjectGetString(manifest_root, "version");
+  if (manifest_version) {
+    snprintf(buf, buf_size, "%s", manifest_version);
+  } else {
+    WARN(MSG_MANIFEST_READ_WARN, "version field not found in manifest.json");
+    snprintf(buf, buf_size, "unknown");
+  }
+
+  SLHFree(slh);
+}
+
 static int process_root_dir(ConfigManager *configmgr) {
   int getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &zl_context.root_dir, 2, "zowe", "runtimeDirectory");
   if (getStatus) {
@@ -2115,13 +2147,17 @@ int main(int argc, char **argv) {
   }
 
   setenv("_BPXK_AUTOCVT", "ON", 1);
-  sprintf(launcherVersion, "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
-  INFO(MSG_LAUNCHER_START, launcherVersion);
-  INFO(MSG_LINE_LENGTH);
-  printf_wto(MSG_LAUNCHER_START, launcherVersion); // Manual sys log print (messages not set here yet)
 
   zl_config_t config = read_config(argc, argv);
   zl_context.config = config;
+
+  char manifestVersion[64] = {0};
+  get_manifest_version(manifestVersion, sizeof(manifestVersion));
+  
+  sprintf(launcherVersion, "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
+  INFO(MSG_LAUNCHER_START, launcherVersion, manifestVersion);
+  INFO(MSG_LINE_LENGTH);
+  printf_wto(MSG_LAUNCHER_START, launcherVersion, manifestVersion);  // Manual sys log print (messages not set here yet)
 
   LoggingContext *logContext = makeLoggingContext();
   if (!logContext) {
@@ -2158,7 +2194,7 @@ int main(int argc, char **argv) {
   if (process_root_dir(configmgr)) {
     exit(EXIT_FAILURE);
   }
-  
+
   set_sys_messages(configmgr);
 
   //got root dir, can now load up the schemas from it
@@ -2174,7 +2210,6 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  
   set_shared_uss_env(configmgr);
 
   if (process_workspace_dir(configmgr)) {

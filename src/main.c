@@ -706,7 +706,7 @@ static void init_component_restart_intervals(zl_comp_t *comp, ConfigManager *con
   JsonArray *intArray = jsonAsArray(restartIntArray);
   int count = jsonArrayGetCount(intArray);
   if (count > ZL_INT_ARRAY_CAPACITY) {
-    DEBUG("zowe.launcher.restartIntervals: %d out of %d will be used.", ZL_INT_ARRAY_CAPACITY, count);
+    DEBUG("zowe.launcher.restartIntervals: %d out of %d will be used.\n", ZL_INT_ARRAY_CAPACITY, count);
     count = ZL_INT_ARRAY_CAPACITY;
   }
   comp->restart_intervals.count = count;

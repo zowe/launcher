@@ -4,7 +4,7 @@ All notable changes to the Zowe Launcher package will be documented in this file
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
 ## 3.6.0
-- Bugfix: Check the array size of `zowe.launcher.restartIntervals` ([#???](https://github.com/zowe/launcher/pull/???))
+- Bugfix: Check the array size of `zowe.launcher.restartIntervals` ([#187](https://github.com/zowe/launcher/pull/187))
 
 ## 3.4.0
 - Enhancement: Message `ZWEL0021I` includes the version of launcher ([#167](https://github.com/zowe/launcher/pull/167))

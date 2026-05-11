@@ -29,7 +29,10 @@ zowe:
     TEST_VAR_STR_09: TE\"ST                     # "TE\\\"ST"
     TEST_VAR_STR_10: !!str 123                  # "123"
     TEST_VAR_STR_11: !!str true                 # "true"
-    TEST_VAR_STR_12: |-                         # William Shakespeare: All's Well That Ends Well
+    TEST_VAR_STR_12: "`cmd`"                    # "\`cmd\`"
+    TEST_VAR_STR_13: "$HOME"                    # "\$HOME"
+    TEST_VAR_STR_14: "$(ls -al)"                # "\$(ls -al)"
+    TEST_VAR_STR_15: |-
       Love all, trust a few,
       Do wrong to none: be able for thine enemy
       Rather in power than use; and keep thy friend

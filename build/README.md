@@ -16,9 +16,8 @@ When adding a new message:
 * Run `node buildZwelMessages.js` to review it
 * Run `node buildZwelMessages.js > launcher-error-codes.md` and use updated file [here](https://github.com/zowe/docs-site/blob/master/docs/troubleshoot/launcher/launcher-error-codes.md)
 
-Note: if you need a testing message, do not use `MSG_` as prefix. These messages are excluded from documentation build and check.
-
-For example:
+Note: if you need a testing message, do not use `MSG_` as prefix, for example:
 ```c
-#define TEST1        MSG_PREFIX "9999I" "I am here\n"
+#define MDEBUG      MY_DEBUG    "7FFFI" "This message will be ignored by check\n"
+#define TEST        MSG_TEST    "1234I" "This message will NOT be ignored by check\n"
 ```

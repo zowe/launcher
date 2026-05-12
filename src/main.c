@@ -260,22 +260,22 @@ static bool check_match_and_wto_message(const char* sys_message_id, const char* 
   }
 
   if (zl_context.trim_sys_message) {
-    wtoMessage(input_string + sys_message_pos);
+    wtoPrintf3(input_string + sys_message_pos);
   } else {
     // Short message, WTO *
     if (input_string_len <= WTO_MESSAGE_LENGTH) {
-      wtoMessage(input_string);
+      wtoPrintf3(input_string);
     // Message length > WTO_MESSAGE_LENGTH
     } else {
       // After the match, there are more chars than WTO_MESSAGE_LENGTH
       // WTO from match position
       if (input_string_len - sys_message_pos > WTO_MESSAGE_LENGTH) {
-        wtoMessage(input_string + sys_message_pos);
+        wtoPrintf3(input_string + sys_message_pos);
       } else {
         // The match is in the last WTO_MESSAGE_LENGTH chars
         // WTO last WTO_MESSAGE_LENGTH chars - egde case: if the match is last word
         //   user will see the text before match too
-        wtoMessage(input_string + (input_string_len - WTO_MESSAGE_LENGTH));
+        wtoPrintf3(input_string + (input_string_len - WTO_MESSAGE_LENGTH));
       }
     }
   }

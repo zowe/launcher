@@ -8,7 +8,7 @@
 #
 # Copyright Contributors to the Zowe Project.
 
-# Start with_any_paramter -> prints output (diff style)
+# Start with any parameter -> prints output (diff style)
 #   rc of this = number of errors found
 
 print=

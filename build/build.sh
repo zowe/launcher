@@ -58,6 +58,7 @@ echo "Compiling qascii libyaml \"${LIBYAML_BRANCH}\" and quickjs \"${QUICKJS_BRA
 
 xlclang \
   -c \
+  ${ZWE_XLCLANG_FLAGS} \
   -q64 \
   -qascii \
   "-Wc,float(ieee),longname,langlvl(extc99),gonum,goff,ASM,asmlib('CEE.SCEEMAC','SYS1.MACLIB','SYS1.MODGEN')" \
@@ -108,6 +109,7 @@ fi
 echo "Compiling zowe_launcher ${LAUNCHER_MAJOR}.${LAUNCHER_MINOR}.${LAUNCHER_PATCH}+${launcher_date_stamp}"
 
 xlclang \
+  ${ZWE_XLCLANG_FLAGS} \
   -q64 \
   "-Wa,goff" \
   "-Wc,float(ieee),langlvl(extc99),agg,list()" \

@@ -14,14 +14,14 @@
 //* ZOWE LAUNCHER PROCEDURE                                          */
 //*                                                                  */
 //* NOTE: this procedure is a template, you will need to modify      */
-//*       #zowe_yaml variable to point to your Zowe YAML config      */
-//*       file.                                                      */
+//*       {ZWE_CLI_PARAMETER_CONFIG} variable to point to your       */
+//*       Zowe YAML config file.                                     */
 //*                                                                  */
 //* Check https://docs.zowe.org for more details.                    */
 //*                                                                  */
 //********************************************************************/
 //ZWELNCH  EXEC PGM=ZWELNCH,REGION=&RGN,TIME=NOLIMIT,
-// PARM='ENVAR(_CEE_ENVFILE=DD:STDENV),POSIX(ON)/&HAINST.'
+// PARM='ENVAR(_CEE_ENVFILE=DD:STDENV),POSIX(ON)/&HAINST.,/ 2>&1'
 //STEPLIB  DD  DSNAME={zowe.setup.dataset.authLoadlib},
 //             DISP=SHR
 //SYSIN    DD  DUMMY
@@ -29,7 +29,7 @@
 //SYSERR   DD  SYSOUT=*
 //********************************************************************/
 //*
-//* CONFIG= can be either a single path ex.
+//* CONFIG= can be either a single path, for example:
 //*   CONFIG=/my/zowe.yaml
 //*
 //* Or a list of FILE() or PARMLIB() and colon : separated paths
@@ -50,8 +50,6 @@
 //* When using a list, files on left override properties
 //* from files to their right.
 //* Typically the right-most file should be the Zowe default yaml.
-//*
-//* Note: All PARMLIB() entries must all have the same member name.
 //*
 //********************************************************************/
 //STDENV   DD  *

@@ -39,6 +39,7 @@
 #include "configmgr.h"
 #include "logging.h"
 #include "stcbase.h"
+#include "unixfile.h"
 #include "zos.h"
 #include "yaml2json.h"
 
@@ -68,13 +69,33 @@ extern char ** environ;
 #define COMP_LIST_SIZE 1024
 
 #define LAUNCHER_MESSAGE_LENGTH_LIMIT 512
-#define SYSLOG_MESSAGE_LENGTH_LIMIT 126
+#define WTO_MESSAGE_LENGTH 126
 
 #ifndef PATH_MAX
 #define PATH_MAX _POSIX_PATH_MAX
 #endif
 
 #define YAML_ERROR_MAX 1024
+
+#ifndef DIR_BUFFER_SIZE
+#define DIR_BUFFER_SIZE 1024
+#endif
+
+
+#define LOGFILE_TIMESTAMP_FORMAT "%Y-%m-%d-%H-%M"
+#ifndef LAUNCHER_VERSION_MAJOR
+#define LAUNCHER_VERSION_MAJOR 0
+#endif
+#ifndef LAUNCHER_VERSION_MINOR
+#define LAUNCHER_VERSION_MINOR 0
+#endif
+#ifndef LAUNCHER_VERSION_PATCH
+#define LAUNCHER_VERSION_PATCH 0
+#endif
+#ifndef LAUNCHER_VERSION_DATE_STAMP
+#define LAUCHNER_VERSION_DATE_STAMP 0
+#endif
+char launcherVersion[40];
 
 // Progressive restart internals in seconds
 static int restart_intervals_default[] = {1, 1, 1, 5, 5, 10, 20, 60, 120, 240};
@@ -141,6 +162,9 @@ typedef struct zl_comp_t {
   zl_int_array_t restart_intervals;
   int min_uptime; // secs
 
+
+  FILE *log_file;
+
 } zl_comp_t;
 
 enum zl_event_t {
@@ -172,23 +196,48 @@ struct {
   char config_path[PATH_MAX*17];
   //configmgr_path is the path in a form configmgr consumes
   char configmgr_path[PATH_MAX*17];
-  char parm_member[8+1];
   char *root_dir;
   char *workspace_dir;
   JsonArray *sys_messages;
+  bool trim_sys_message;
   char ha_instance_id[64];
   
   pid_t pid;
   char userid[9];
   
-} zl_context = {.config = {.debug_mode = false}, .userid = "(NONE)"} ;
+} zl_context = {.config = {.debug_mode = false}, .trim_sys_message = false, .userid = "(NONE)"} ;
 
-// Wrapper for wtoPrintf3
+// Forward declarations
+static void comp_log(zl_comp_t *comp, char *msg);
+
+// Wrapper for wtoPrintf3 - WTO message with C formatting specifiers
 static void printf_wto(const char *formatString, ...) {
   va_list argPointer;
   va_start(argPointer, formatString);
   wtoPrintf3(formatString, argPointer);
   va_end(argPointer);
+}
+
+// WTO message ignoring C formatting specifiers, the first new line stops the message and the rest is ignored.
+// print_wto_directly("%s%i%d\n\n") -> WTO "%s%i%d"
+static void print_wto_directly(const char *wtoText) {
+  if (wtoText == NULL) return;
+
+  size_t len = strlen(wtoText);
+  char *wtoTextCopy = malloc(len + 1);
+  if (wtoTextCopy == NULL) return;
+
+  memcpy(wtoTextCopy, wtoText, len + 1);
+
+  for (size_t i = 0; i < len; i++) {
+    if (wtoTextCopy[i] == '\n') {
+      wtoTextCopy[i] = '\0';
+      break;
+    }
+  }
+
+  wtoMessage(wtoTextCopy);
+  free(wtoTextCopy);
 }
 
 static void set_sys_messages(ConfigManager *configmgr) {
@@ -203,8 +252,59 @@ static void set_sys_messages(ConfigManager *configmgr) {
   if (sys_messages) {
     zl_context.sys_messages = sys_messages;
   }
+
+  bool trim = false; // for backwards compatibility trimming sys messages is disabled by default.
+  cfgGetStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &trim, 2, "zowe", "sysMessageTrim");
+  if (cfgGetStatus != ZCFG_SUCCESS) { // No sysMessageTrim found in Zowe configuration, disabled by default.
+    return;
+  }
+  zl_context.trim_sys_message = trim;
 }
 
+//size of "ZWE_zowe_sysMessages"
+#define ZWE_ZOWE_SYS_MESSAGES "ZWE_zowe_sysMessages"
+#define ZWE_ZOWE_SYS_MESSAGES_LEN (sizeof(ZWE_ZOWE_SYS_MESSAGES) - 1)
+
+static bool check_match_and_wto_message(const char* sys_message_id, const char* input_string, const bool other_messages) {
+
+  char *sys_message_start = strstr(input_string, sys_message_id);
+  int sys_message_pos = (sys_message_start != NULL) ? (sys_message_start - input_string) : -1;
+  if (sys_message_pos == -1) {
+    return false;
+  }
+  int input_string_len = strlen(input_string);
+
+  if (other_messages) {
+    // App-server -> Show Environment -> E.g. ^ZWE_zowe_sysMessages_0=ZWEL0021I$
+    if (memcmp(ZWE_ZOWE_SYS_MESSAGES, input_string, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
+      return false;
+    }
+  }
+
+  if (zl_context.trim_sys_message) {
+    print_wto_directly(input_string + sys_message_pos);
+  } else {
+    // Short message, WTO *
+    if (input_string_len <= WTO_MESSAGE_LENGTH) {
+      print_wto_directly(input_string);
+    // Message length > WTO_MESSAGE_LENGTH
+    } else {
+      // After the match, there are more chars than WTO_MESSAGE_LENGTH
+      // WTO from match position
+      if (input_string_len - sys_message_pos > WTO_MESSAGE_LENGTH) {
+        print_wto_directly(input_string + sys_message_pos);
+      } else {
+        // The match is in the last WTO_MESSAGE_LENGTH chars
+        // WTO last WTO_MESSAGE_LENGTH chars - egde case: if the match is last word
+        //   user will see the text before match too
+        print_wto_directly(input_string + (input_string_len - WTO_MESSAGE_LENGTH));
+      }
+    }
+  }
+  return true;
+}
+
+// Launcher's message contains the body only, no timestamp
 static void launcher_syslog_on_match(const char* fmt, ...) {
   if (!zl_context.sys_messages) {
     return;
@@ -217,37 +317,16 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
   va_start(args, fmt);
   vsnprintf(input_string, sizeof(input_string), fmt, args);
   va_end(args);
-    
+
   int count = jsonArrayGetCount(zl_context.sys_messages);
   for (int i = 0; i < count; i++) {
-      const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
-      if (sys_message_id && strstr(input_string, sys_message_id)) {
-          printf_wto(input_string); // Print our match to the syslog
-          break;
-      }
-  }
-  
-}
-
-static int index_of_string_limited(const char *str, int len, const char *search_string, int start_pos, int search_limit){
-  int search_len = strlen(search_string);
-  int last_possible_start = len < search_limit ? len - search_len : search_limit - search_len;
-  int pos = start_pos;
-
-  if (start_pos > last_possible_start){
-    return -1;
-  }
-  while (pos <= last_possible_start){
-    if (!memcmp(str+pos,search_string,search_len)){
-      return pos;
+    const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
+    if (check_match_and_wto_message(sys_message_id, input_string, false)) {
+      break;
     }
-    pos++;
   }
-  return -1;
-}
 
-//size of "ZWE_zowe_sysMessages"
-#define ZWE_SYSMESSAGES_EXCLUDE_LEN 20
+}
 
 // matches YYYY-MM-DD starting with 2xxx.
 // this regex was chosen because other patterns didnt seem to work with LE's regex library.
@@ -256,32 +335,26 @@ static int index_of_string_limited(const char *str, int len, const char *search_
 // zowe standard "YYYY-MM-DD HH-MM-SS.sss "
 #define DATE_PREFIX_LEN 24
 
+// Needed once
+static regex_t time_regex = { .re_comp = NULL };
+
+// Other messages are completed, check possible date and filter it out
 static void check_for_and_print_sys_message(const char* input_string) {
   if (!zl_context.sys_messages) {
     return;
   }
 
   int count = jsonArrayGetCount(zl_context.sys_messages);
-  int input_length = strlen(input_string);
+  if (!time_regex.re_comp) {
+    int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
+  }
+  int match = regexec(&time_regex, input_string, 0, NULL, 0);
+  int offset = match == 0 ? DATE_PREFIX_LEN : 0;
+
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
-    if (sys_message_id && (index_of_string_limited(input_string, input_length, sys_message_id, 0, SYSLOG_MESSAGE_LENGTH_LIMIT) != -1)) {
-
-      //exclude "ZWE_zowe_sysMessages" messages to avoid spam.
-      if (memcmp("ZWE_zowe_sysMessages", input_string, ZWE_SYSMESSAGES_EXCLUDE_LEN)){ 
-
-        //truncate match for reasonable output
-        char syslog_string[SYSLOG_MESSAGE_LENGTH_LIMIT+1] = {0};
-        regex_t time_regex;
-        int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
-        int match = regexec(&time_regex, input_string, 0, NULL, 0);
-        int offset = match == 0 ? DATE_PREFIX_LEN : 0;
-        int length = SYSLOG_MESSAGE_LENGTH_LIMIT < (input_length-offset) ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_length-offset;
-        memcpy(syslog_string, input_string+offset, length);  
-        syslog_string[length] = '\0';
-        printf_wto(syslog_string);// Print our match to the syslog
-        break;
-      }
+    if (check_match_and_wto_message(sys_message_id, input_string + offset, true)) {
+      break;
     }
   }
   
@@ -572,57 +645,29 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
   }
 
   int config_len = strlen(zl_context.config_path);
-  bool hasMember = false;
-  char member[9] = {0};
   char config_line[PATH_MAX*17] = {0};
   if (zl_context.config_path[0] == '/') { // simple file case, must be absolute path.
     snprintf(config_line, config_len+7, "FILE(%s)", zl_context.config_path);
     snprintf(zl_context.configmgr_path, config_len+7, "%s", config_line);
-  } else { //HERE loop over input to construct new string for configmgr use.
-    // It needs to strip out the (member) within each occurrence of PARMLIB()
+    setenv("CONFIG", zl_context.config_path, 1);
+  } else {
+    //check that PARMLIB has no missing members
     int parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", 0);
-    int destPos = 0;
-    int srcPos = 0;
-    DEBUG("Handling config=%s\n",zl_context.config_path);
     while (parmIndex != -1) {
-      int parenStartIndex = indexOf(zl_context.config_path, config_len, '(', parmIndex+9);
-      int parenEndIndex = indexOf(zl_context.config_path, config_len, ')', parmIndex+9);
-      DEBUG("pStart=%d, pEnd=%d\n", parenStartIndex, parenEndIndex);
-      if (parenStartIndex != -1 && parenEndIndex != -1 && (parenStartIndex < parenEndIndex)) {
-        memcpy(zl_context.parm_member, zl_context.config_path+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
-        if (hasMember && strcmp(zl_context.parm_member, member) != 0) {
-          ERROR(MSG_MEMBER_NAME_BAD);
-          return -1;
-        }
-        hasMember = true;
-        memcpy(member, zl_context.config_path+parenStartIndex+1, parenEndIndex-parenStartIndex-1);
-        DEBUG("Found member=%s\n",member);
-        memcpy(config_line+destPos, zl_context.config_path+srcPos, parenStartIndex-srcPos);
-        destPos+= parenStartIndex-srcPos;
-        srcPos=parenEndIndex+1;
-        parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", parenEndIndex+2);
-      } else {
+      int rParenIndex = indexOfString(zl_context.config_path, config_len, "))", parmIndex);
+      //find ( after PARMLIB( section, to find where member name should be
+      int lParenIndex = indexOfString(zl_context.config_path, config_len, "(", parmIndex+9);
+      if ((rParenIndex == -1)
+          || (rParenIndex == (lParenIndex+1))) {
         ERROR(MSG_MEMBER_MISSING);
         return -1;
       }
-      DEBUG("config_line now=%s\n", config_line);
-      DEBUG("src=%d, dst=%d, pNext=%d\n",srcPos,destPos,parmIndex);
+      parmIndex = indexOfString(zl_context.config_path, config_len, "PARMLIB(", rParenIndex);
     }
-
-    if (destPos >= 0) {
-      memcpy(config_line+destPos, zl_context.config_path+srcPos, config_len - srcPos);
-      destPos+= config_len - srcPos;
-      memcpy(zl_context.configmgr_path, config_line, destPos);
-      zl_context.configmgr_path[destPos]='\0';
-    }
-    if (!hasMember) {
-      zl_context.parm_member[0] = '\0';
-    }
-  
+    snprintf(zl_context.configmgr_path, config_len+1, "%s", zl_context.config_path);
   }
 
 
-  setenv("CONFIG", zl_context.config_path, 1);
   INFO(MSG_YAML_FILE, zl_context.configmgr_path);
 
   zl_context.config = *cfg;
@@ -632,6 +677,12 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
     return -1;
   }
   snprintf (zl_context.ha_instance_id, sizeof(zl_context.ha_instance_id), "%s", argv[1]);
+  for (int i = 0; i < strlen(zl_context.ha_instance_id); i++) {
+    if (zl_context.ha_instance_id[i] == ',') {
+      zl_context.ha_instance_id[i] = 0;
+      break;
+    }
+  }
   to_lower(zl_context.ha_instance_id);
   INFO(MSG_HA_INST_ID, zl_context.ha_instance_id);
 
@@ -682,6 +733,10 @@ static void init_component_restart_intervals(zl_comp_t *comp, ConfigManager *con
   // load restartIntervals from the configuration
   JsonArray *intArray = jsonAsArray(restartIntArray);
   int count = jsonArrayGetCount(intArray);
+  if (count > ZL_INT_ARRAY_CAPACITY) {
+    DEBUG("zowe.launcher.restartIntervals: %d out of %d will be used.\n", ZL_INT_ARRAY_CAPACITY, count);
+    count = ZL_INT_ARRAY_CAPACITY;
+  }
   comp->restart_intervals.count = count;
   for (int i = 0; i < count; i++) {
     comp->restart_intervals.data[i] = jsonArrayGetNumber(intArray, i);
@@ -852,7 +907,8 @@ static void *handle_comp_comm(void *args) {
 
         while (next_line) {
           printf("%s\n", next_line);
-          check_for_and_print_sys_message(next_line); 
+          check_for_and_print_sys_message(next_line);
+          comp_log(comp, next_line);
           next_line = strtok(NULL, "\n");
         }
 
@@ -908,7 +964,166 @@ static const char **env_comp(zl_comp_t *comp) {
   return env_comp;
 }
 
-static int start_component(zl_comp_t *comp) {
+static void comp_log(zl_comp_t *comp, char *msg) {
+  if (comp->log_file) {
+    fprintf(comp->log_file, "%s\n", msg);
+    fflush(comp->log_file);
+  }
+}
+
+static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, char *log_name) {
+  int returnCode, reasonCode;
+
+  int rollover_count = 4;
+  int getStatus = cfgGetIntC(configmgr, ZOWE_CONFIG_NAME, &rollover_count, 3, "zowe", "logging", "rolloverCount");
+  if (getStatus) {
+    rollover_count = 4;
+    getStatus = 0;
+  }
+
+  char *log_directory = NULL;
+  getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &log_directory, 2, "zowe", "logDirectory");
+  if (getStatus) {
+    return getStatus;
+  }
+
+  char *job_prefix = NULL;
+  getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &job_prefix, 3, "zowe", "job", "prefix");
+  if (getStatus) {
+    job_prefix = "ZWE1";
+    getStatus = 0;
+  }
+
+  
+  char directoryDataBuffer[DIR_BUFFER_SIZE];
+  UnixFile *directory = NULL;
+
+  int entries_found = 0;
+  int *newest_timestamps = safeMalloc(sizeof(int)*rollover_count, "componentTimestamp");
+  for (int i = 0; i < rollover_count; i++) {
+    newest_timestamps[i] = 0;
+  }
+
+  if ((directory = directoryOpen(log_directory, &returnCode, &reasonCode)) == NULL) {
+    ERROR(MSG_LOG_DIR_PERM, returnCode, reasonCode, log_directory);
+    safeFree(log_directory, strlen(log_directory));
+    return returnCode;
+  } else {
+    char search_string[PATH_MAX];
+    snprintf(search_string, PATH_MAX, "%s_%s_%s_", job_prefix, zl_context.ha_instance_id, comp->name);
+
+    int entriesRead = 0;
+    while ((entriesRead = directoryRead(directory, directoryDataBuffer, DIR_BUFFER_SIZE, &returnCode, &reasonCode)) > 0) {
+      char *entryStart = directoryDataBuffer;
+      for (int e = 0; e < entriesRead; e++) {
+        int entryLength = ((short*)entryStart)[0];  /* entry names are null-terminated */
+        int nameLength = ((short*)entryStart)[1];
+        if(entryLength == 4 && nameLength == 0) { /* Null directory entry */
+          break;
+        }
+        char *name = entryStart+4;
+        entryStart += entryLength;
+
+        /* For old files of same type, capture [rollover_count] newest timestamps */
+        if (0 == indexOfString(name, strlen(name), search_string, 0)) {
+          entries_found++;
+          char file_path[PATH_MAX];
+          FileInfo *file_info = safeMalloc(sizeof(FileInfo), "logFileInfo");
+          snprintf(file_path, PATH_MAX, "%s/%s", log_directory, name);
+          fileInfo(file_path, file_info, &returnCode, &reasonCode);
+          if (!returnCode) { 
+            int timestamp = file_info->creationTime;
+            /* search newest timestamp list for an older timestamp
+               if found, shift list to bump out oldest */
+            for (int r = 0; r < rollover_count; r++) {
+              if (timestamp > newest_timestamps[r]) {
+                if (r != (rollover_count-1)) {
+                  for (int s = rollover_count-1; s > r; s--) {
+                    newest_timestamps[s] = newest_timestamps[s-1];
+                  }
+                }
+
+                newest_timestamps[r] = timestamp;
+                break;      
+              }
+            }
+          } else {
+            WARN("stat failed for %s, rc=0x%x, rsn=0x%x\n", name, returnCode, reasonCode);
+          }
+          safeFree(file_info, sizeof(FileInfo));
+        }
+      }
+    }
+    directoryClose(directory, &returnCode, &reasonCode);
+
+    if (returnCode) {
+      WARN(MSG_LOG_DIR_CLOSE, returnCode, reasonCode, log_directory);
+    } else if (entries_found > rollover_count) {
+      /* If found more files than limit, go through files again, deleting those that arent in newest list */
+
+      DEBUG("Found %d files for component %s, removing %d oldest files\n", entries_found, comp->name, entries_found - rollover_count);
+      directory = directoryOpen(log_directory, &returnCode, &reasonCode);
+
+      while ((entriesRead = directoryRead(directory, directoryDataBuffer, DIR_BUFFER_SIZE, &returnCode, &reasonCode)) > 0) {
+        char *entryStart = directoryDataBuffer;
+        for (int e = 0; e < entriesRead; e++) {
+          int entryLength = ((short*)entryStart)[0];  /* entry names are null-terminated */
+          int nameLength = ((short*)entryStart)[1];
+          if(entryLength == 4 && nameLength == 0) { /* Null directory entry */
+            break;
+          }
+          char *name = entryStart+4;
+          entryStart += entryLength;
+          if (0 == indexOfString(name, strlen(name), search_string, 0)) {
+            char file_path[PATH_MAX];
+            FileInfo *file_info = safeMalloc(sizeof(FileInfo), "logFileInfo2");
+            snprintf(file_path, PATH_MAX, "%s/%s", log_directory, name);
+            fileInfo(file_path, file_info, &returnCode, &reasonCode);
+            if (!returnCode) { 
+              bool found = false;
+              for (int r = 0; r < rollover_count; r++) {
+                if (file_info->creationTime == newest_timestamps[r]) {
+                  found = true;
+                } 
+              }
+              if (!found) {
+                DEBUG("%s has over %d old log files, removing %s\n", comp->name, rollover_count, file_path);
+                fileDelete(file_path, &returnCode, &reasonCode);
+                if (returnCode) {
+                  WARN("could not remove old log file %s, rc=0x%x, rsn=0x%x\n", name, returnCode, reasonCode);
+                }
+              } 
+            } else {
+              WARN("stat failed for %s, rc=0x%x, rsn=0x%x\n", name, returnCode, reasonCode);
+            }
+            safeFree(file_info, sizeof(FileInfo));
+          }
+        }
+      }
+      directoryClose(directory, &returnCode, &reasonCode);
+
+      if (returnCode) {
+        WARN(MSG_LOG_DIR_CLOSE, returnCode, reasonCode, log_directory);
+      }
+    }
+  }
+
+  safeFree(newest_timestamps, sizeof(int)*rollover_count);
+
+  time_t t = time(NULL);
+  char log_timestamp[32];
+
+  struct tm lt;
+  gmtime_r(&t, &lt);
+
+  strftime(log_timestamp, sizeof(log_timestamp), LOGFILE_TIMESTAMP_FORMAT, &lt);
+
+  snprintf(log_name, PATH_MAX, "%s/%s_%s_%s_%s.log", log_directory, job_prefix, zl_context.ha_instance_id, comp->name, log_timestamp);
+  safeFree(log_directory, strlen(log_directory));
+  return getStatus;
+}
+
+static int start_component(zl_comp_t *comp, ConfigManager *configmgr) {
 
   if (comp->pid != -1) {
     ERROR(MSG_COMP_ALREADY_RUN, comp->name);
@@ -916,6 +1131,21 @@ static int start_component(zl_comp_t *comp) {
   }
 
   DEBUG("about to start component %s\n", comp->name);
+
+  char log_name[PATH_MAX];
+  int getStatus = get_component_log_name(comp, configmgr, log_name);
+
+  if (!getStatus) {
+    DEBUG("Creating log file %s\n", log_name);
+    comp->log_file = fopen(log_name, "w");
+    if (!comp->log_file) {
+      ERROR(MSG_NO_LOG_FILE, comp->name);
+    }
+    DEBUG("Opened %s for %s\n", log_name, comp->name);
+  } else { //TODO better and different message from above
+    ERROR(MSG_NO_LOG_FILE, comp->name);
+    comp->log_file = 0; //To be clear that there is no file.
+  }
 
   // ensure the new process has its own process group ID so we can terminate
   // the entire process tree
@@ -1002,14 +1232,14 @@ static int start_component(zl_comp_t *comp) {
   return 0;
 }
 
-static int start_components(void) {
+static int start_components(ConfigManager *configmgr) {
 
   INFO(MSG_STARTING_COMPS);
 
   int rc = 0;
 
   for (size_t i = 0; i < zl_context.child_count; i++) {
-    if (start_component(&zl_context.children[i])) {
+    if (start_component(&zl_context.children[i], configmgr)) {
       ERROR(MSG_COMP_START_FAILED, zl_context.children[i].name);
       rc = -1;
     }
@@ -1028,6 +1258,14 @@ static int stop_component(zl_comp_t *comp) {
 
   if (comp->pid == -1) {
     return 0;
+  }
+
+  if (comp->log_file) {
+    if (fclose(comp->log_file)) {
+      ERROR("fclose() failed for %s - %s\n", comp->name, strerror(errno));
+    } else {
+      comp->log_file = 0;
+    }
   }
 
   comp->clean_stop = true;
@@ -1108,7 +1346,12 @@ static int stop_components(void) {
         WARN("kill() failed for %s - %s\n", compkill->name, strerror(errno));
       }
       rc = -1;
-    }  
+    }
+    if (fclose(compkill->log_file)) {
+      ERROR("fclose() failed for %s - %s\n", compkill->name, strerror(errno));
+    } else {
+      compkill->log_file = 0;
+    }
   }
 
   if (rc) {
@@ -1135,7 +1378,7 @@ static zl_comp_t *find_comp(const char *name) {
 #define CMD_STOP  "STOP"
 #define CMD_DISP  "DISP"
 
-static int handle_start(const char *comp_name) {
+static int handle_start(const char *comp_name, ConfigManager *configmgr) {
 
   zl_comp_t *comp = find_comp(comp_name);
   if (comp == NULL) {
@@ -1144,7 +1387,7 @@ static int handle_start(const char *comp_name) {
   }
 
   comp->fail_cnt = 0;
-  start_component(comp);
+  start_component(comp, configmgr);
 
   return 0;
 }
@@ -1199,7 +1442,8 @@ static char *get_cmd_val(const char *cmd, char *buff, size_t buff_len) {
   return buff;
 }
 
-static void *handle_console(void *args) {
+static void *handle_console(void *parm) {
+  ConfigManager *configmgr = (ConfigManager *)parm;
 
   INFO(MSG_START_CONSOLE);
 
@@ -1225,7 +1469,7 @@ static void *handle_console(void *args) {
       if (strstr(mod_cmd, CMD_START) == mod_cmd) {
         char *val = get_cmd_val(mod_cmd, cmd_val, sizeof(cmd_val));
         if (val != NULL) {
-          handle_start(val);
+          handle_start(val, configmgr);
         } else {
           ERROR(MSG_BAD_CMD_VAL);
         }
@@ -1255,11 +1499,11 @@ static void *handle_console(void *args) {
   return NULL;
 }
 
-static int start_console_tread(void) {
+static int start_console_thread(ConfigManager *configmgr) {
 
   DEBUG("starting console thread\n");
 
-  if (pthread_create(&zl_context.console_thid, NULL, handle_console, NULL) != 0) {
+  if (pthread_create(&zl_context.console_thid, NULL, handle_console, configmgr) != 0) {
     DEBUG("pthread_created() for console listener - %s\n", strerror(errno));
     return -1;
   }
@@ -1319,15 +1563,15 @@ static zl_config_t read_config(int argc, char **argv) {
   return result;
 }
 
-static int restart_component(zl_comp_t *comp) {
+static int restart_component(zl_comp_t *comp, ConfigManager *configmgr) {
   int stop_rc = stop_component(comp);
   if (stop_rc) {
     return stop_rc;
   }
-  return start_component(comp);
+  return start_component(comp, configmgr);
 }
 
-static void monitor_events(void) {
+static void monitor_events(ConfigManager *configmgr) {
 
   if (pthread_mutex_lock(&zl_context.event_lock) != 0) {
     DEBUG("monitor_events: pthread_mutex_lock() error - %s\n", strerror(errno));
@@ -1353,7 +1597,7 @@ static void monitor_events(void) {
       break;
     } else if (zl_context.event_type == ZL_EVENT_COMP_RESTART) {
       zl_comp_t* comp = zl_context.event_data;
-      int restart_rc = restart_component(comp);
+      int restart_rc = restart_component(comp, configmgr);
       if (restart_rc) {
         ERROR(MSG_COMP_RESTART_FAILED, comp->name);
       }
@@ -1619,60 +1863,90 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
       return -1;
     }
 
-    
+
+    bool apimlModulithEnabled = false;
+    if (checkHaSection) {
+      getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &apimlModulithEnabled, 5, "haInstances", zl_context.ha_instance_id, "components", "apiml", "enabled");
+      if (getStatus != ZCFG_SUCCESS) {
+        getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &apimlModulithEnabled,3, "components", "apiml", "enabled");
+      }
+    } else {
+      getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &apimlModulithEnabled,3, "components", "apiml", "enabled");
+    }
+    if (getStatus != ZCFG_SUCCESS) {
+      DEBUG("apiml modulith not found or error, %d\n", getStatus);
+      apimlModulithEnabled = false;
+    }
+
+                               
 
     while (prop!=NULL) {
       enabled = false;
       // check if component is enabled
-      if (checkHaSection) {
-        getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled, 5, "haInstances", zl_context.ha_instance_id, "components", prop->key, "enabled");
-        if (getStatus) {
+      // except for apiml components - those are checked against if the apiml modulith is enabled
+      // if it is, skip over the individual apiml components to avoid duplication.
+      if (apimlModulithEnabled == true &&
+          (
+           !strcmp("gateway", prop->key) ||
+           !strcmp("discovery", prop->key) ||
+           !strcmp("api-catalog", prop->key) ||
+           !strcmp("caching-service", prop->key) ||
+           !strcmp("zaas", prop->key)
+           )
+          ) {
+        DEBUG("Skipping individual apiml components because apiml modulith enabled\n");
+      } else {
+        if (checkHaSection) {
+          getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled, 5, "haInstances", zl_context.ha_instance_id, "components", prop->key, "enabled");
+          if (getStatus != ZCFG_SUCCESS) {
+            getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
+          }
+        } else {
           getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
         }
-      } else {
-        getStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &enabled,3, "components", prop->key, "enabled");
-      }
       
-      if (getStatus) { // failed to get enabled value of the component
-        DEBUG("failed to get enabled value of the component %s\n", prop->key);
-        prop = prop->next;
-        continue;
-      }
+        if (getStatus != ZCFG_SUCCESS) { // failed to get enabled value of the component
+          DEBUG("failed to get enabled value of the component %s\n", prop->key);
+          prop = prop->next;
+          continue;
+        }
 
-      yamlExists = true; //unused if not enabled. otherwise set to false if not found.
-      if (enabled) {
-        snprintf(manifestPath, PATH_MAX, "%s/components/%s/manifest.yaml", runtimeDirectory, prop->key);
-        DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
-  
-        // check if manifest.yaml is in <runtimeDirectory>/components/<component-name>/manifest.yaml
-        if (check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
-          yamlExists = false;
-          // if not check <extensionDirectory>/<component-name>/manifest.yaml
-          snprintf(manifestPath, PATH_MAX, "%s/%s/manifest.yaml", extensionDirectory, prop->key);
+        yamlExists = true; //unused if not enabled. otherwise set to false if not found.
+        if (enabled) {
+          snprintf(manifestPath, PATH_MAX, "%s/components/%s/manifest.yaml", runtimeDirectory, prop->key);
           DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
-          if(!check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
-             yamlExists = true;
+  
+          // check if manifest.yaml is in <runtimeDirectory>/components/<component-name>/manifest.yaml
+          if (check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
+            yamlExists = false;
+            // if not check <extensionDirectory>/<component-name>/manifest.yaml
+            snprintf(manifestPath, PATH_MAX, "%s/%s/manifest.yaml", extensionDirectory, prop->key);
+            DEBUG("manifest path for component %s is %s\n", prop->key, manifestPath);
+            if(!check_if_yaml_exists(manifestPath, "MANIFEST.YAML")) {
+              yamlExists = true;
+            }
           }
         }
-      }
 
-      // read the yaml and check for item 'commands.start', if present then add enabled component to component list
-      startScript = false;
-      if(enabled && yamlExists) {
-        yaml_document_t *document = readYAML2(manifestPath, errorBuffer, YAML_ERROR_MAX, &wasMissing);
-        yaml_node_t *root =  yaml_document_get_root_node(document);
-        if (root) {
+        // read the yaml and check for item 'commands.start', if present then add enabled component to component list
+        if(enabled && yamlExists) {
+          startScript = false;
+          yaml_document_t *document = readYAML2(manifestPath, errorBuffer, YAML_ERROR_MAX, &wasMissing);
+          yaml_node_t *root =  yaml_document_get_root_node(document);
+          if (root) {
             getStatus = get_string_by_yaml_path(document, root, start_path, sizeof(start_path)/sizeof(start_path[0]), item, sizeof(item));
             memset(item, 0, sizeof(item));
             if(!getStatus)
               startScript = true;
-        }
-        if (startScript) {
-          strncpy(comp_list + len, prop->key, strlen(prop->key));
-          strncpy(comp_list + len + strlen(prop->key), ",", 1);
-          len += (strlen(prop->key)+1);
+          }
+          if (startScript) {
+            strncpy(comp_list + len, prop->key, strlen(prop->key));
+            strncpy(comp_list + len + strlen(prop->key), ",", 1);
+            len += (strlen(prop->key)+1);
+          }
         }
       }
+      
       prop = prop->next;
     }
     if (len)
@@ -1873,9 +2147,10 @@ int main(int argc, char **argv) {
   }
 
   setenv("_BPXK_AUTOCVT", "ON", 1);
-  INFO(MSG_LAUNCHER_START);
+  sprintf(launcherVersion, "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
+  INFO(MSG_LAUNCHER_START, launcherVersion);
   INFO(MSG_LINE_LENGTH);
-  printf_wto(MSG_LAUNCHER_START); // Manual sys log print (messages not set here yet)
+  printf_wto(MSG_LAUNCHER_START, launcherVersion); // Manual sys log print (messages not set here yet)
 
   zl_config_t config = read_config(argc, argv);
   zl_context.config = config;
@@ -1899,10 +2174,6 @@ int main(int argc, char **argv) {
   }
 
   cfgSetConfigPath(configmgr, ZOWE_CONFIG_NAME, zl_context.configmgr_path);
-  int parm_member_len = strlen(zl_context.parm_member);
-  if (parm_member_len > 0 && parm_member_len < 9) {
-    cfgSetParmlibMemberName(configmgr, ZOWE_CONFIG_NAME, zl_context.parm_member);
-  }
 
   if (cfgLoadConfiguration(configmgr, ZOWE_CONFIG_NAME) != 0){
     ERROR(MSG_CFG_LOAD_FAIL);
@@ -1957,15 +2228,15 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  start_components();
+  start_components(configmgr);
 
-  if (start_console_tread()) {
+  if (start_console_thread(configmgr)) {
     ERROR(MSG_CONS_START_ERR);
     free(shared_uss_env);
     exit(EXIT_FAILURE);
   }
 
-  monitor_events();
+  monitor_events(configmgr);
 
   if (stop_console_thread()) {
     ERROR(MSG_CONS_STOP_ERR);

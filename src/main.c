@@ -220,24 +220,24 @@ static void printf_wto(const char *formatString, ...) {
 
 // WTO message ignoring C formatting specifiers, the first new line stops the message and the rest is ignored.
 // print_wto_directly("%s%i%d\n\n") -> WTO "%s%i%d"
-static void print_wto_directly(const char *wtoMessage) {
-  if (wtoMessage == NULL) return;
+static void print_wto_directly(const char *wtoText) {
+  if (wtoText == NULL) return;
 
-  size_t len = strlen(wtoMessage);
-  char *wtoCopy = malloc(len + 1);
-  if (wtoCopy == NULL) return;
+  size_t len = strlen(wtoText);
+  char *wtoTextCopy = malloc(len + 1);
+  if (wtoTextCopy == NULL) return;
 
-  memcpy(wtoCopy, wtoMessage, len + 1);
+  memcpy(wtoTextCopy, wtoText, len + 1);
 
   for (size_t i = 0; i < len; i++) {
-    if (wtoCopy[i] == '\n') {
-      wtoCopy[i] = '\0';
+    if (wtoTextCopy[i] == '\n') {
+      wtoTextCopy[i] = '\0';
       break;
     }
   }
 
-  wtoMessage(wtoCopy);
-  free(wtoCopy);
+  wtoMessage(wtoTextCopy);
+  free(wtoTextCopy);
 }
 
 static void set_sys_messages(ConfigManager *configmgr) {

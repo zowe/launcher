@@ -4,6 +4,7 @@ All notable changes to the Zowe Launcher package will be documented in this file
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
 ## 3.6.0
+- Bugfix: Check the array size of `zowe.launcher.restartIntervals` ([#187](https://github.com/zowe/launcher/pull/187))
 - Bugfix: Check the HA instance name if followed by any additional parameters ([#181](https://github.com/zowe/launcher/pull/181))
 - Bugfix: Use `wtoMessage` directly when the message is triggered from `zowe.sysMessages` ([#189](https://github.com/zowe/launcher/pull/189))
 - Enhancement: All error messages are printed to `SYSPRINT` ([#177](https://github.com/zowe/launcher/pull/177))

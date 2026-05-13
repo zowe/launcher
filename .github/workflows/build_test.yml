@@ -59,7 +59,7 @@ jobs:
           PR_DESCRIPTION: ${{ github.event.pull_request.body }}
         run: |
           # Safely print the PR description using Node.js
-          
+
           node -e "const fs=require('fs'); fs.writeFileSync('/tmp/pr_description.txt', process.env.PR_DESCRIPTION);"
           # Use diff to compare the two files
           if diff -wB /tmp/pr_description.txt .github/pull_request_template.md > /dev/null; then
@@ -114,13 +114,31 @@ jobs:
             echo "changelog was updated successfully."
           fi
 
+  check-messages:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Check defined and documented ZWEL messages
+        run: |
+          result=$(node ./buildZwelMessages.js --check)
+          if [ "${result}" != "0" ]; then
+            echo "${result}"
+            exit 1
+          fi
+
   build-test:
     runs-on: ubuntu-latest
-    needs: check-permission
-    steps: 
+    needs: [ check-permission, check-messages ]
+    steps:
       - name: '[Prep 1] Checkout'
         uses: actions/checkout@v3
-            
+
       - name: '[Dep 1] Libyaml'
         uses: actions/checkout@v3
         with:
@@ -134,7 +152,7 @@ jobs:
           repository: joenemo/quickjs-portable
           path: deps/launcher/quickjs
           ref: 'main'
-          
+
       - name: '[Dep 3] Zowe common'
         uses: actions/checkout@v3
         with:
@@ -146,14 +164,14 @@ jobs:
         uses: jfrog/setup-jfrog-cli@v2
         env:
           JF_ENV_1: ${{ secrets.JF_ARTIFACTORY_TOKEN }}
-          
+
       - name: 'convert manifest'
         run: |
           COMMIT_HASH=$(git rev-parse --verify HEAD)
           CURRENT_TIME=$(date +%s%3N)
           if [ -z ${{ github.event.pull_request.number }} ]
           then
-            CURRENT_BRANCH=${GITHUB_REF#refs/heads/} 
+            CURRENT_BRANCH=${GITHUB_REF#refs/heads/}
           else
             CURRENT_BRANCH=PR-${{ github.event.pull_request.number }}
           fi
@@ -163,10 +181,10 @@ jobs:
               -e "s|{{build\.timestamp}}|${CURRENT_TIME}|g" \
               manifest.yaml > manifest.yaml.tmp
           mv manifest.yaml.tmp manifest.yaml
-          
+
           echo "Current manifest.yaml is:"
           cat manifest.yaml
-      
+
       - name: '[Prep 3] Prepare workflow'
         uses: zowe-actions/shared-actions/prepare-workflow@main
 
@@ -190,10 +208,10 @@ jobs:
         if: ${{ success() && github.event.inputs.PERFORM_RELEASE == 'true' && env.IS_RELEASE_BRANCH == 'true' }}
         uses: zowe-actions/shared-actions/release@main
 
-      - name: '[Release 2] NPM bump version (if necessary)' 
+      - name: '[Release 2] NPM bump version (if necessary)'
         if: ${{ success() && github.event.inputs.PERFORM_RELEASE == 'true' && env.IS_RELEASE_BRANCH == 'true' }}
         uses: zowe-actions/shared-actions/bump-version@main
         with:
           version: minor
-        env: 
+        env:
           GITHUB_TOKEN: ${{ secrets.ZOWE_ROBOT_TOKEN }}

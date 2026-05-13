@@ -385,12 +385,6 @@ export const MESSAGES = [
         action: "Review the error text to determine the action to take."
     },
     {
-        id: "ZWEL0067E",
-        text: "PARMLIB() entries must all have the same member name",
-        reason: "PARMLIB() entries must all have the same member name.",
-        action: "Review the member names are identical for all PARMLIB() entries."
-    },
-    {
         id: "ZWEL0068E",
         text: "PARMLIB() entries must have a member name",
         reason: "PARMLIB() entries must have a member name.",
@@ -438,6 +432,18 @@ export const MESSAGES = [
         action: CONTACT_SUPPORT
     },
     {
+        id: "ZWEL0075E",
+        text: "Log file for %s not created",
+        reason: "The log file for `<component-name>` was not created.",
+        action: CONTACT_SUPPORT
+    },
+    {
+        id: "ZWEL0076E",
+        text: "Log directory unreadable, rc=0x%x, rsn=0x%x, location=%s",
+        reason: "The log directory is unreadable. Return code=`<rc>`, reason code=`<rsn>`, location=`<location>`.",
+        action: CONTACT_SUPPORT
+    },
+    {
         id: "ZWEL0051W",
         text: "failed to read zowe.yaml, launcher will use default settings",
         reason: "Failed to read zowe.yaml, launcher will use default settings.",
@@ -471,6 +477,12 @@ export const MESSAGES = [
         id: "ZWEL0066W",
         text: "command '%s' ended with code %d",
         reason: "The command `<command>` ended with return code `<return-code>`.",
+        action: NO_ACTION
+    },
+    {
+        id: "ZWEL0077W",
+        text: "Log directory close issue, rc=0%x, rsn=0x%x, location=%s",
+        reason: "There is an issue closing the log directory. Return code=`<rc>`, reason code=`<rsn>`, location=`<location>`.",
         action: NO_ACTION
     }
 ]

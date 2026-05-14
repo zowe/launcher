@@ -8,7 +8,7 @@
 #
 # Copyright Contributors to the Zowe Project.
 
-# Start with_any_paramter -> prints output (diff style)
+# Start with any parameter -> prints output (diff style)
 #   rc of this = number of errors found
 
 print=
@@ -95,6 +95,7 @@ PARMLIB(ZOWE.TEST-1.A(A)) | hello | ZWEL0023I Zowe YAML config file is 'PARMLIB(
 PARMLIB(ZOWE.TEST-1.A) | world | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
 PARMLIB(ZOWE.TEST-1.A() | | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
 PARMLIB(ZOWE.TEST-1.A()) | | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
+${ABS_ZOWE} | valid,IGNORED | ZWEL0024I HA_INSTANCE_ID is 'valid' | Should ignore the second parameter
 EOF
 
 exit $errors

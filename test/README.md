@@ -14,3 +14,12 @@ Copyright Contributors to the Zowe Project.
 
 Simple shell script to test basic functionality, such as treating items in environment variable `CONFIG`, `haInstace` and typical start-up messages.
 Return code is the number detected errors. To see an output, use any parameter, for example `./config-syntax.sh print`.
+
+## Environments
+
+Script for testing `zowe.environments`:
+* Escaping strings with `\` or `"`. It checks only if the variable is in output.
+* Ignoring environment variables, which are not valid unix names.
+* Return code is the number detected errors.
+
+See [config](./files/zowe.environments.yaml) used for testing.

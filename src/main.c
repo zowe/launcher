@@ -210,12 +210,34 @@ struct {
 // Forward declarations
 static void comp_log(zl_comp_t *comp, char *msg);
 
-// Wrapper for wtoPrintf3
+// Wrapper for wtoPrintf3 - WTO message with C formatting specifiers
 static void printf_wto(const char *formatString, ...) {
   va_list argPointer;
   va_start(argPointer, formatString);
   wtoPrintf3(formatString, argPointer);
   va_end(argPointer);
+}
+
+// WTO message ignoring C formatting specifiers, the first new line stops the message and the rest is ignored.
+// print_wto_directly("%s%i%d\n\n") -> WTO "%s%i%d"
+static void print_wto_directly(const char *wtoText) {
+  if (wtoText == NULL) return;
+
+  size_t len = strlen(wtoText);
+  char *wtoTextCopy = malloc(len + 1);
+  if (wtoTextCopy == NULL) return;
+
+  memcpy(wtoTextCopy, wtoText, len + 1);
+
+  for (size_t i = 0; i < len; i++) {
+    if (wtoTextCopy[i] == '\n') {
+      wtoTextCopy[i] = '\0';
+      break;
+    }
+  }
+
+  wtoMessage(wtoTextCopy);
+  free(wtoTextCopy);
 }
 
 static void set_sys_messages(ConfigManager *configmgr) {
@@ -260,22 +282,22 @@ static bool check_match_and_wto_message(const char* sys_message_id, const char* 
   }
 
   if (zl_context.trim_sys_message) {
-    printf_wto(input_string + sys_message_pos);
+    print_wto_directly(input_string + sys_message_pos);
   } else {
     // Short message, WTO *
     if (input_string_len <= WTO_MESSAGE_LENGTH) {
-      printf_wto(input_string);
+      print_wto_directly(input_string);
     // Message length > WTO_MESSAGE_LENGTH
     } else {
       // After the match, there are more chars than WTO_MESSAGE_LENGTH
       // WTO from match position
       if (input_string_len - sys_message_pos > WTO_MESSAGE_LENGTH) {
-        printf_wto(input_string + sys_message_pos);
+        print_wto_directly(input_string + sys_message_pos);
       } else {
         // The match is in the last WTO_MESSAGE_LENGTH chars
         // WTO last WTO_MESSAGE_LENGTH chars - egde case: if the match is last word
         //   user will see the text before match too
-        printf_wto(input_string + (input_string_len - WTO_MESSAGE_LENGTH));
+        print_wto_directly(input_string + (input_string_len - WTO_MESSAGE_LENGTH));
       }
     }
   }
@@ -453,23 +475,18 @@ static bool arrayListContains(ArrayList *list, char *element) {
 
 static char* escape_string(char *input) {
     int length = strlen(input);
-    int quotes = 0;
-    for (int i = 0; i < length; i++) {
-        if (input[i] == '\"') quotes++;
-    }
-
-    char *output = malloc(length + quotes + 2 + 1); // add quote on first and the last position and escape quotes inside
+    // Worst case: every character needs escaping
+    char *output = malloc(length * 2 + 2 + 1);
     output[0] = '\"';
     int j = 1;
     for (int i = 0; i < length; i++) {
-        if (input[i] == '\"') {
+        if (input[i] == '\"' || input[i] == '\\' || input[i] == '$' || input[i] == '`') {
             output[j++] = '\\';
         }
         output[j++] = input[i];
     }
     output[j++] = '\"';
     output[j++] = 0;
-
     return output;
 }
 
@@ -482,7 +499,7 @@ static char* jsonToString(Json *json) {
       return jsonAsBoolean(json) ? "true" : "false";
     case JSON_TYPE_NUMBER:
     case JSON_TYPE_INT64:
-      output = malloc(21); // Longest string possible -9223372036854775807
+      output = malloc(21); // Longest string possible -9223372036854775808 (20+\0)
       snprintf(output, 21, "%ld", jsonAsInt64(json));
       return output;
     case JSON_TYPE_DOUBLE:
@@ -494,11 +511,20 @@ static char* jsonToString(Json *json) {
   }
 }
 
-static bool is_valid_key(char *key) {
+// Zowe.environments key must follow Unix variable name syntax:
+// * The first char must not be a digit
+// * Any characters must be either alphanumeric or an underscore
+static bool is_key_valid_unix_name(const char *key) {
     int length = strlen(key);
+    if (!length) {
+        return false;
+    }
+    if (isdigit(key[0])) {
+        return false;
+    }
     for (int i = 0; i < length; i++) {
         if (isalnum(key[i])) continue;
-        if (strchr("_-", key[i])) continue;
+        if (key[i] == '_') continue;
         return false;
     }
     return true;
@@ -554,8 +580,8 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     // Get all environment variables defined in zowe.yaml and put them in the output as they are
     for (JsonProperty *property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
       char *key = jsonPropertyGetKey(property);
-      if (!is_valid_key(key)) {
-        WARN("Key in zowe.yaml `zowe.environments.%s` is invalid and it will be ignored\n", key);
+      if (!is_key_valid_unix_name(key)) {
+        WARN("Key in configuration `zowe.environments.%s` is invalid and it will be ignored\n", key);
         continue;
       }
 
@@ -655,6 +681,12 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
     return -1;
   }
   snprintf (zl_context.ha_instance_id, sizeof(zl_context.ha_instance_id), "%s", argv[1]);
+  for (int i = 0; i < strlen(zl_context.ha_instance_id); i++) {
+    if (zl_context.ha_instance_id[i] == ',') {
+      zl_context.ha_instance_id[i] = 0;
+      break;
+    }
+  }
   to_lower(zl_context.ha_instance_id);
   INFO(MSG_HA_INST_ID, zl_context.ha_instance_id);
 
@@ -705,6 +737,10 @@ static void init_component_restart_intervals(zl_comp_t *comp, ConfigManager *con
   // load restartIntervals from the configuration
   JsonArray *intArray = jsonAsArray(restartIntArray);
   int count = jsonArrayGetCount(intArray);
+  if (count > ZL_INT_ARRAY_CAPACITY) {
+    DEBUG("zowe.launcher.restartIntervals: %d out of %d will be used.\n", ZL_INT_ARRAY_CAPACITY, count);
+    count = ZL_INT_ARRAY_CAPACITY;
+  }
   comp->restart_intervals.count = count;
   for (int i = 0; i < count; i++) {
     comp->restart_intervals.data[i] = jsonArrayGetNumber(intArray, i);

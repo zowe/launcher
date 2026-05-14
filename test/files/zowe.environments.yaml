@@ -1,0 +1,85 @@
+zowe:
+  environments:
+    TEST_VAR_START: \S\T\A\R\T                  # "\\S\\T\\A\\R\\T"
+    # *** Bool ***
+    TEST_VAR_BOOL_01: true                      # true
+    TEST_VAR_BOOL_02: false                     # false
+    TEST_VAR_BOOL_03: !!bool true               # true
+    TEST_VAR_BOOL_04: !!bool false              # false
+    # *** Int ***
+    TEST_VAR_INT_01: 123456                     # 123456
+    TEST_VAR_INT_02: !!int 123456               # 123456
+    TEST_VAR_INT_03: 0x7FFFFFFF                 # 2147483647
+    TEST_VAR_INT_04: 0x00000001                 # 1
+    TEST_VAR_INT_05: !!int 0x7FFFFFFF           # 2147483647
+    TEST_VAR_INT_06: !!int 0x00000001           # 1
+    TEST_VAR_INT_07: 9223372036854775807        # 9223372036854775807
+    TEST_VAR_INT_08: !!int 9223372036854775807  # 9223372036854775807
+    TEST_VAR_INT_09: -9223372036854775808       # -9223372036854775808
+    TEST_VAR_INT_10: !!int -9223372036854775808 # -9223372036854775808
+    # *** Str ***
+    TEST_VAR_STR_01: \\\\\\\\\\                 # "\\\\\\\\\\\\\\\\\\\\"
+    TEST_VAR_STR_02: !!str \\\\\\\\\\           # "\\\\\\\\\\\\\\\\\\\\"
+    TEST_VAR_STR_03: '""""""""""'               # "\"\"\"\"\"\"\"\"\"\""
+    TEST_VAR_STR_04: '"'                        # "\""
+    TEST_VAR_STR_05: \n                         # "\\n"
+    TEST_VAR_STR_06: \0                         # "\\0"
+    TEST_VAR_STR_07: 'TE\"ST'                   # "TE\\\"ST"
+    TEST_VAR_STR_08: "TE\"ST"                   # "TE\"ST"
+    TEST_VAR_STR_09: TE\"ST                     # "TE\\\"ST"
+    TEST_VAR_STR_10: !!str 123                  # "123"
+    TEST_VAR_STR_11: !!str true                 # "true"
+    TEST_VAR_STR_12: "`cmd`"                    # "\`cmd\`"
+    TEST_VAR_STR_13: "$HOME"                    # "\$HOME"
+    TEST_VAR_STR_14: "$(ls -al)"                # "\$(ls -al)"
+    TEST_VAR_STR_15: |-
+      Love all, trust a few,
+      Do wrong to none: be able for thine enemy
+      Rather in power than use; and keep thy friend
+      Under thy own life's key: be check'd for silence,
+      But never tax'd for speech.
+    # *** Null ***
+    TEST_VAR_NULL_01:
+    TEST_VAR_NULL_02: ~
+    TEST_VAR_NULL_03: null
+    # *** Array ***
+    TEST_VAR_ARRAY_01:
+      - kiwi
+      - banana
+      - orange
+    TEST_VAR_ARRAY_02: ['A', 'B', 'C']
+    TEST_VAR_NESTED:
+      enabled: true
+      disabled: false
+    # *** Embedded JS ***
+    TEST_VAR_EJS_01: "${{ zowe.environments.TEST_VAR_INT_01 }}"   # zowe.environments.TEST_VAR_INT_01
+    TEST_VAR_EJS_02: "${{ 1+1*7 }}"             # 8
+    TEST_VAR_EJS_03: "${{ 'EJS' }}"             # "EJS"
+    TEST_VAR_EJS_04: "${{ `EJS` }}"             # "EJS"
+    TEST_VAR_EJS_05: "${{ \"EJS\" }}"           # "EJS"
+    TEST_VAR_EJS_06: "${{ `E` + 'J' + \"S\" }}" # "EJS"
+    TEST_VAR_EJS_07: "${{ `\\` }}"              # "\\"
+    TEST_VAR_EJS_08: "${{                    /* # true */
+       () => { if (1 == 1) return true } ();
+      }}"
+    TEST_VAR_END: \E\N\D                        # "\\E\\N\\D"
+    # *** Ignored keys ***
+    -key-: ~                                    # <ignored>
+    ?key: '?'                                   # <ignored>
+    1+1: =2                                     # <ignored>
+    1-1: "=0"                                   # <ignored>
+    _!_: '!!!'                                  # <ignored>
+    1TEST: true                                 # <ignored>
+    3_141592: 6535                              # <ignored>
+    (): !!int 0                                 # <ignored>
+    ~null: not null                             # <ignored>
+    =: equal sign                               # <ignored>
+    <h1>: heading                               # <ignored>
+  runtimeDirectory: "${{ () => {
+      let thisPath = os.realpath('./fakeRuntime');
+      if (thisPath[1] == 0) {
+        return thisPath[0];
+      }
+      return undefined;
+    } ()
+  }}"

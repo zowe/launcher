@@ -13,6 +13,7 @@
 
 #define MSG_PREFIX "ZWEL"
 
+#define MSG_TEST1               MSG_PREFIX "0000I" " Test - ignore\n"
 #define MSG_COMP_STARTED        MSG_PREFIX "0001I" " component %s started\n"
 #define MSG_COMP_STOPPED        MSG_PREFIX "0002I" " component %s stopped\n"
 #define MSG_COMP_INITED         MSG_PREFIX "0003I" " new component initialized %s, restart_cnt=%d, min_uptime=%d seconds, share_as=%s\n"

@@ -1353,7 +1353,7 @@ static int stop_components(void) {
     }
     if (compkill->log_file) {
       if (fclose(compkill->log_file)) {
-        ERROR("fclose() failed for %s - %s\n", comp->name, strerror(errno));
+        ERROR("fclose() failed for %s - %s\n", compkill->name, strerror(errno));
       } else {
         compkill->log_file = 0;
       }

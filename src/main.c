@@ -401,29 +401,20 @@ static bool arrayListContains(ArrayList *list, char *element) {
 }
 
 static char* escape_string(char *input) {
-    int length = strlen(input);
-    int quotes = 0;
-    int backSlashes = 0;
-    for (int i = 0; i < length; i++) {
-        if (input[i] == '\"') quotes++;
-        if (input[i] == '\\') backSlashes++;
+  int length = strlen(input);
+  // Worst case: every character needs escaping
+  char *output = malloc(length * 2 + 2 + 1);
+  output[0] = '\"';
+  int j = 1;
+  for (int i = 0; i < length; i++) {
+    if (input[i] == '\"' || input[i] == '\\' || input[i] == '$' || input[i] == '`') {
+      output[j++] = '\\';
     }
-
-    // 2 + 1 = add quote on first and the last position and \0 at the end
-    // quotes & backSlashes = add '\' to escape '"' and '\'
-    char *output = malloc(length + quotes + backSlashes + 2 + 1);
-    output[0] = '\"';
-    int j = 1;
-    for (int i = 0; i < length; i++) {
-        if (input[i] == '\"' || input[i] == '\\') {
-            output[j++] = '\\';
-        }
-        output[j++] = input[i];
-    }
-    output[j++] = '\"';
-    output[j++] = 0;
-
-    return output;
+    output[j++] = input[i];
+  }
+  output[j++] = '\"';
+  output[j++] = 0;
+  return output;
 }
 
 static char* jsonToString(Json *json) {
@@ -451,19 +442,19 @@ static char* jsonToString(Json *json) {
 // * The first char must not be a digit
 // * Any characters must be either alphanumeric or an underscore
 static bool is_key_valid_unix_name(const char *key) {
-    int length = strlen(key);
-    if (!length) {
-        return false;
-    }
-    if (isdigit(key[0])) {
-        return false;
-    }
-    for (int i = 0; i < length; i++) {
-        if (isalnum(key[i])) continue;
-        if (key[i] == '_') continue;
-        return false;
-    }
-    return true;
+  int length = strlen(key);
+  if (!length) {
+    return false;
+  }
+  if (isdigit(key[0])) {
+    return false;
+  }
+  for (int i = 0; i < length; i++) {
+    if (isalnum(key[i])) continue;
+    if (key[i] == '_') continue;
+    return false;
+  }
+  return true;
 }
 
 static void set_shared_uss_env(ConfigManager *configmgr) {

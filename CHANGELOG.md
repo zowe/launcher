@@ -3,6 +3,9 @@
 All notable changes to the Zowe Launcher package will be documented in this file.
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
+## 3.6.0
+- Bugfix: Component names must fit the component list ([#195](https://github.com/zowe/launcher/pull/195))
+
 ## 3.5.0
 - Bugfix: Escape backslash, backtick and dollar sign when used in environment variable ([#168](https://github.com/zowe/launcher/pull/168))
 - Bugfix: Check the array size of `zowe.launcher.restartIntervals` ([#187](https://github.com/zowe/launcher/pull/187))

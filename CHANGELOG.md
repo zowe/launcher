@@ -3,8 +3,9 @@
 All notable changes to the Zowe Launcher package will be documented in this file.
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
-## 2.18.4
+## 2.18.5
 - Bugfix: Escape backslash when used in environment variable ([#169](https://github.com/zowe/launcher/pull/169))
+- Bugfix: Check the array size of `zowe.launcher.restartIntervals` ([#188](https://github.com/zowe/launcher/pull/188))
 
 ## 2.18.1
 - Bugfix: HEAPPOOLS and HEAPPOOLS64 no longer need to be set to OFF for launcher (#132)

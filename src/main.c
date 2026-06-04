@@ -903,7 +903,7 @@ static void *handle_comp_comm(void *args) {
     int retries_left = 3;
     while (retries_left > 0) {
 
-      int msg_len = read(comp->output, msg, sizeof(msg));
+      int msg_len = read(comp->output, msg, sizeof(msg) - 1);
       if (msg_len > 0) {
         msg[msg_len] = '\0';
 

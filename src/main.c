@@ -789,7 +789,6 @@ static void init_component_shareas(zl_comp_t *comp, ConfigManager *configmgr) {
   } else {
     comp->share_as = ZL_COMP_AS_SHARE_YES;
   }
-  safeFree(share_as, strlen(share_as));
 }
 
 static const char *get_shareas_label(const zl_comp_t *comp) {

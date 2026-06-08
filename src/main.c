@@ -1747,7 +1747,6 @@ static char* get_sharedenv(void) {
   }
   trimRight(output, strlen(output));
   free(aux);
-  INFO("get_sharedenv = %s\n", output);  // Delete me
   return output;
 }
 

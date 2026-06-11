@@ -276,7 +276,7 @@ static bool check_match_and_wto_message(const char* sys_message_id, const char* 
 
   if (other_messages) {
     // App-server -> Show Environment -> E.g. ^ZWE_zowe_sysMessages_0=ZWEL0021I$
-    if (memcmp(ZWE_ZOWE_SYS_MESSAGES, input_string, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
+    if (strncmp(input_string, ZWE_ZOWE_SYS_MESSAGES, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
       return false;
     }
   }

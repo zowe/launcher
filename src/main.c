@@ -1351,10 +1351,12 @@ static int stop_components(void) {
       }
       rc = -1;
     }
-    if (fclose(compkill->log_file)) {
-      ERROR("fclose() failed for %s - %s\n", compkill->name, strerror(errno));
-    } else {
-      compkill->log_file = 0;
+    if (compkill->log_file) {
+      if (fclose(compkill->log_file)) {
+        ERROR("fclose() failed for %s - %s\n", compkill->name, strerror(errno));
+      } else {
+        compkill->log_file = 0;
+      }
     }
   }
 
@@ -1944,9 +1946,13 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
               startScript = true;
           }
           if (startScript) {
-            strncpy(comp_list + len, prop->key, strlen(prop->key));
-            strncpy(comp_list + len + strlen(prop->key), ",", 1);
-            len += (strlen(prop->key)+1);
+            if (len + strlen(prop->key) + 2 <= sizeof(comp_list)) {
+              strncpy(comp_list + len, prop->key, strlen(prop->key));
+              strncpy(comp_list + len + strlen(prop->key), ",", 1);
+              len += (strlen(prop->key)+1);
+            } else {
+              DEBUG("skip adding component %s to comp_list\n", prop->key);
+            }
           }
         }
       }

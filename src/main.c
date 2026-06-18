@@ -789,6 +789,9 @@ static void init_component_shareas(zl_comp_t *comp, ConfigManager *configmgr) {
   } else {
     comp->share_as = ZL_COMP_AS_SHARE_YES;
   }
+  if (getStatus == ZCFG_SUCCESS) {
+    safeFree(share_as, strlen(share_as) + 1);
+  }
 }
 
 static const char *get_shareas_label(const zl_comp_t *comp) {
@@ -1009,7 +1012,7 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
 
   if ((directory = directoryOpen(log_directory, &returnCode, &reasonCode)) == NULL) {
     ERROR(MSG_LOG_DIR_PERM, returnCode, reasonCode, log_directory);
-    safeFree(log_directory, strlen(log_directory));
+    safeFree(log_directory, strlen(log_directory) + 1);
     return returnCode;
   } else {
     char search_string[PATH_MAX];
@@ -1122,7 +1125,7 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
   strftime(log_timestamp, sizeof(log_timestamp), LOGFILE_TIMESTAMP_FORMAT, &lt);
 
   snprintf(log_name, PATH_MAX, "%s/%s_%s_%s_%s.log", log_directory, job_prefix, zl_context.ha_instance_id, comp->name, log_timestamp);
-  safeFree(log_directory, strlen(log_directory));
+  safeFree(log_directory, strlen(log_directory) + 1);
   return getStatus;
 }
 

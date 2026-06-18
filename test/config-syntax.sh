@@ -8,17 +8,25 @@
 #
 # Copyright Contributors to the Zowe Project.
 
-# Start with_any_paramter -> prints output (diff style)
+# Start with any parameter -> prints output (diff style)
 #   rc of this = number of errors found
 
 print=
 errors=0
+
+# Get the launchers's version from manifest.yaml
+VERSION=$(cat "../manifest.yaml" | grep -e "^version:" | awk -F: '{ print $2 }' | awk '{$1=$1};1')
 
 if [ ! -z "${1}" ]; then
     print='1'
 fi
 
 LAUNCHER='../bin/zowe_launcher'
+if [ ! -f "${LAUNCHER}" ]; then
+    echo "Executable for Zowe launcher not found at: ${LAUNCHER}"
+    exit 255
+fi
+
 ABS_PATH=$(cd .; pwd)
 
 TEST_FILES='./files'
@@ -77,8 +85,8 @@ done <<EOF
 CONFIG | HA-INSTANCE | TEXT-TO-FIND | DESCRIPTION | ZLDEBUG
  | | PANIC! readJson got null pathElement | No config leads to PANIC!
 FILE(${ZOWE_EMPTY}) | | ZWEL0318E - failed to get root node in YAML | Empty config leads to ZWEL0318E
-${ABS_ZOWE} | | ZWEL0021I Zowe Launcher starting | Check the basic message ZWEL0021I
-${ZOWE} | | INFO ZWEL0023I Zowe YAML config file is 'FILE(${ZOWE})' | ZWEL0023I wrapped by FILE()
+${ABS_ZOWE} | | ZWEL0021I Zowe Launcher starting, version is ${VERSION}+ | Check the basic message ZWEL0021I
+${ZOWE} | | INFO ZWEL0023I Zowe YAML config file is '${ZOWE}' | ZWEL0023I
 FILE(${ZOWE}) | | INFO ZWEL0023I Zowe YAML config file is 'FILE(${ZOWE})' | Same as previous test
 ${ABS_ZOWE} | | INFO ZWEL0023I Zowe YAML config file is 'FILE(${ABS_ZOWE})' | ZWEL0023I wrapped by FILE()
 ${ABS_ZOWE2} | | INFO ZWEL0023I Zowe YAML config file is 'FILE(${ABS_ZOWE2})' | Should be able to read the file
@@ -87,6 +95,7 @@ PARMLIB(ZOWE.TEST-1.A(A)) | hello | ZWEL0023I Zowe YAML config file is 'PARMLIB(
 PARMLIB(ZOWE.TEST-1.A) | world | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
 PARMLIB(ZOWE.TEST-1.A() | | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
 PARMLIB(ZOWE.TEST-1.A()) | | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
+${ABS_ZOWE} | valid,IGNORED | ZWEL0024I HA_INSTANCE_ID is 'valid' | Should ignore the second parameter
 EOF
 
 exit $errors

@@ -3,13 +3,26 @@
 All notable changes to the Zowe Launcher package will be documented in this file.
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
-## 3.3
-- Bugfix: `zowe.sysMessages` feature was ignoring messages where the matching string was after the position of 126 ([#157]https://github.com/zowe/launcher/pull/157)
+## 3.6.0
+- Bugfix: Component names must fit the component list ([#195](https://github.com/zowe/launcher/pull/195))
+
+## 3.5.0
+- Bugfix: Escape backslash, backtick and dollar sign when used in environment variable ([#168](https://github.com/zowe/launcher/pull/168))
+- Bugfix: Check the array size of `zowe.launcher.restartIntervals` ([#187](https://github.com/zowe/launcher/pull/187))
+- Bugfix: Check the HA instance name if followed by any additional parameters ([#181](https://github.com/zowe/launcher/pull/181))
+- Bugfix: Use `wtoMessage` directly when the message is triggered from `zowe.sysMessages` ([#189](https://github.com/zowe/launcher/pull/189))
+- Enhancement: All error messages are printed to `SYSPRINT` ([#177](https://github.com/zowe/launcher/pull/177))
+
+## 3.4.0
+- Enhancement: Message `ZWEL0021I` includes the version of launcher ([#167](https://github.com/zowe/launcher/pull/167))
+
+## 3.3.0
+- Bugfix: `zowe.sysMessages` feature was ignoring messages where the matching string was after the position of 126 ([#157](https://github.com/zowe/launcher/pull/157))
 - Enhancement: Launcher can now accept PARMLIB CONFIG entries that have more than one member name ([#146](https://github.com/zowe/launcher/pull/146))
 - Enhancement: Trimming the sys messages to print from the sys-message-id as optional based on the zowe.sysMessageTrim=true/false. (#147)
 - Enhancement: Avoid starting individual apiml components when apiml modulith is enabled ([#160](https://github.com/zowe/launcher/pull/160))
 
-## 3.1
+## 3.1.0
 - Bugfix: HEAPPOOLS and HEAPPOOLS64 no longer need to be set to OFF for launcher (#133)
 
 ## 2.17.0

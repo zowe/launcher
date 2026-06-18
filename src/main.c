@@ -18,7 +18,6 @@
 #include <string.h>
 #include <strings.h>
 #include <errno.h>
-#include <regex.h>
 #include <time.h>
 #include <sys/time.h>
 
@@ -276,7 +275,7 @@ static bool check_match_and_wto_message(const char* sys_message_id, const char* 
 
   if (other_messages) {
     // App-server -> Show Environment -> E.g. ^ZWE_zowe_sysMessages_0=ZWEL0021I$
-    if (memcmp(ZWE_ZOWE_SYS_MESSAGES, input_string, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
+    if (strncmp(input_string, ZWE_ZOWE_SYS_MESSAGES, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
       return false;
     }
   }
@@ -328,15 +327,29 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
 
 }
 
-// matches YYYY-MM-DD starting with 2xxx.
-// this regex was chosen because other patterns didnt seem to work with LE's regex library.
-#define DATE_PREFIX_REGEXP_PATTERN "^[2-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*"
+// Replacement for previous regex ^[2-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*
+// Easy to implement & maintain
+static int is_date_prefix(const char *s) {
+  if (!s || strlen(s) < 10) {
+    return 0;
+  }
+
+  if (s[0] < '2' || s[0] > '9') return 0;
+  if (s[1] < '0' || s[1] > '9') return 0;
+  if (s[2] < '0' || s[2] > '9') return 0;
+  if (s[3] < '0' || s[3] > '9') return 0;
+  if (s[4] != '-')              return 0;
+  if (s[5] < '0' || s[5] > '9') return 0;
+  if (s[6] < '0' || s[6] > '9') return 0;
+  if (s[7] != '-')              return 0;
+  if (s[8] < '0' || s[8] > '9') return 0;
+  if (s[9] < '0' || s[9] > '9') return 0;
+
+  return 1;
+}
 
 // zowe standard "YYYY-MM-DD HH-MM-SS.sss "
 #define DATE_PREFIX_LEN 24
-
-// Needed once
-static regex_t time_regex = { .re_comp = NULL };
 
 // Other messages are completed, check possible date and filter it out
 static void check_for_and_print_sys_message(const char* input_string) {
@@ -345,11 +358,10 @@ static void check_for_and_print_sys_message(const char* input_string) {
   }
 
   int count = jsonArrayGetCount(zl_context.sys_messages);
-  if (!time_regex.re_comp) {
-    int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
+  int offset = 0;
+  if (is_date_prefix(input_string) && strlen(input_string) >= DATE_PREFIX_LEN) {
+    offset = DATE_PREFIX_LEN;
   }
-  int match = regexec(&time_regex, input_string, 0, NULL, 0);
-  int offset = match == 0 ? DATE_PREFIX_LEN : 0;
 
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);

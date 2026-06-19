@@ -329,10 +329,8 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
 
 // Replacement for previous regex ^[2-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*
 // Easy to implement & maintain
-static int is_date_prefix(const char *s) {
-  if (!s || strlen(s) < 10) {
-    return 0;
-  }
+// No NULL check - always called for input strings with length >= DATE_PREFIX_LEN (24)
+static inline int is_date_prefix(const char *s) {
 
   if (s[0] < '2' || s[0] > '9') return 0;
   if (s[1] < '0' || s[1] > '9') return 0;
@@ -353,13 +351,13 @@ static int is_date_prefix(const char *s) {
 
 // Other messages are completed, check possible date and filter it out
 static void check_for_and_print_sys_message(const char* input_string) {
-  if (!zl_context.sys_messages) {
+  if (!zl_context.sys_messages || !input_string) {
     return;
   }
 
   int count = jsonArrayGetCount(zl_context.sys_messages);
   int offset = 0;
-  if (is_date_prefix(input_string) && strlen(input_string) >= DATE_PREFIX_LEN) {
+  if (strlen(input_string) >= DATE_PREFIX_LEN && is_date_prefix(input_string)) {
     offset = DATE_PREFIX_LEN;
   }
 

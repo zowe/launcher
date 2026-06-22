@@ -255,6 +255,12 @@ static void set_sys_messages(ConfigManager *configmgr) {
     zl_context.sys_messages = sys_messages;
   }
 
+  int count = jsonArrayGetCount(zl_context.sys_messages);
+  for (int i = 0; i < count; i++) {
+    const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
+    printf("set_sys_messages: MSGID: %s\n", sys_message_id);
+  }
+
   bool trim = false; // for backwards compatibility trimming sys messages is disabled by default.
   cfgGetStatus = cfgGetBooleanC(configmgr, ZOWE_CONFIG_NAME, &trim, 2, "zowe", "sysMessageTrim");
   if (cfgGetStatus != ZCFG_SUCCESS) { // No sysMessageTrim found in Zowe configuration, disabled by default.

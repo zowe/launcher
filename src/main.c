@@ -243,7 +243,9 @@ static void print_wto_directly(const char *wtoText) {
 static void set_sys_messages(ConfigManager *configmgr) {
   Json *env;
   int cfgGetStatus = cfgGetAnyC(configmgr, ZOWE_CONFIG_NAME, &env, 2, "zowe", "sysMessages");
-
+  
+  printf("set_sys_messages: cfgGetStatus = %i\n", cfgGetStatus);
+  
   if (cfgGetStatus != ZCFG_SUCCESS) { // No sysMessages found in Zowe configuration
     return;
   }
@@ -259,6 +261,7 @@ static void set_sys_messages(ConfigManager *configmgr) {
     return;
   }
   zl_context.trim_sys_message = trim;
+  printf("set_sys_messages: done here\n");
 }
 
 //size of "ZWE_zowe_sysMessages"

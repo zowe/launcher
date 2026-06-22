@@ -401,25 +401,20 @@ static bool arrayListContains(ArrayList *list, char *element) {
 }
 
 static char* escape_string(char *input) {
-    int length = strlen(input);
-    int quotes = 0;
-    for (int i = 0; i < length; i++) {
-        if (input[i] == '\"') quotes++;
+  int length = strlen(input);
+  // Worst case: every character needs escaping
+  char *output = malloc(length * 2 + 2 + 1);
+  output[0] = '\"';
+  int j = 1;
+  for (int i = 0; i < length; i++) {
+    if (input[i] == '\"' || input[i] == '\\' || input[i] == '$' || input[i] == '`') {
+      output[j++] = '\\';
     }
-
-    char *output = malloc(length + quotes + 2 + 1); // add quote on first and the last position and escape quotes inside
-    output[0] = '\"';
-    int j = 1;
-    for (int i = 0; i < length; i++) {
-        if (input[i] == '\"') {
-            output[j++] = '\\';
-        }
-        output[j++] = input[i];
-    }
-    output[j++] = '\"';
-    output[j++] = 0;
-
-    return output;
+    output[j++] = input[i];
+  }
+  output[j++] = '\"';
+  output[j++] = 0;
+  return output;
 }
 
 static char* jsonToString(Json *json) {
@@ -431,7 +426,7 @@ static char* jsonToString(Json *json) {
       return jsonAsBoolean(json) ? "true" : "false";
     case JSON_TYPE_NUMBER:
     case JSON_TYPE_INT64:
-      output = malloc(21); // Longest string possible -9223372036854775807
+      output = malloc(21); // Longest string possible -9223372036854775808
       snprintf(output, 21, "%ld", jsonAsInt64(json));
       return output;
     case JSON_TYPE_DOUBLE:
@@ -443,14 +438,23 @@ static char* jsonToString(Json *json) {
   }
 }
 
-static bool is_valid_key(char *key) {
-    int length = strlen(key);
-    for (int i = 0; i < length; i++) {
-        if (isalnum(key[i])) continue;
-        if (strchr("_-", key[i])) continue;
-        return false;
-    }
-    return true;
+// Zowe.environments key must follow Unix variable name syntax:
+// * The first char must not be a digit
+// * Any characters must be either alphanumeric or an underscore
+static bool is_key_valid_unix_name(const char *key) {
+  int length = strlen(key);
+  if (!length) {
+    return false;
+  }
+  if (isdigit(key[0])) {
+    return false;
+  }
+  for (int i = 0; i < length; i++) {
+    if (isalnum(key[i])) continue;
+    if (key[i] == '_') continue;
+    return false;
+  }
+  return true;
 }
 
 static void set_shared_uss_env(ConfigManager *configmgr) {
@@ -503,7 +507,7 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     // Get all environment variables defined in zowe.yaml and put them in the output as they are
     for (JsonProperty *property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
       char *key = jsonPropertyGetKey(property);
-      if (!is_valid_key(key)) {
+      if (!is_key_valid_unix_name(key)) {
         WARN("Key in zowe.yaml `zowe.environments.%s` is invalid and it will be ignored\n", key);
         continue;
       }
@@ -682,6 +686,10 @@ static void init_component_restart_intervals(zl_comp_t *comp, ConfigManager *con
   // load restartIntervals from the configuration
   JsonArray *intArray = jsonAsArray(restartIntArray);
   int count = jsonArrayGetCount(intArray);
+  if (count > ZL_INT_ARRAY_CAPACITY) {
+    DEBUG("zowe.launcher.restartIntervals: %d out of %d will be used.\n", ZL_INT_ARRAY_CAPACITY, count);
+    count = ZL_INT_ARRAY_CAPACITY;
+  }
   comp->restart_intervals.count = count;
   for (int i = 0; i < count; i++) {
     comp->restart_intervals.data[i] = jsonArrayGetNumber(intArray, i);

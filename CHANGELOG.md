@@ -4,7 +4,7 @@ All notable changes to the Zowe Launcher package will be documented in this file
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
 ## 3.6.0
-- Bugfix: `zowe.sysMessages` are used after the validation ([#2??](https://github.com/zowe/launcher/pull/2??))
+- Bugfix: `zowe.sysMessages` are used after the validation ([#208](https://github.com/zowe/launcher/pull/208))
 - Bugfix: Component names must fit the component list ([#195](https://github.com/zowe/launcher/pull/195))
 
 ## 3.5.0

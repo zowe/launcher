@@ -2137,17 +2137,17 @@ static bool validateConfiguration(ConfigManager *cmgr, FILE *out){
   switch (validateStatus){
   case JSON_VALIDATOR_NO_EXCEPTIONS:
     INFO(MSG_CFG_VALID);
-    print_wto(MSG_CFG_VALID); // Manual sys log print (messages not set here yet)
+    printf_wto(MSG_CFG_VALID); // Manual sys log print (messages not set here yet)
     ok = true;
     break;
   case JSON_VALIDATOR_HAS_EXCEPTIONS:
     ERROR(MSG_CFG_INVALID);
-    print_wto(MSG_CFG_INVALID); // Manual sys log print (messages not set here yet)
+    printf_wto(MSG_CFG_INVALID); // Manual sys log print (messages not set here yet)
     displayValidityException(out,0,validator->topValidityException);
     break;
   case JSON_VALIDATOR_INTERNAL_FAILURE:
     ERROR(MSG_CFG_INTERNAL_FAIL);
-    print_wto(MSG_CFG_INTERNAL_FAIL); // Manual sys log print (messages not set here yet)
+    printf_wto(MSG_CFG_INTERNAL_FAIL); // Manual sys log print (messages not set here yet)
     break;
   }
   freeJsonValidator(validator);

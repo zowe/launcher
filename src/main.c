@@ -331,19 +331,17 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
 // Easy to implement & maintain
 // No NULL check - always called for input strings with length >= DATE_PREFIX_LEN (24)
 static inline int is_date_prefix(const char *s) {
-
-  if (s[0] < '2' || s[0] > '9') return 0;
-  if (s[1] < '0' || s[1] > '9') return 0;
-  if (s[2] < '0' || s[2] > '9') return 0;
-  if (s[3] < '0' || s[3] > '9') return 0;
-  if (s[4] != '-')              return 0;
-  if (s[5] < '0' || s[5] > '9') return 0;
-  if (s[6] < '0' || s[6] > '9') return 0;
-  if (s[7] != '-')              return 0;
-  if (s[8] < '0' || s[8] > '9') return 0;
-  if (s[9] < '0' || s[9] > '9') return 0;
-
-  return 1;
+  unsigned r  = (unsigned char)(s[0] - '2') > 7u;  /* '2'..'9' */
+  r |= (unsigned char)(s[1] - '0') > 9u;
+  r |= (unsigned char)(s[2] - '0') > 9u;
+  r |= (unsigned char)(s[3] - '0') > 9u;
+  r |= s[4] != '-';
+  r |= (unsigned char)(s[5] - '0') > 9u;
+  r |= (unsigned char)(s[6] - '0') > 9u;
+  r |= s[7] != '-';
+  r |= (unsigned char)(s[8] - '0') > 9u;
+  r |= (unsigned char)(s[9] - '0') > 9u;
+  return !r;
 }
 
 // zowe standard "YYYY-MM-DD HH-MM-SS.sss "

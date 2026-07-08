@@ -1685,28 +1685,6 @@ static int run_command(const char *command, handle_line_callback_t handle_line, 
   return 0;
 }
 
-static void handle_get_component_line(void *data, const char *line) {
-  char *comp_list = data;
-  snprintf(comp_list, COMP_LIST_SIZE, "%s", line);
-  int len = strlen(comp_list);
-  for (int i = len - 1; i >= 0; i--) {
-    if (comp_list[i] != ' ' && comp_list[i] != '\n' && comp_list[i] != ',') {
-      break;
-    }
-    comp_list[i] = '\0';
-  }
-}
-
-static char* get_launch_components_cmd(char* sharedenv) {
-  const char basecmd[] = "%s ZWE_CLI_PARAMETER_CONFIG=\"%s\" %s/bin/utils/configmgr -script %s/bin/commands/internal/get-launch-components/cli.js 2>&1";
-  int size = (strlen(zl_context.root_dir) * 2) + strlen(zl_context.config_path) + strlen(sharedenv) + sizeof(basecmd) + 1;
-  char *command = malloc(size);
-
-  snprintf(command, size, basecmd,
-           sharedenv, zl_context.config_path, zl_context.root_dir, zl_context.root_dir);
-  return command;
-}
-
 /**
  * @brief Get the sharedenv. The function contemplates enclosing in quotes the values of the variables.
  * 

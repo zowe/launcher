@@ -5,7 +5,7 @@ This repo is part of the app-server Zowe Component, and the change logs here may
 
 ## 3.6.0
 - Bugfix: Component names must fit the component list ([#195](https://github.com/zowe/launcher/pull/195))
-- Enhancement: More restrictive permissions ([#2??](https://github.com/zowe/launcher/pull/2??))
+- Enhancement: More restrictive permissions ([#212](https://github.com/zowe/launcher/pull/212))
 
 ## 3.5.0
 - Bugfix: Escape backslash, backtick and dollar sign when used in environment variable ([#168](https://github.com/zowe/launcher/pull/168))

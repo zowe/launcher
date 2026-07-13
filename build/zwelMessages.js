@@ -239,7 +239,7 @@ export const MESSAGES = [
         id: "ZWEL0030E",
         define: "MSG_INST_PREP_ERR",
         text: "failed to prepare Zowe instance",
-        reason: "Failed to prepare the zowe instance.",
+        reason: "Failed to prepare the Zowe instance.",
         action: "Check previous messages in the Zowe Launcher `SYSPRINT` to find the reason and correct it."
     },
     {

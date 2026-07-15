@@ -12,7 +12,7 @@ on:
       - v3.x/staging
       - v3.x/rc
   pull_request:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened, synchronize, labeled, unlabeled]
   workflow_dispatch:
     inputs:
       PERFORM_RELEASE:
@@ -31,7 +31,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   update-changelog:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
     runs-on: ubuntu-latest
     outputs:
       was_updated: ${{ steps.check-change.outputs.change_detected }}
@@ -98,7 +98,7 @@ jobs:
             fi
 
   check_changelog:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
     needs: update-changelog
     runs-on: ubuntu-latest
     steps:

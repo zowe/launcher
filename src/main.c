@@ -902,7 +902,7 @@ static void *handle_comp_comm(void *args) {
     int retries_left = 3;
     while (retries_left > 0) {
 
-      int msg_len = read(comp->output, msg, sizeof(msg));
+      int msg_len = read(comp->output, msg, sizeof(msg) - 1);
       if (msg_len > 0) {
         msg[msg_len] = '\0';
 
@@ -1305,7 +1305,7 @@ static int stop_component(zl_comp_t *comp) {
 
 static int stop_components(void) {
 
-  INFO(MSG_STOPING_COMPS);
+  INFO(MSG_STOPPING_COMPS);
   prevent_restart=true;
 
   int rc = 0;
@@ -1696,7 +1696,9 @@ static char* get_sharedenv(void) {
 
   required++;
   output = malloc(required);
+  output[0] = '\0';
   aux = malloc(required);
+  aux[0] = '\0';
   for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
     char *thisEnv = *env;
     strcat(aux, thisEnv);
@@ -2069,7 +2071,7 @@ static int init() {
 }
 
 static void terminate(int sig) {
-  INFO(MSG_LAUNCHER_STOPING);
+  INFO(MSG_LAUNCHER_STOPPING);
   stop_components();
   exit(EXIT_SUCCESS);
 }

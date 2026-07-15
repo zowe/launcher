@@ -1308,7 +1308,7 @@ static int stop_component(zl_comp_t *comp) {
 
 static int stop_components(void) {
 
-  INFO(MSG_STOPING_COMPS);
+  INFO(MSG_STOPPING_COMPS);
   prevent_restart=true;
 
   int rc = 0;
@@ -2072,7 +2072,7 @@ static int init() {
 }
 
 static void terminate(int sig) {
-  INFO(MSG_LAUNCHER_STOPING);
+  INFO(MSG_LAUNCHER_STOPPING);
   stop_components();
   exit(EXIT_SUCCESS);
 }

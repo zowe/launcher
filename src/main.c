@@ -1699,7 +1699,9 @@ static char* get_sharedenv(void) {
 
   required++;
   output = malloc(required);
+  output[0] = '\0';
   aux = malloc(required);
+  aux[0] = '\0';
   for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
     char *thisEnv = *env;
     strcat(aux, thisEnv);

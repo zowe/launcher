@@ -792,7 +792,6 @@ static void init_component_shareas(zl_comp_t *comp, ConfigManager *configmgr) {
   } else {
     comp->share_as = ZL_COMP_AS_SHARE_YES;
   }
-  safeFree(share_as, strlen(share_as));
 }
 
 static const char *get_shareas_label(const zl_comp_t *comp) {
@@ -906,7 +905,7 @@ static void *handle_comp_comm(void *args) {
     int retries_left = 3;
     while (retries_left > 0) {
 
-      int msg_len = read(comp->output, msg, sizeof(msg));
+      int msg_len = read(comp->output, msg, sizeof(msg) - 1);
       if (msg_len > 0) {
         msg[msg_len] = '\0';
 
@@ -1013,7 +1012,6 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
 
   if ((directory = directoryOpen(log_directory, &returnCode, &reasonCode)) == NULL) {
     ERROR(MSG_LOG_DIR_PERM, returnCode, reasonCode, log_directory);
-    safeFree(log_directory, strlen(log_directory));
     return returnCode;
   } else {
     char search_string[PATH_MAX];
@@ -1126,7 +1124,6 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
   strftime(log_timestamp, sizeof(log_timestamp), LOGFILE_TIMESTAMP_FORMAT, &lt);
 
   snprintf(log_name, PATH_MAX, "%s/%s_%s_%s_%s.log", log_directory, job_prefix, zl_context.ha_instance_id, comp->name, log_timestamp);
-  safeFree(log_directory, strlen(log_directory));
   return getStatus;
 }
 
@@ -1311,7 +1308,7 @@ static int stop_component(zl_comp_t *comp) {
 
 static int stop_components(void) {
 
-  INFO(MSG_STOPING_COMPS);
+  INFO(MSG_STOPPING_COMPS);
   prevent_restart=true;
 
   int rc = 0;
@@ -1702,7 +1699,9 @@ static char* get_sharedenv(void) {
 
   required++;
   output = malloc(required);
+  output[0] = '\0';
   aux = malloc(required);
+  aux[0] = '\0';
   for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
     char *thisEnv = *env;
     strcat(aux, thisEnv);
@@ -2075,7 +2074,7 @@ static int init() {
 }
 
 static void terminate(int sig) {
-  INFO(MSG_LAUNCHER_STOPING);
+  INFO(MSG_LAUNCHER_STOPPING);
   stop_components();
   exit(EXIT_SUCCESS);
 }

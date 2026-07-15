@@ -276,7 +276,7 @@ static bool check_match_and_wto_message(const char* sys_message_id, const char* 
 
   if (other_messages) {
     // App-server -> Show Environment -> E.g. ^ZWE_zowe_sysMessages_0=ZWEL0021I$
-    if (memcmp(ZWE_ZOWE_SYS_MESSAGES, input_string, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
+    if (strncmp(input_string, ZWE_ZOWE_SYS_MESSAGES, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
       return false;
     }
   }
@@ -349,7 +349,10 @@ static void check_for_and_print_sys_message(const char* input_string) {
     int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
   }
   int match = regexec(&time_regex, input_string, 0, NULL, 0);
-  int offset = match == 0 ? DATE_PREFIX_LEN : 0;
+  int offset = 0;
+  if (match == 0 && strlen(input_string) >= DATE_PREFIX_LEN) {
+    offset = DATE_PREFIX_LEN;
+  }
 
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);

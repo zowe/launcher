@@ -12,7 +12,7 @@ Copyright Contributors to the Zowe Project.
 
 ## Config-syntax
 
-Simple shell script to test basic functionality, such as treating items in environment variable `CONFIG`, `haInstace` and typical start-up messages.
+Simple shell script to test basic functionality, such as treating items in environment variable `CONFIG`, `haInstance` and typical start-up messages.
 Return code is the number detected errors. To see an output, use any parameter, for example `./config-syntax.sh print`.
 
 ## Environments

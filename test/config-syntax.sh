@@ -78,10 +78,10 @@ run_launcher() {
 }
 
 IFS='|'
-while read config haInstace textMatch desc debug; do
+while read config haInstance textMatch desc debug; do
     # Skip the first line
     if [ "${config}" != "CONFIG " ]; then
-        run_launcher $config $haInstace $textMatch $desc $debug
+        run_launcher $config $haInstance $textMatch $desc $debug
     fi
 done <<EOF
 CONFIG | HA-INSTANCE | TEXT-TO-FIND | DESCRIPTION | ZLDEBUG

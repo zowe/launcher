@@ -2092,7 +2092,7 @@ static void terminate(int sig) {
 static void *handle_term_signal(void *arg) {
   unsigned char byte;
   if (read(term_signal_pipe[0], &byte, 1) > 0) {
-    INFO(MSG_LAUNCHER_STOPING);
+    INFO(MSG_LAUNCHER_STOPPING);
     send_event(ZL_EVENT_TERM, NULL);
   }
   return NULL;

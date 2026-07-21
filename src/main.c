@@ -2116,7 +2116,7 @@ static int setup_signal_handlers() {
     DEBUG("failed to start termination signal relay thread - %s\n", strerror(errno));
     return -1;
   }
-  pthread_detach(term_thid);
+  pthread_detach(&term_thid);
 
   sa.sa_handler = terminate;
   sigemptyset(&sa.sa_mask);

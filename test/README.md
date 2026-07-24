@@ -12,14 +12,14 @@ Copyright Contributors to the Zowe Project.
 
 ## Config-syntax
 
-Simple shell script to test basic functionality, such as treating items in environment variable `CONFIG`, `haInstance` and typical start-up messages.
-Return code is the number detected errors. To see an output, use any parameter, for example `./config-syntax.sh print`.
+Simple shell script to test basic functionality:
+* Treating items in the environment variable `CONFIG` and `haInstance`.
+* Typical start-up messages.
+* To see the output, please run the script with any parameter, for example: `./config-syntax.sh print`.
 
 ## Environments
 
-Script for testing `zowe.environments`:
-* Escaping strings with `\` or `"`. It checks only if the variable is in output.
-* Ignoring environment variables, which are not valid unix names.
-* Return code is the number detected errors.
-
-See [config](./files/zowe.environments.yaml) used for testing.
+Test script for `zowe.environments`. It performs the following checks:
+* String Escaping: it verifies how strings with special characters are escaped by checking if the variable is present in the output.
+* Environment variable filtering: it ignores environment variables that do not have valid Unix names.
+* See [config](./files/zowe.environments.yaml) used for testing.

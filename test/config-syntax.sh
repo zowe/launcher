@@ -9,7 +9,9 @@
 # Copyright Contributors to the Zowe Project.
 
 # Start with any parameter -> prints output (diff style)
-#   rc of this = number of errors found
+#   rc = 0 - success
+#   rc = 1 - invalid or no executable file
+#   rc = 2 - test case(s) failed
 
 print=
 errors=0
@@ -24,7 +26,7 @@ fi
 LAUNCHER='../bin/zowe_launcher'
 if [ ! -f "${LAUNCHER}" ]; then
     echo "Executable for Zowe launcher not found at: ${LAUNCHER}"
-    exit 255
+    exit 1
 fi
 
 ABS_PATH=$(cd .; pwd)
@@ -66,7 +68,7 @@ run_launcher() {
         findText=$(echo "${result}" | grep "${textMatch}" )
         if [ -z "${findText}" ]; then
             echo "- >  Not found: ${textMatch}"
-            errors=`expr $errors + 1`
+            errors=2
         else
             [ ! -z "${print}" ] && echo "+ >  Found: ${textMatch}"
         fi
@@ -76,10 +78,10 @@ run_launcher() {
 }
 
 IFS='|'
-while read config haInstace textMatch desc debug; do
+while read config haInstance textMatch desc debug; do
     # Skip the first line
     if [ "${config}" != "CONFIG " ]; then
-        run_launcher $config $haInstace $textMatch $desc $debug
+        run_launcher $config $haInstance $textMatch $desc $debug
     fi
 done <<EOF
 CONFIG | HA-INSTANCE | TEXT-TO-FIND | DESCRIPTION | ZLDEBUG

@@ -276,7 +276,7 @@ static bool check_match_and_wto_message(const char* sys_message_id, const char* 
 
   if (other_messages) {
     // App-server -> Show Environment -> E.g. ^ZWE_zowe_sysMessages_0=ZWEL0021I$
-    if (memcmp(ZWE_ZOWE_SYS_MESSAGES, input_string, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
+    if (strncmp(input_string, ZWE_ZOWE_SYS_MESSAGES, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
       return false;
     }
   }
@@ -349,7 +349,10 @@ static void check_for_and_print_sys_message(const char* input_string) {
     int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
   }
   int match = regexec(&time_regex, input_string, 0, NULL, 0);
-  int offset = match == 0 ? DATE_PREFIX_LEN : 0;
+  int offset = 0;
+  if (match == 0 && strlen(input_string) >= DATE_PREFIX_LEN) {
+    offset = DATE_PREFIX_LEN;
+  }
 
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
@@ -789,7 +792,6 @@ static void init_component_shareas(zl_comp_t *comp, ConfigManager *configmgr) {
   } else {
     comp->share_as = ZL_COMP_AS_SHARE_YES;
   }
-  safeFree(share_as, strlen(share_as));
 }
 
 static const char *get_shareas_label(const zl_comp_t *comp) {
@@ -903,7 +905,7 @@ static void *handle_comp_comm(void *args) {
     int retries_left = 3;
     while (retries_left > 0) {
 
-      int msg_len = read(comp->output, msg, sizeof(msg));
+      int msg_len = read(comp->output, msg, sizeof(msg) - 1);
       if (msg_len > 0) {
         msg[msg_len] = '\0';
 
@@ -1010,7 +1012,6 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
 
   if ((directory = directoryOpen(log_directory, &returnCode, &reasonCode)) == NULL) {
     ERROR(MSG_LOG_DIR_PERM, returnCode, reasonCode, log_directory);
-    safeFree(log_directory, strlen(log_directory));
     return returnCode;
   } else {
     char search_string[PATH_MAX];
@@ -1123,7 +1124,6 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
   strftime(log_timestamp, sizeof(log_timestamp), LOGFILE_TIMESTAMP_FORMAT, &lt);
 
   snprintf(log_name, PATH_MAX, "%s/%s_%s_%s_%s.log", log_directory, job_prefix, zl_context.ha_instance_id, comp->name, log_timestamp);
-  safeFree(log_directory, strlen(log_directory));
   return getStatus;
 }
 
@@ -1308,7 +1308,7 @@ static int stop_component(zl_comp_t *comp) {
 
 static int stop_components(void) {
 
-  INFO(MSG_STOPING_COMPS);
+  INFO(MSG_STOPPING_COMPS);
   prevent_restart=true;
 
   int rc = 0;
@@ -1682,28 +1682,6 @@ static int run_command(const char *command, handle_line_callback_t handle_line, 
   return 0;
 }
 
-static void handle_get_component_line(void *data, const char *line) {
-  char *comp_list = data;
-  snprintf(comp_list, COMP_LIST_SIZE, "%s", line);
-  int len = strlen(comp_list);
-  for (int i = len - 1; i >= 0; i--) {
-    if (comp_list[i] != ' ' && comp_list[i] != '\n' && comp_list[i] != ',') {
-      break;
-    }
-    comp_list[i] = '\0';
-  }
-}
-
-static char* get_launch_components_cmd(char* sharedenv) {
-  const char basecmd[] = "%s ZWE_CLI_PARAMETER_CONFIG=\"%s\" %s/bin/utils/configmgr -script %s/bin/commands/internal/get-launch-components/cli.js 2>&1";
-  int size = (strlen(zl_context.root_dir) * 2) + strlen(zl_context.config_path) + strlen(sharedenv) + sizeof(basecmd) + 1;
-  char *command = malloc(size);
-
-  snprintf(command, size, basecmd,
-           sharedenv, zl_context.config_path, zl_context.root_dir, zl_context.root_dir);
-  return command;
-}
-
 /**
  * @brief Get the sharedenv. The function contemplates enclosing in quotes the values of the variables.
  * 
@@ -1721,7 +1699,9 @@ static char* get_sharedenv(void) {
 
   required++;
   output = malloc(required);
+  output[0] = '\0';
   aux = malloc(required);
+  aux[0] = '\0';
   for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
     char *thisEnv = *env;
     strcat(aux, thisEnv);
@@ -2094,7 +2074,7 @@ static int init() {
 }
 
 static void terminate(int sig) {
-  INFO(MSG_LAUNCHER_STOPING);
+  INFO(MSG_LAUNCHER_STOPPING);
   stop_components();
   exit(EXIT_SUCCESS);
 }

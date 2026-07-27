@@ -18,7 +18,6 @@
 #include <string.h>
 #include <strings.h>
 #include <errno.h>
-#include <regex.h>
 #include <time.h>
 #include <sys/time.h>
 
@@ -328,29 +327,35 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
 
 }
 
-// matches YYYY-MM-DD starting with 2xxx.
-// this regex was chosen because other patterns didnt seem to work with LE's regex library.
-#define DATE_PREFIX_REGEXP_PATTERN "^[2-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*"
+// Replacement for previous regex ^[2-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*
+// Easy to implement & maintain
+// No NULL check - always called for input strings with length >= DATE_PREFIX_LEN (24)
+static inline int is_date_prefix(const char *s) {
+  unsigned r  = (unsigned char)(s[0] - '2') > 7u;  /* '2'..'9' */
+  r |= (unsigned char)(s[1] - '0') > 9u;
+  r |= (unsigned char)(s[2] - '0') > 9u;
+  r |= (unsigned char)(s[3] - '0') > 9u;
+  r |= s[4] != '-';
+  r |= (unsigned char)(s[5] - '0') > 9u;
+  r |= (unsigned char)(s[6] - '0') > 9u;
+  r |= s[7] != '-';
+  r |= (unsigned char)(s[8] - '0') > 9u;
+  r |= (unsigned char)(s[9] - '0') > 9u;
+  return !r;
+}
 
 // zowe standard "YYYY-MM-DD HH-MM-SS.sss "
 #define DATE_PREFIX_LEN 24
 
-// Needed once
-static regex_t time_regex = { .re_comp = NULL };
-
 // Other messages are completed, check possible date and filter it out
 static void check_for_and_print_sys_message(const char* input_string) {
-  if (!zl_context.sys_messages) {
+  if (!zl_context.sys_messages || !input_string) {
     return;
   }
 
   int count = jsonArrayGetCount(zl_context.sys_messages);
-  if (!time_regex.re_comp) {
-    int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
-  }
-  int match = regexec(&time_regex, input_string, 0, NULL, 0);
   int offset = 0;
-  if (match == 0 && strlen(input_string) >= DATE_PREFIX_LEN) {
+  if (strlen(input_string) >= DATE_PREFIX_LEN && is_date_prefix(input_string)) {
     offset = DATE_PREFIX_LEN;
   }
 

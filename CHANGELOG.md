@@ -4,6 +4,7 @@ All notable changes to the Zowe Launcher package will be documented in this file
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
 ## 3.6.0
+- Enhancement: regex replaced by internal routine ([#206](https://github.com/zowe/launcher/pull/206))
 - Bugfix: Component names must fit the component list ([#195](https://github.com/zowe/launcher/pull/195))
 - Enhancement: More restrictive permissions ([#212](https://github.com/zowe/launcher/pull/212))
 

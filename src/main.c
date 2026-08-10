@@ -294,7 +294,7 @@ static bool check_match_and_wto_message(const char* sys_message_id, const char* 
         print_wto_directly(input_string + sys_message_pos);
       } else {
         // The match is in the last WTO_MESSAGE_LENGTH chars
-        // WTO last WTO_MESSAGE_LENGTH chars - egde case: if the match is last word
+        // WTO last WTO_MESSAGE_LENGTH chars - edge case: if the match is last word
         //   user will see the text before match too
         print_wto_directly(input_string + (input_string_len - WTO_MESSAGE_LENGTH));
       }
@@ -2122,14 +2122,17 @@ static bool validateConfiguration(ConfigManager *cmgr, FILE *out){
   switch (validateStatus){
   case JSON_VALIDATOR_NO_EXCEPTIONS:
     INFO(MSG_CFG_VALID);
+    printf_wto(MSG_CFG_VALID); // Manual sys log print (messages not set here yet)
     ok = true;
     break;
   case JSON_VALIDATOR_HAS_EXCEPTIONS:
     ERROR(MSG_CFG_INVALID);
+    printf_wto(MSG_CFG_INVALID); // Manual sys log print (messages not set here yet)
     displayValidityException(out,0,validator->topValidityException);
     break;
   case JSON_VALIDATOR_INTERNAL_FAILURE:
     ERROR(MSG_CFG_INTERNAL_FAIL);
+    printf_wto(MSG_CFG_INTERNAL_FAIL); // Manual sys log print (messages not set here yet)
     break;
   }
   freeJsonValidator(validator);
@@ -2142,7 +2145,7 @@ int main(int argc, char **argv) {
   }
 
   setenv("_BPXK_AUTOCVT", "ON", 1);
-  sprintf(launcherVersion, "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
+  snprintf(launcherVersion, sizeof(launcherVersion), "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
   INFO(MSG_LAUNCHER_START, launcherVersion);
   INFO(MSG_LINE_LENGTH);
   printf_wto(MSG_LAUNCHER_START, launcherVersion); // Manual sys log print (messages not set here yet)
@@ -2186,14 +2189,13 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
   
-  set_sys_messages(configmgr);
-
   //got root dir, can now load up the schemas from it
   char schemaList[PATH_MAX*2 + 4] = {0};
-  snprintf(schemaList, PATH_MAX*2 + 1, "%s/schemas/zowe-yaml-schema.json:%s/schemas/server-common.json", zl_context.root_dir, zl_context.root_dir);  
+  snprintf(schemaList, PATH_MAX*2 + 1, "%1$s/schemas/zowe-yaml-schema.json:%1$s/schemas/server-common.json", zl_context.root_dir);
   int schemaLoadStatus = cfgLoadSchemas(configmgr, ZOWE_CONFIG_NAME, schemaList);
   if (schemaLoadStatus){
     ERROR(MSG_CFG_SCHEMA_FAIL, schemaLoadStatus);
+    printf_wto(MSG_CFG_SCHEMA_FAIL, schemaLoadStatus); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
 
@@ -2201,7 +2203,10 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  
+  // At this point, if the zowe.sysMessages is defined,
+  // then it is validated => always string with length > 0
+  set_sys_messages(configmgr);
+
   set_shared_uss_env(configmgr);
 
   if (process_workspace_dir(configmgr)) {

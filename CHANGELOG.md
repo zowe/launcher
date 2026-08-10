@@ -4,8 +4,10 @@ All notable changes to the Zowe Launcher package will be documented in this file
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
 ## 3.6.0
+- Bugfix: `zowe.sysMessages` are used after the validation ([#208](https://github.com/zowe/launcher/pull/208))
 - Enhancement: regex replaced by internal routine ([#206](https://github.com/zowe/launcher/pull/206))
 - Bugfix: Component names must fit the component list ([#195](https://github.com/zowe/launcher/pull/195))
+- Enhancement: More restrictive permissions ([#212](https://github.com/zowe/launcher/pull/212))
 
 ## 3.5.0
 - Bugfix: Escape backslash, backtick and dollar sign when used in environment variable ([#168](https://github.com/zowe/launcher/pull/168))

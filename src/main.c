@@ -18,7 +18,6 @@
 #include <string.h>
 #include <strings.h>
 #include <errno.h>
-#include <regex.h>
 #include <time.h>
 #include <sys/time.h>
 
@@ -39,6 +38,7 @@
 #include "configmgr.h"
 #include "logging.h"
 #include "stcbase.h"
+#include "unixfile.h"
 #include "zos.h"
 #include "yaml2json.h"
 
@@ -76,6 +76,12 @@ extern char ** environ;
 
 #define YAML_ERROR_MAX 1024
 
+#ifndef DIR_BUFFER_SIZE
+#define DIR_BUFFER_SIZE 1024
+#endif
+
+
+#define LOGFILE_TIMESTAMP_FORMAT "%Y-%m-%d-%H-%M"
 #ifndef LAUNCHER_VERSION_MAJOR
 #define LAUNCHER_VERSION_MAJOR 0
 #endif
@@ -155,6 +161,9 @@ typedef struct zl_comp_t {
   zl_int_array_t restart_intervals;
   int min_uptime; // secs
 
+
+  FILE *log_file;
+
 } zl_comp_t;
 
 enum zl_event_t {
@@ -197,12 +206,37 @@ struct {
   
 } zl_context = {.config = {.debug_mode = false}, .trim_sys_message = false, .userid = "(NONE)"} ;
 
-// Wrapper for wtoPrintf3
+// Forward declarations
+static void comp_log(zl_comp_t *comp, char *msg);
+
+// Wrapper for wtoPrintf3 - WTO message with C formatting specifiers
 static void printf_wto(const char *formatString, ...) {
   va_list argPointer;
   va_start(argPointer, formatString);
   wtoPrintf3(formatString, argPointer);
   va_end(argPointer);
+}
+
+// WTO message ignoring C formatting specifiers, the first new line stops the message and the rest is ignored.
+// print_wto_directly("%s%i%d\n\n") -> WTO "%s%i%d"
+static void print_wto_directly(const char *wtoText) {
+  if (wtoText == NULL) return;
+
+  size_t len = strlen(wtoText);
+  char *wtoTextCopy = malloc(len + 1);
+  if (wtoTextCopy == NULL) return;
+
+  memcpy(wtoTextCopy, wtoText, len + 1);
+
+  for (size_t i = 0; i < len; i++) {
+    if (wtoTextCopy[i] == '\n') {
+      wtoTextCopy[i] = '\0';
+      break;
+    }
+  }
+
+  wtoMessage(wtoTextCopy);
+  free(wtoTextCopy);
 }
 
 static void set_sys_messages(ConfigManager *configmgr) {
@@ -241,28 +275,28 @@ static bool check_match_and_wto_message(const char* sys_message_id, const char* 
 
   if (other_messages) {
     // App-server -> Show Environment -> E.g. ^ZWE_zowe_sysMessages_0=ZWEL0021I$
-    if (memcmp(ZWE_ZOWE_SYS_MESSAGES, input_string, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
+    if (strncmp(input_string, ZWE_ZOWE_SYS_MESSAGES, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
       return false;
     }
   }
 
   if (zl_context.trim_sys_message) {
-    printf_wto(input_string + sys_message_pos);
+    print_wto_directly(input_string + sys_message_pos);
   } else {
     // Short message, WTO *
     if (input_string_len <= WTO_MESSAGE_LENGTH) {
-      printf_wto(input_string);
+      print_wto_directly(input_string);
     // Message length > WTO_MESSAGE_LENGTH
     } else {
       // After the match, there are more chars than WTO_MESSAGE_LENGTH
       // WTO from match position
       if (input_string_len - sys_message_pos > WTO_MESSAGE_LENGTH) {
-        printf_wto(input_string + sys_message_pos);
+        print_wto_directly(input_string + sys_message_pos);
       } else {
         // The match is in the last WTO_MESSAGE_LENGTH chars
-        // WTO last WTO_MESSAGE_LENGTH chars - egde case: if the match is last word
+        // WTO last WTO_MESSAGE_LENGTH chars - edge case: if the match is last word
         //   user will see the text before match too
-        printf_wto(input_string + (input_string_len - WTO_MESSAGE_LENGTH));
+        print_wto_directly(input_string + (input_string_len - WTO_MESSAGE_LENGTH));
       }
     }
   }
@@ -293,28 +327,37 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
 
 }
 
-// matches YYYY-MM-DD starting with 2xxx.
-// this regex was chosen because other patterns didnt seem to work with LE's regex library.
-#define DATE_PREFIX_REGEXP_PATTERN "^[2-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*"
+// Replacement for previous regex ^[2-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*
+// Easy to implement & maintain
+// No NULL check - always called for input strings with length >= DATE_PREFIX_LEN (24)
+static inline int is_date_prefix(const char *s) {
+  unsigned r  = (unsigned char)(s[0] - '2') > 7u;  /* '2'..'9' */
+  r |= (unsigned char)(s[1] - '0') > 9u;
+  r |= (unsigned char)(s[2] - '0') > 9u;
+  r |= (unsigned char)(s[3] - '0') > 9u;
+  r |= s[4] != '-';
+  r |= (unsigned char)(s[5] - '0') > 9u;
+  r |= (unsigned char)(s[6] - '0') > 9u;
+  r |= s[7] != '-';
+  r |= (unsigned char)(s[8] - '0') > 9u;
+  r |= (unsigned char)(s[9] - '0') > 9u;
+  return !r;
+}
 
 // zowe standard "YYYY-MM-DD HH-MM-SS.sss "
 #define DATE_PREFIX_LEN 24
 
-// Needed once
-static regex_t time_regex = { .re_comp = NULL };
-
 // Other messages are completed, check possible date and filter it out
 static void check_for_and_print_sys_message(const char* input_string) {
-  if (!zl_context.sys_messages) {
+  if (!zl_context.sys_messages || !input_string) {
     return;
   }
 
   int count = jsonArrayGetCount(zl_context.sys_messages);
-  if (!time_regex.re_comp) {
-    int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
+  int offset = 0;
+  if (strlen(input_string) >= DATE_PREFIX_LEN && is_date_prefix(input_string)) {
+    offset = DATE_PREFIX_LEN;
   }
-  int match = regexec(&time_regex, input_string, 0, NULL, 0);
-  int offset = match == 0 ? DATE_PREFIX_LEN : 0;
 
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
@@ -440,23 +483,18 @@ static bool arrayListContains(ArrayList *list, char *element) {
 
 static char* escape_string(char *input) {
     int length = strlen(input);
-    int quotes = 0;
-    for (int i = 0; i < length; i++) {
-        if (input[i] == '\"') quotes++;
-    }
-
-    char *output = malloc(length + quotes + 2 + 1); // add quote on first and the last position and escape quotes inside
+    // Worst case: every character needs escaping
+    char *output = malloc(length * 2 + 2 + 1);
     output[0] = '\"';
     int j = 1;
     for (int i = 0; i < length; i++) {
-        if (input[i] == '\"') {
+        if (input[i] == '\"' || input[i] == '\\' || input[i] == '$' || input[i] == '`') {
             output[j++] = '\\';
         }
         output[j++] = input[i];
     }
     output[j++] = '\"';
     output[j++] = 0;
-
     return output;
 }
 
@@ -469,7 +507,7 @@ static char* jsonToString(Json *json) {
       return jsonAsBoolean(json) ? "true" : "false";
     case JSON_TYPE_NUMBER:
     case JSON_TYPE_INT64:
-      output = malloc(21); // Longest string possible -9223372036854775807
+      output = malloc(21); // Longest string possible -9223372036854775808 (20+\0)
       snprintf(output, 21, "%ld", jsonAsInt64(json));
       return output;
     case JSON_TYPE_DOUBLE:
@@ -481,11 +519,20 @@ static char* jsonToString(Json *json) {
   }
 }
 
-static bool is_valid_key(char *key) {
+// Zowe.environments key must follow Unix variable name syntax:
+// * The first char must not be a digit
+// * Any characters must be either alphanumeric or an underscore
+static bool is_key_valid_unix_name(const char *key) {
     int length = strlen(key);
+    if (!length) {
+        return false;
+    }
+    if (isdigit(key[0])) {
+        return false;
+    }
     for (int i = 0; i < length; i++) {
         if (isalnum(key[i])) continue;
-        if (strchr("_-", key[i])) continue;
+        if (key[i] == '_') continue;
         return false;
     }
     return true;
@@ -541,8 +588,8 @@ static void set_shared_uss_env(ConfigManager *configmgr) {
     // Get all environment variables defined in zowe.yaml and put them in the output as they are
     for (JsonProperty *property = jsonObjectGetFirstProperty(object); property != NULL; property = jsonObjectGetNextProperty(property)) {
       char *key = jsonPropertyGetKey(property);
-      if (!is_valid_key(key)) {
-        WARN("Key in zowe.yaml `zowe.environments.%s` is invalid and it will be ignored\n", key);
+      if (!is_key_valid_unix_name(key)) {
+        WARN("Key in configuration `zowe.environments.%s` is invalid and it will be ignored\n", key);
         continue;
       }
 
@@ -642,6 +689,12 @@ static int init_context(int argc, char **argv, const struct zl_config_t *cfg, Co
     return -1;
   }
   snprintf (zl_context.ha_instance_id, sizeof(zl_context.ha_instance_id), "%s", argv[1]);
+  for (int i = 0; i < strlen(zl_context.ha_instance_id); i++) {
+    if (zl_context.ha_instance_id[i] == ',') {
+      zl_context.ha_instance_id[i] = 0;
+      break;
+    }
+  }
   to_lower(zl_context.ha_instance_id);
   INFO(MSG_HA_INST_ID, zl_context.ha_instance_id);
 
@@ -692,6 +745,10 @@ static void init_component_restart_intervals(zl_comp_t *comp, ConfigManager *con
   // load restartIntervals from the configuration
   JsonArray *intArray = jsonAsArray(restartIntArray);
   int count = jsonArrayGetCount(intArray);
+  if (count > ZL_INT_ARRAY_CAPACITY) {
+    DEBUG("zowe.launcher.restartIntervals: %d out of %d will be used.\n", ZL_INT_ARRAY_CAPACITY, count);
+    count = ZL_INT_ARRAY_CAPACITY;
+  }
   comp->restart_intervals.count = count;
   for (int i = 0; i < count; i++) {
     comp->restart_intervals.data[i] = jsonArrayGetNumber(intArray, i);
@@ -740,7 +797,6 @@ static void init_component_shareas(zl_comp_t *comp, ConfigManager *configmgr) {
   } else {
     comp->share_as = ZL_COMP_AS_SHARE_YES;
   }
-  safeFree(share_as, strlen(share_as));
 }
 
 static const char *get_shareas_label(const zl_comp_t *comp) {
@@ -854,7 +910,7 @@ static void *handle_comp_comm(void *args) {
     int retries_left = 3;
     while (retries_left > 0) {
 
-      int msg_len = read(comp->output, msg, sizeof(msg));
+      int msg_len = read(comp->output, msg, sizeof(msg) - 1);
       if (msg_len > 0) {
         msg[msg_len] = '\0';
 
@@ -862,7 +918,8 @@ static void *handle_comp_comm(void *args) {
 
         while (next_line) {
           printf("%s\n", next_line);
-          check_for_and_print_sys_message(next_line); 
+          check_for_and_print_sys_message(next_line);
+          comp_log(comp, next_line);
           next_line = strtok(NULL, "\n");
         }
 
@@ -918,7 +975,164 @@ static const char **env_comp(zl_comp_t *comp) {
   return env_comp;
 }
 
-static int start_component(zl_comp_t *comp) {
+static void comp_log(zl_comp_t *comp, char *msg) {
+  if (comp->log_file) {
+    fprintf(comp->log_file, "%s\n", msg);
+    fflush(comp->log_file);
+  }
+}
+
+static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, char *log_name) {
+  int returnCode, reasonCode;
+
+  int rollover_count = 4;
+  int getStatus = cfgGetIntC(configmgr, ZOWE_CONFIG_NAME, &rollover_count, 3, "zowe", "logging", "rolloverCount");
+  if (getStatus) {
+    rollover_count = 4;
+    getStatus = 0;
+  }
+
+  char *log_directory = NULL;
+  getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &log_directory, 2, "zowe", "logDirectory");
+  if (getStatus) {
+    return getStatus;
+  }
+
+  char *job_prefix = NULL;
+  getStatus = cfgGetStringC(configmgr, ZOWE_CONFIG_NAME, &job_prefix, 3, "zowe", "job", "prefix");
+  if (getStatus) {
+    job_prefix = "ZWE1";
+    getStatus = 0;
+  }
+
+  
+  char directoryDataBuffer[DIR_BUFFER_SIZE];
+  UnixFile *directory = NULL;
+
+  int entries_found = 0;
+  int *newest_timestamps = safeMalloc(sizeof(int)*rollover_count, "componentTimestamp");
+  for (int i = 0; i < rollover_count; i++) {
+    newest_timestamps[i] = 0;
+  }
+
+  if ((directory = directoryOpen(log_directory, &returnCode, &reasonCode)) == NULL) {
+    ERROR(MSG_LOG_DIR_PERM, returnCode, reasonCode, log_directory);
+    return returnCode;
+  } else {
+    char search_string[PATH_MAX];
+    snprintf(search_string, PATH_MAX, "%s_%s_%s_", job_prefix, zl_context.ha_instance_id, comp->name);
+
+    int entriesRead = 0;
+    while ((entriesRead = directoryRead(directory, directoryDataBuffer, DIR_BUFFER_SIZE, &returnCode, &reasonCode)) > 0) {
+      char *entryStart = directoryDataBuffer;
+      for (int e = 0; e < entriesRead; e++) {
+        int entryLength = ((short*)entryStart)[0];  /* entry names are null-terminated */
+        int nameLength = ((short*)entryStart)[1];
+        if(entryLength == 4 && nameLength == 0) { /* Null directory entry */
+          break;
+        }
+        char *name = entryStart+4;
+        entryStart += entryLength;
+
+        /* For old files of same type, capture [rollover_count] newest timestamps */
+        if (0 == indexOfString(name, strlen(name), search_string, 0)) {
+          entries_found++;
+          char file_path[PATH_MAX];
+          FileInfo *file_info = safeMalloc(sizeof(FileInfo), "logFileInfo");
+          snprintf(file_path, PATH_MAX, "%s/%s", log_directory, name);
+          fileInfo(file_path, file_info, &returnCode, &reasonCode);
+          if (!returnCode) { 
+            int timestamp = file_info->creationTime;
+            /* search newest timestamp list for an older timestamp
+               if found, shift list to bump out oldest */
+            for (int r = 0; r < rollover_count; r++) {
+              if (timestamp > newest_timestamps[r]) {
+                if (r != (rollover_count-1)) {
+                  for (int s = rollover_count-1; s > r; s--) {
+                    newest_timestamps[s] = newest_timestamps[s-1];
+                  }
+                }
+
+                newest_timestamps[r] = timestamp;
+                break;      
+              }
+            }
+          } else {
+            WARN("stat failed for %s, rc=0x%x, rsn=0x%x\n", name, returnCode, reasonCode);
+          }
+          safeFree(file_info, sizeof(FileInfo));
+        }
+      }
+    }
+    directoryClose(directory, &returnCode, &reasonCode);
+
+    if (returnCode) {
+      WARN(MSG_LOG_DIR_CLOSE, returnCode, reasonCode, log_directory);
+    } else if (entries_found > rollover_count) {
+      /* If found more files than limit, go through files again, deleting those that arent in newest list */
+
+      DEBUG("Found %d files for component %s, removing %d oldest files\n", entries_found, comp->name, entries_found - rollover_count);
+      directory = directoryOpen(log_directory, &returnCode, &reasonCode);
+
+      while ((entriesRead = directoryRead(directory, directoryDataBuffer, DIR_BUFFER_SIZE, &returnCode, &reasonCode)) > 0) {
+        char *entryStart = directoryDataBuffer;
+        for (int e = 0; e < entriesRead; e++) {
+          int entryLength = ((short*)entryStart)[0];  /* entry names are null-terminated */
+          int nameLength = ((short*)entryStart)[1];
+          if(entryLength == 4 && nameLength == 0) { /* Null directory entry */
+            break;
+          }
+          char *name = entryStart+4;
+          entryStart += entryLength;
+          if (0 == indexOfString(name, strlen(name), search_string, 0)) {
+            char file_path[PATH_MAX];
+            FileInfo *file_info = safeMalloc(sizeof(FileInfo), "logFileInfo2");
+            snprintf(file_path, PATH_MAX, "%s/%s", log_directory, name);
+            fileInfo(file_path, file_info, &returnCode, &reasonCode);
+            if (!returnCode) { 
+              bool found = false;
+              for (int r = 0; r < rollover_count; r++) {
+                if (file_info->creationTime == newest_timestamps[r]) {
+                  found = true;
+                } 
+              }
+              if (!found) {
+                DEBUG("%s has over %d old log files, removing %s\n", comp->name, rollover_count, file_path);
+                fileDelete(file_path, &returnCode, &reasonCode);
+                if (returnCode) {
+                  WARN("could not remove old log file %s, rc=0x%x, rsn=0x%x\n", name, returnCode, reasonCode);
+                }
+              } 
+            } else {
+              WARN("stat failed for %s, rc=0x%x, rsn=0x%x\n", name, returnCode, reasonCode);
+            }
+            safeFree(file_info, sizeof(FileInfo));
+          }
+        }
+      }
+      directoryClose(directory, &returnCode, &reasonCode);
+
+      if (returnCode) {
+        WARN(MSG_LOG_DIR_CLOSE, returnCode, reasonCode, log_directory);
+      }
+    }
+  }
+
+  safeFree(newest_timestamps, sizeof(int)*rollover_count);
+
+  time_t t = time(NULL);
+  char log_timestamp[32];
+
+  struct tm lt;
+  gmtime_r(&t, &lt);
+
+  strftime(log_timestamp, sizeof(log_timestamp), LOGFILE_TIMESTAMP_FORMAT, &lt);
+
+  snprintf(log_name, PATH_MAX, "%s/%s_%s_%s_%s.log", log_directory, job_prefix, zl_context.ha_instance_id, comp->name, log_timestamp);
+  return getStatus;
+}
+
+static int start_component(zl_comp_t *comp, ConfigManager *configmgr) {
 
   if (comp->pid != -1) {
     ERROR(MSG_COMP_ALREADY_RUN, comp->name);
@@ -926,6 +1140,21 @@ static int start_component(zl_comp_t *comp) {
   }
 
   DEBUG("about to start component %s\n", comp->name);
+
+  char log_name[PATH_MAX];
+  int getStatus = get_component_log_name(comp, configmgr, log_name);
+
+  if (!getStatus) {
+    DEBUG("Creating log file %s\n", log_name);
+    comp->log_file = fopen(log_name, "w");
+    if (!comp->log_file) {
+      ERROR(MSG_NO_LOG_FILE, comp->name);
+    }
+    DEBUG("Opened %s for %s\n", log_name, comp->name);
+  } else { //TODO better and different message from above
+    ERROR(MSG_NO_LOG_FILE, comp->name);
+    comp->log_file = 0; //To be clear that there is no file.
+  }
 
   // ensure the new process has its own process group ID so we can terminate
   // the entire process tree
@@ -1012,14 +1241,14 @@ static int start_component(zl_comp_t *comp) {
   return 0;
 }
 
-static int start_components(void) {
+static int start_components(ConfigManager *configmgr) {
 
   INFO(MSG_STARTING_COMPS);
 
   int rc = 0;
 
   for (size_t i = 0; i < zl_context.child_count; i++) {
-    if (start_component(&zl_context.children[i])) {
+    if (start_component(&zl_context.children[i], configmgr)) {
       ERROR(MSG_COMP_START_FAILED, zl_context.children[i].name);
       rc = -1;
     }
@@ -1038,6 +1267,14 @@ static int stop_component(zl_comp_t *comp) {
 
   if (comp->pid == -1) {
     return 0;
+  }
+
+  if (comp->log_file) {
+    if (fclose(comp->log_file)) {
+      ERROR("fclose() failed for %s - %s\n", comp->name, strerror(errno));
+    } else {
+      comp->log_file = 0;
+    }
   }
 
   comp->clean_stop = true;
@@ -1076,7 +1313,7 @@ static int stop_component(zl_comp_t *comp) {
 
 static int stop_components(void) {
 
-  INFO(MSG_STOPING_COMPS);
+  INFO(MSG_STOPPING_COMPS);
   prevent_restart=true;
 
   int rc = 0;
@@ -1118,7 +1355,14 @@ static int stop_components(void) {
         WARN("kill() failed for %s - %s\n", compkill->name, strerror(errno));
       }
       rc = -1;
-    }  
+    }
+    if (compkill->log_file) {
+      if (fclose(compkill->log_file)) {
+        ERROR("fclose() failed for %s - %s\n", compkill->name, strerror(errno));
+      } else {
+        compkill->log_file = 0;
+      }
+    }
   }
 
   if (rc) {
@@ -1145,7 +1389,7 @@ static zl_comp_t *find_comp(const char *name) {
 #define CMD_STOP  "STOP"
 #define CMD_DISP  "DISP"
 
-static int handle_start(const char *comp_name) {
+static int handle_start(const char *comp_name, ConfigManager *configmgr) {
 
   zl_comp_t *comp = find_comp(comp_name);
   if (comp == NULL) {
@@ -1154,7 +1398,7 @@ static int handle_start(const char *comp_name) {
   }
 
   comp->fail_cnt = 0;
-  start_component(comp);
+  start_component(comp, configmgr);
 
   return 0;
 }
@@ -1209,7 +1453,8 @@ static char *get_cmd_val(const char *cmd, char *buff, size_t buff_len) {
   return buff;
 }
 
-static void *handle_console(void *args) {
+static void *handle_console(void *parm) {
+  ConfigManager *configmgr = (ConfigManager *)parm;
 
   INFO(MSG_START_CONSOLE);
 
@@ -1235,7 +1480,7 @@ static void *handle_console(void *args) {
       if (strstr(mod_cmd, CMD_START) == mod_cmd) {
         char *val = get_cmd_val(mod_cmd, cmd_val, sizeof(cmd_val));
         if (val != NULL) {
-          handle_start(val);
+          handle_start(val, configmgr);
         } else {
           ERROR(MSG_BAD_CMD_VAL);
         }
@@ -1265,11 +1510,11 @@ static void *handle_console(void *args) {
   return NULL;
 }
 
-static int start_console_tread(void) {
+static int start_console_thread(ConfigManager *configmgr) {
 
   DEBUG("starting console thread\n");
 
-  if (pthread_create(&zl_context.console_thid, NULL, handle_console, NULL) != 0) {
+  if (pthread_create(&zl_context.console_thid, NULL, handle_console, configmgr) != 0) {
     DEBUG("pthread_created() for console listener - %s\n", strerror(errno));
     return -1;
   }
@@ -1329,15 +1574,15 @@ static zl_config_t read_config(int argc, char **argv) {
   return result;
 }
 
-static int restart_component(zl_comp_t *comp) {
+static int restart_component(zl_comp_t *comp, ConfigManager *configmgr) {
   int stop_rc = stop_component(comp);
   if (stop_rc) {
     return stop_rc;
   }
-  return start_component(comp);
+  return start_component(comp, configmgr);
 }
 
-static void monitor_events(void) {
+static void monitor_events(ConfigManager *configmgr) {
 
   if (pthread_mutex_lock(&zl_context.event_lock) != 0) {
     DEBUG("monitor_events: pthread_mutex_lock() error - %s\n", strerror(errno));
@@ -1363,7 +1608,7 @@ static void monitor_events(void) {
       break;
     } else if (zl_context.event_type == ZL_EVENT_COMP_RESTART) {
       zl_comp_t* comp = zl_context.event_data;
-      int restart_rc = restart_component(comp);
+      int restart_rc = restart_component(comp, configmgr);
       if (restart_rc) {
         ERROR(MSG_COMP_RESTART_FAILED, comp->name);
       }
@@ -1442,28 +1687,6 @@ static int run_command(const char *command, handle_line_callback_t handle_line, 
   return 0;
 }
 
-static void handle_get_component_line(void *data, const char *line) {
-  char *comp_list = data;
-  snprintf(comp_list, COMP_LIST_SIZE, "%s", line);
-  int len = strlen(comp_list);
-  for (int i = len - 1; i >= 0; i--) {
-    if (comp_list[i] != ' ' && comp_list[i] != '\n' && comp_list[i] != ',') {
-      break;
-    }
-    comp_list[i] = '\0';
-  }
-}
-
-static char* get_launch_components_cmd(char* sharedenv) {
-  const char basecmd[] = "%s ZWE_CLI_PARAMETER_CONFIG=\"%s\" %s/bin/utils/configmgr -script %s/bin/commands/internal/get-launch-components/cli.js 2>&1";
-  int size = (strlen(zl_context.root_dir) * 2) + strlen(zl_context.config_path) + strlen(sharedenv) + sizeof(basecmd) + 1;
-  char *command = malloc(size);
-
-  snprintf(command, size, basecmd,
-           sharedenv, zl_context.config_path, zl_context.root_dir, zl_context.root_dir);
-  return command;
-}
-
 /**
  * @brief Get the sharedenv. The function contemplates enclosing in quotes the values of the variables.
  * 
@@ -1481,7 +1704,9 @@ static char* get_sharedenv(void) {
 
   required++;
   output = malloc(required);
+  output[0] = '\0';
   aux = malloc(required);
+  aux[0] = '\0';
   for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
     char *thisEnv = *env;
     strcat(aux, thisEnv);
@@ -1706,9 +1931,13 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
               startScript = true;
           }
           if (startScript) {
-            strncpy(comp_list + len, prop->key, strlen(prop->key));
-            strncpy(comp_list + len + strlen(prop->key), ",", 1);
-            len += (strlen(prop->key)+1);
+            if (len + strlen(prop->key) + 2 <= sizeof(comp_list)) {
+              strncpy(comp_list + len, prop->key, strlen(prop->key));
+              strncpy(comp_list + len + strlen(prop->key), ",", 1);
+              len += (strlen(prop->key)+1);
+            } else {
+              DEBUG("skip adding component %s to comp_list\n", prop->key);
+            }
           }
         }
       }
@@ -1850,7 +2079,7 @@ static int init() {
 }
 
 static void terminate(int sig) {
-  INFO(MSG_LAUNCHER_STOPING);
+  INFO(MSG_LAUNCHER_STOPPING);
   stop_components();
   exit(EXIT_SUCCESS);
 }
@@ -1893,14 +2122,17 @@ static bool validateConfiguration(ConfigManager *cmgr, FILE *out){
   switch (validateStatus){
   case JSON_VALIDATOR_NO_EXCEPTIONS:
     INFO(MSG_CFG_VALID);
+    printf_wto(MSG_CFG_VALID); // Manual sys log print (messages not set here yet)
     ok = true;
     break;
   case JSON_VALIDATOR_HAS_EXCEPTIONS:
     ERROR(MSG_CFG_INVALID);
+    printf_wto(MSG_CFG_INVALID); // Manual sys log print (messages not set here yet)
     displayValidityException(out,0,validator->topValidityException);
     break;
   case JSON_VALIDATOR_INTERNAL_FAILURE:
     ERROR(MSG_CFG_INTERNAL_FAIL);
+    printf_wto(MSG_CFG_INTERNAL_FAIL); // Manual sys log print (messages not set here yet)
     break;
   }
   freeJsonValidator(validator);
@@ -1913,7 +2145,7 @@ int main(int argc, char **argv) {
   }
 
   setenv("_BPXK_AUTOCVT", "ON", 1);
-  sprintf(launcherVersion, "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
+  snprintf(launcherVersion, sizeof(launcherVersion), "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
   INFO(MSG_LAUNCHER_START, launcherVersion);
   INFO(MSG_LINE_LENGTH);
   printf_wto(MSG_LAUNCHER_START, launcherVersion); // Manual sys log print (messages not set here yet)
@@ -1957,14 +2189,13 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
   
-  set_sys_messages(configmgr);
-
   //got root dir, can now load up the schemas from it
   char schemaList[PATH_MAX*2 + 4] = {0};
-  snprintf(schemaList, PATH_MAX*2 + 1, "%s/schemas/zowe-yaml-schema.json:%s/schemas/server-common.json", zl_context.root_dir, zl_context.root_dir);  
+  snprintf(schemaList, PATH_MAX*2 + 1, "%1$s/schemas/zowe-yaml-schema.json:%1$s/schemas/server-common.json", zl_context.root_dir);
   int schemaLoadStatus = cfgLoadSchemas(configmgr, ZOWE_CONFIG_NAME, schemaList);
   if (schemaLoadStatus){
     ERROR(MSG_CFG_SCHEMA_FAIL, schemaLoadStatus);
+    printf_wto(MSG_CFG_SCHEMA_FAIL, schemaLoadStatus); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
 
@@ -1972,7 +2203,10 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  
+  // At this point, if the zowe.sysMessages is defined,
+  // then it is validated => always string with length > 0
+  set_sys_messages(configmgr);
+
   set_shared_uss_env(configmgr);
 
   if (process_workspace_dir(configmgr)) {
@@ -1994,15 +2228,15 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  start_components();
+  start_components(configmgr);
 
-  if (start_console_tread()) {
+  if (start_console_thread(configmgr)) {
     ERROR(MSG_CONS_START_ERR);
     free(shared_uss_env);
     exit(EXIT_FAILURE);
   }
 
-  monitor_events();
+  monitor_events(configmgr);
 
   if (stop_console_thread()) {
     ERROR(MSG_CONS_STOP_ERR);

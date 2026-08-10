@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "https://zowe.org/schemas/v2/server-common",
+  "title": "Common types",
+  "description": "Simplified version for testing",
+  "$defs": {
+    "semverVersion": {
+      "$anchor": "zoweSemverVersion",
+      "type": "string",
+      "description": "A semantic version, see https://semver.org/",
+      "pattern": "^[0-9]*\\.[0-9]*\\.[0-9]*(-*[a-zA-Z][0-9a-zA-Z\\-\\.]*)?(\\+[0-9a-zA-Z\\-\\.]*)?$"
+    }
+  }
+}

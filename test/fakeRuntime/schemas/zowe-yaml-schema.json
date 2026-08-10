@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "https://zowe.org/schemas/v2/server-base",
+  "title": "Zowe configuration file",
+  "description": "Simplified version for testing",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "zowe": {
+      "type": "object"
+    }
+  }
+}

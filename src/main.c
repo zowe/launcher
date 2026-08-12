@@ -266,6 +266,10 @@ static void set_sys_messages(ConfigManager *configmgr) {
 
 static bool check_match_and_wto_message(const char* sys_message_id, const char* input_string, const bool other_messages) {
 
+  if (!sys_message_id || !input_string) {
+    return false;
+  }
+
   char *sys_message_start = strstr(input_string, sys_message_id);
   int sys_message_pos = (sys_message_start != NULL) ? (sys_message_start - input_string) : -1;
   if (sys_message_pos == -1) {

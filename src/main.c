@@ -2082,14 +2082,51 @@ static int init() {
   return 0;
 }
 
+// Self-pipe used to get out of signal-handler context safely: the handler
+// only writes a byte (async-signal-safe), and a plain thread on the read
+// end forwards the request through the normal event mechanism.
+static int term_signal_pipe[2] = { -1, -1 };
+
 static void terminate(int sig) {
-  INFO(MSG_LAUNCHER_STOPPING);
-  stop_components();
-  exit(EXIT_SUCCESS);
+  // Do not call printf/malloc/exit/stop_components here: none of them are
+  // async-signal-safe, and calling them while another thread holds the
+  // stdio or malloc lock (e.g. component I/O) can deadlock
+  // or corrupt heap state, leaving child processes orphaned. write() is
+  // async-signal-safe, so just record the request and let the main event
+  // loop (monitor_events -> main()) perform the actual shutdown.
+  unsigned char byte = 1;
+  (void)write(term_signal_pipe[1], &byte, 1);
+}
+
+static void *handle_term_signal(void *arg) {
+  unsigned char byte;
+  if (read(term_signal_pipe[0], &byte, 1) > 0) {
+    INFO(MSG_LAUNCHER_STOPPING);
+    send_event(ZL_EVENT_TERM, NULL);
+  }
+  return NULL;
 }
 
 static int setup_signal_handlers() {
   struct sigaction sa;
+
+  if (pipe(term_signal_pipe) == -1) {
+    DEBUG("failed to create termination signal pipe - %s\n", strerror(errno));
+    return -1;
+  }
+  // never let a slow/full pipe make the signal handler block
+  if (fcntl(term_signal_pipe[1], F_SETFL, O_NONBLOCK) == -1) {
+    DEBUG("failed to set termination pipe non-blocking - %s\n", strerror(errno));
+    return -1;
+  }
+
+  pthread_t term_thid;
+  if (pthread_create(&term_thid, NULL, handle_term_signal, NULL) != 0) {
+    DEBUG("failed to start termination signal relay thread - %s\n", strerror(errno));
+    return -1;
+  }
+  pthread_detach(&term_thid);
+
   sa.sa_handler = terminate;
   sigemptyset(&sa.sa_mask);
   sa.sa_flags = SA_RESTART;

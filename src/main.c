@@ -1683,6 +1683,15 @@ typedef void (*handle_line_callback_t)(void *data, const char *line);
 static int run_command(const char *bin, const char *argv[], const char *envp[], handle_line_callback_t handle_line, void *data) {
   DEBUG("about to run command '%s'\n", bin);
 
+  if (*envp != NULL) {
+    DEBUG("with the following environment variable keys:\n");
+    for (const char **p = envp; *p != NULL; p++) {
+      const char *eq = strchr(*p, '=');
+      int key_len = eq ? (int)(eq - *p) : (int)strlen(*p);
+      DEBUG("  %.*s\n", key_len, *p);
+    }
+  }
+
   int c_stdout[2];
   if (pipe(c_stdout)) {
     ERROR(MSG_CMD_RUN_ERR, bin, strerror(errno));

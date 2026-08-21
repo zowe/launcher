@@ -1174,9 +1174,27 @@ static int start_component(zl_comp_t *comp, ConfigManager *configmgr) {
     return -1;
   }
 
-  if (fcntl(c_stdout[0], F_SETFL, O_NONBLOCK)) {
-    DEBUG("fcntl() failed for %s - %s\n", comp->name, strerror(errno));
+  int read_flags = fcntl(c_stdout[0], F_GETFL);
+  if (read_flags < 0) {
+    DEBUG("fcntl(F_GETFL) failed for %s - %s\n", comp->name, strerror(errno));
+    close(c_stdout[0]);
+    close(c_stdout[1]);
     return -1;
+  }
+  if (fcntl(c_stdout[0], F_SETFL, read_flags | O_NONBLOCK) < 0) {
+    DEBUG("fcntl(F_SETFL, O_NONBLOCK) failed for %s - %s\n", comp->name, strerror(errno));
+    close(c_stdout[0]);
+    close(c_stdout[1]);
+    return -1;
+  }
+
+  for (int i = 0; i < 2; i++) {
+    if (fcntl(c_stdout[i], F_SETFD, FD_CLOEXEC) < 0) {
+      DEBUG("fcntl(F_SETFD, FD_CLOEXEC) failed for %s - %s\n", comp->name, strerror(errno));
+      close(c_stdout[0]);
+      close(c_stdout[1]);
+      return -1;
+    }
   }
 
   int fd_count = 3;

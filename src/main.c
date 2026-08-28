@@ -266,6 +266,10 @@ static void set_sys_messages(ConfigManager *configmgr) {
 
 static bool check_match_and_wto_message(const char* sys_message_id, const char* input_string, const bool other_messages) {
 
+  if (!sys_message_id || !input_string) {
+    return false;
+  }
+
   char *sys_message_start = strstr(input_string, sys_message_id);
   int sys_message_pos = (sys_message_start != NULL) ? (sys_message_start - input_string) : -1;
   if (sys_message_pos == -1) {
@@ -1170,9 +1174,27 @@ static int start_component(zl_comp_t *comp, ConfigManager *configmgr) {
     return -1;
   }
 
-  if (fcntl(c_stdout[0], F_SETFL, O_NONBLOCK)) {
-    DEBUG("fcntl() failed for %s - %s\n", comp->name, strerror(errno));
+  int read_flags = fcntl(c_stdout[0], F_GETFL);
+  if (read_flags < 0) {
+    DEBUG("fcntl(F_GETFL) failed for %s - %s\n", comp->name, strerror(errno));
+    close(c_stdout[0]);
+    close(c_stdout[1]);
     return -1;
+  }
+  if (fcntl(c_stdout[0], F_SETFL, read_flags | O_NONBLOCK) < 0) {
+    DEBUG("fcntl(F_SETFL, O_NONBLOCK) failed for %s - %s\n", comp->name, strerror(errno));
+    close(c_stdout[0]);
+    close(c_stdout[1]);
+    return -1;
+  }
+
+  for (int i = 0; i < 2; i++) {
+    if (fcntl(c_stdout[i], F_SETFD, FD_CLOEXEC) < 0) {
+      DEBUG("fcntl(F_SETFD, FD_CLOEXEC) failed for %s - %s\n", comp->name, strerror(errno));
+      close(c_stdout[0]);
+      close(c_stdout[1]);
+      return -1;
+    }
   }
 
   int fd_count = 3;
@@ -1658,79 +1680,82 @@ static int send_event(enum zl_event_t event_type, void *event_data) {
 
 typedef void (*handle_line_callback_t)(void *data, const char *line);
 
-static int run_command(const char *command, handle_line_callback_t handle_line, void *data) {
-  DEBUG("about to run command '%s'\n", command);
-  FILE *fp = popen(command, "r");
-  if (!fp) {
-    ERROR(MSG_CMD_RUN_ERR, command, strerror(errno));
+static int run_command(const char *bin, const char *argv[], const char *envp[], handle_line_callback_t handle_line, void *data) {
+  DEBUG("about to run command '%s'\n", bin);
+
+  if (*envp != NULL) {
+    DEBUG("with the following environment variable keys:\n");
+    for (const char **p = envp; *p != NULL; p++) {
+      const char *eq = strchr(*p, '=');
+      int key_len = eq ? (int)(eq - *p) : (int)strlen(*p);
+      DEBUG("  %.*s\n", key_len, *p);
+    }
+  }
+
+  int c_stdout[2];
+  if (pipe(c_stdout)) {
+    ERROR(MSG_CMD_RUN_ERR, bin, strerror(errno));
     return -1;
   }
+
+  if (fcntl(c_stdout[0], F_SETFD, FD_CLOEXEC) || fcntl(c_stdout[1], F_SETFD, FD_CLOEXEC)) {
+    ERROR(MSG_CMD_RUN_ERR, bin, strerror(errno));
+    close(c_stdout[0]);
+    close(c_stdout[1]);
+    return -1;
+  }
+
+  int fd_count = 3;
+  int fd_map[3] = { STDIN_FILENO, c_stdout[1], c_stdout[1] };
+
+  pid_t pid = spawn(bin, fd_count, fd_map, NULL, argv, envp);
+  if (pid == -1) {
+    ERROR(MSG_CMD_RUN_ERR, bin, strerror(errno));
+    close(c_stdout[0]);
+    close(c_stdout[1]);
+    return -1;
+  }
+  close(c_stdout[1]);
+
+  FILE *fp = fdopen(c_stdout[0], "r");
+  if (!fp) {
+    ERROR(MSG_CMD_RUN_ERR, bin, strerror(errno));
+    close(c_stdout[0]);
+    return -1;
+  }
+
   char *line;
   char buf[1024] = {0};
   while((line = fgets(buf, sizeof(buf) - 1, fp)) != NULL) {
     handle_line(data, line);
     memset(buf, '\0', sizeof(buf));
   }
-  if (ferror(fp)) {
-    pclose(fp);
-    ERROR(MSG_CMD_OUT_ERR, command, strerror(errno));
+  int read_err = ferror(fp);
+  fclose(fp); // also closes c_stdout[0]
+
+  int status = 0;
+  pid_t wait_rc;
+  while ((wait_rc = waitpid(pid, &status, 0)) == -1 && errno == EINTR) {
+    // retry: SIGINT/SIGTERM handlers are already armed at this point
+  }
+  if (wait_rc == -1) {
+    ERROR(MSG_CMD_RUN_ERR, bin, strerror(errno));
     return -1;
   }
-  int rc = pclose(fp);
-  if (rc == -1) {
-    ERROR(MSG_CMD_RUN_ERR, command, strerror(errno));
-  } else if (rc > 0) {
-    WARN(MSG_CMD_RCP_WARN, command, rc);
+
+  if (read_err) {
+    ERROR(MSG_CMD_OUT_ERR, bin, strerror(errno));
     return -1;
   }
-  DEBUG("command '%s' ran successfully\n", command);
+
+  int rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+  if (rc != 0) {
+    WARN(MSG_CMD_RCP_WARN, bin, rc);
+    return -1;
+  }
+
+  DEBUG("command '%s' ran successfully\n", bin);
   return 0;
-}
-
-/**
- * @brief Get the sharedenv. The function contemplates enclosing in quotes the values of the variables.
- * 
- * @return char* string representation of the shared_uss_env variable, e.g. VAR1="sample" VAR2=12345
- */
-static char* get_sharedenv(void) {
-  char *output = NULL;
-  char *aux = NULL;
-
-  int required = 0;
-  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
-    char *thisEnv = *env;
-    required += (strlen(thisEnv) + 3); // space + quotes
-  }
-
-  required++;
-  output = malloc(required);
-  output[0] = '\0';
-  aux = malloc(required);
-  aux[0] = '\0';
-  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
-    char *thisEnv = *env;
-    strcat(aux, thisEnv);
-    char *envName = strtok(aux, "=");
-    if (envName) {
-      strcat(output, envName);
-      char *envValue = &thisEnv[strlen(envName) + 1];
-      if (*envValue == '"') { // Env value is already enclosed in quotes
-        strcat(output, "=");
-        strcat(output, envValue);
-        trimRight(output, strlen(output));
-        strcat(output, " ");
-      } else {
-        strcat(output, "=\"");
-        strcat(output, envValue);
-        trimRight(output, strlen(output));
-        strcat(output, "\" ");
-      }
-    }
-    aux[0] = 0;
-  }
-  trimRight(output, strlen(output));
-  free(aux);
-  return output;
 }
 
 static int check_if_yaml_exists(const char *yaml, const char *name) {
@@ -2046,24 +2071,26 @@ static void print_line(void *data, const char *line) {
   check_for_and_print_sys_message(line);
 }
 
-static char* get_start_prepare_cmd(char *sharedenv) {
-  const char basecmd[] = "%s ZWE_CLI_PARAMETER_CONFIG=\"%s\" %s/bin/utils/configmgr -script %s/bin/commands/internal/start/prepare/cli.js 2>&1";
-  int size = (strlen(zl_context.root_dir) * 2) + strlen(zl_context.config_path) + strlen(sharedenv) + sizeof(basecmd) + 1;
-  char *command = malloc(size);
-
-  snprintf(command, size, basecmd,
-           sharedenv, zl_context.config_path, zl_context.root_dir, zl_context.root_dir);
-  return command;
-}
-
 static int prepare_instance() {
-  char *sharedenv = get_sharedenv();
-  char *command = get_start_prepare_cmd(sharedenv);
+  char bin[PATH_MAX];
+  char js_path[PATH_MAX];
 
-  free(sharedenv);
+  int len_bin = snprintf(bin, sizeof(bin), "%s/bin/utils/configmgr", zl_context.root_dir);
+  if (len_bin < 0 || (size_t)len_bin >= sizeof(bin)) {
+    ERROR(MSG_INST_PREP_ERR);
+    return -1;
+  }
+  
+  int len_js = snprintf(js_path, sizeof(js_path), "%s/bin/commands/internal/start/prepare/cli.js", zl_context.root_dir);
+  if (len_js < 0 || (size_t)len_js >= sizeof(js_path)) {
+    ERROR(MSG_INST_PREP_ERR);
+    return -1;
+  }
+
+  const char *argv[] = { bin, "-script", js_path, NULL };
 
   DEBUG("about to prepare Zowe instance\n");
-  if (run_command(command, print_line, NULL)) {
+  if (run_command(bin, argv, (const char **)shared_uss_env, print_line, NULL)) {
     ERROR(MSG_INST_PREP_ERR);
     return -1;
   }
@@ -2078,14 +2105,51 @@ static int init() {
   return 0;
 }
 
+// Self-pipe used to get out of signal-handler context safely: the handler
+// only writes a byte (async-signal-safe), and a plain thread on the read
+// end forwards the request through the normal event mechanism.
+static int term_signal_pipe[2] = { -1, -1 };
+
 static void terminate(int sig) {
-  INFO(MSG_LAUNCHER_STOPPING);
-  stop_components();
-  exit(EXIT_SUCCESS);
+  // Do not call printf/malloc/exit/stop_components here: none of them are
+  // async-signal-safe, and calling them while another thread holds the
+  // stdio or malloc lock (e.g. component I/O) can deadlock
+  // or corrupt heap state, leaving child processes orphaned. write() is
+  // async-signal-safe, so just record the request and let the main event
+  // loop (monitor_events -> main()) perform the actual shutdown.
+  unsigned char byte = 1;
+  (void)write(term_signal_pipe[1], &byte, 1);
+}
+
+static void *handle_term_signal(void *arg) {
+  unsigned char byte;
+  if (read(term_signal_pipe[0], &byte, 1) > 0) {
+    INFO(MSG_LAUNCHER_STOPPING);
+    send_event(ZL_EVENT_TERM, NULL);
+  }
+  return NULL;
 }
 
 static int setup_signal_handlers() {
   struct sigaction sa;
+
+  if (pipe(term_signal_pipe) == -1) {
+    DEBUG("failed to create termination signal pipe - %s\n", strerror(errno));
+    return -1;
+  }
+  // never let a slow/full pipe make the signal handler block
+  if (fcntl(term_signal_pipe[1], F_SETFL, O_NONBLOCK) == -1) {
+    DEBUG("failed to set termination pipe non-blocking - %s\n", strerror(errno));
+    return -1;
+  }
+
+  pthread_t term_thid;
+  if (pthread_create(&term_thid, NULL, handle_term_signal, NULL) != 0) {
+    DEBUG("failed to start termination signal relay thread - %s\n", strerror(errno));
+    return -1;
+  }
+  pthread_detach(&term_thid);
+
   sa.sa_handler = terminate;
   sigemptyset(&sa.sa_mask);
   sa.sa_flags = SA_RESTART;

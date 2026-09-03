@@ -560,5 +560,12 @@ export const MESSAGES = [
         text: "Log directory close issue, rc=0%x, rsn=0x%x, location=%s",
         reason: "There is an issue closing the log directory. Return code=`<rc>`, reason code=`<rsn>`, location=`<location>`.",
         action: NO_ACTION
+    },
+    {
+        id: "ZWEL0078E",
+        define: "MSG_CFGMGR_INIT_FAILED",
+        text: "Configuration manager could not be created",
+        reason: "The configuration manager could not be created, so the launcher cannot read `zowe.yaml`. This happens when its embedded JavaScript engine cannot be set up, for example when the launcher is started from a privileged environment rather than problem state and key 8, or when memory is short.",
+        action: "Check the messages that precede this one and the environment the launcher was started from, then restart."
     }
 ]

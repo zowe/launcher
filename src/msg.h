@@ -91,6 +91,7 @@
 #define MSG_NO_LOG_FILE         MSG_PREFIX "0075E" " Log file for %s not created\n"
 #define MSG_LOG_DIR_PERM        MSG_PREFIX "0076E" " Log directory unreadable, rc=0x%x, rsn=0x%x, location=%s\n"
 #define MSG_LOG_DIR_CLOSE       MSG_PREFIX "0077W" " Log directory close issue, rc=0%x, rsn=0x%x, location=%s\n"
+#define MSG_CFGMGR_INIT_FAILED  MSG_PREFIX "0078E" " Configuration manager could not be created\n"
 
 #endif // MSG_H
 

@@ -149,9 +149,9 @@ jobs:
       - name: '[Dep 2] Quickjs'
         uses: actions/checkout@v3
         with:
-          repository: joenemo/quickjs-portable
+          repository: zowe/quickjs-portable
           path: deps/launcher/quickjs
-          ref: 'main'
+          ref: 'staging'
 
       - name: '[Dep 3] Zowe common'
         uses: actions/checkout@v3

@@ -1680,7 +1680,7 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
             strncpy(comp_list + len + strlen(prop->key), ",", 1);
             len += (strlen(prop->key)+1);
           } else {
-            DEBUG("skip adding component %s to comp_list\n", prop->key);
+            WARN("comp_list buffer is full, component %s will not be started\n", prop->key);
           }
         }
       }

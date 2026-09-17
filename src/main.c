@@ -116,7 +116,7 @@ static zl_time_t gettime(void) {
   struct tm lt;
   zl_time_t result;
 
-  gmtime_r(&t, &lt);
+  localtime_r(&t, &lt);
 
   strftime(result.value, sizeof(result.value), format, &lt);
 

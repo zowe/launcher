@@ -183,12 +183,32 @@ struct {
   
 } zl_context = {.config = {.debug_mode = false}, .userid = "(NONE)"} ;
 
-// Wrapper for wtoPrintf3
+// Wrapper for wtoPrintf3 - WTO message with C formatting specifiers
 static void printf_wto(const char *formatString, ...) {
   va_list argPointer;
   va_start(argPointer, formatString);
   wtoPrintf3(formatString, argPointer);
   va_end(argPointer);
+}
+
+static void print_wto_directly(const char *wtoText) {
+  if (wtoText == NULL) return;
+
+  size_t len = strlen(wtoText);
+  char *wtoTextCopy = malloc(len + 1);
+  if (wtoTextCopy == NULL) return;
+
+  memcpy(wtoTextCopy, wtoText, len + 1);
+
+  for (size_t i = 0; i < len; i++) {
+    if (wtoTextCopy[i] == '\n') {
+      wtoTextCopy[i] = '\0';
+      break;
+    }
+  }
+
+  wtoMessage(wtoTextCopy);
+  free(wtoTextCopy);
 }
 
 static void set_sys_messages(ConfigManager *configmgr) {
@@ -222,7 +242,7 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
   for (int i = 0; i < count; i++) {
       const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
       if (sys_message_id && strstr(input_string, sys_message_id)) {
-          printf_wto(input_string); // Print our match to the syslog
+          print_wto_directly(input_string); // Print our match to the SYSLOG
           break;
       }
   }
@@ -277,9 +297,9 @@ static void check_for_and_print_sys_message(const char* input_string) {
         int match = regexec(&time_regex, input_string, 0, NULL, 0);
         int offset = match == 0 ? DATE_PREFIX_LEN : 0;
         int length = SYSLOG_MESSAGE_LENGTH_LIMIT < (input_length-offset) ? SYSLOG_MESSAGE_LENGTH_LIMIT : input_length-offset;
-        memcpy(syslog_string, input_string+offset, length);  
+        memcpy(syslog_string, input_string+offset, length);
         syslog_string[length] = '\0';
-        printf_wto(syslog_string);// Print our match to the syslog
+        print_wto_directly(syslog_string);// Print our match to the SYSLOG
         break;
       }
     }

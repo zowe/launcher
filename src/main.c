@@ -1695,9 +1695,13 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
               startScript = true;
         }
         if (startScript) {
-          strncpy(comp_list + len, prop->key, strlen(prop->key));
-          strncpy(comp_list + len + strlen(prop->key), ",", 1);
-          len += (strlen(prop->key)+1);
+          if (len + strlen(prop->key) + 2 <= sizeof(comp_list)) {
+            strncpy(comp_list + len, prop->key, strlen(prop->key));
+            strncpy(comp_list + len + strlen(prop->key), ",", 1);
+            len += (strlen(prop->key)+1);
+          } else {
+            WARN("comp_list buffer is full, component %s will not be started\n", prop->key);
+          }
         }
       }
       prop = prop->next;

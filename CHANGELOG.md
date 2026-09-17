@@ -5,7 +5,7 @@ This repo is part of the app-server Zowe Component, and the change logs here may
 
 ## 3.6.0
 
-- Enhancement: the launcher is built with the same QuickJS engine as configmgr, from `zowe/quickjs-portable` `staging` (the 2024-01-13 port), instead of the 2021-03-27 engine from `joenemo/quickjs-portable`; `build/build.sh` adds the `libbf` and `debugutil` sources that engine needs.
+- Enhancement: the launcher is built with the same QuickJS engine as configmgr, from `zowe/quickjs-portable` `staging` (the 2024-01-13 port), instead of the 2021-03-27 engine from `joenemo/quickjs-portable`; `build/build.sh` adds the `libbf` and `debugutil` sources that engine needs. ([#222](https://github.com/zowe/launcher/pull/222))
 - Bugfix: `zowe.sysMessages` are used after the validation ([#208](https://github.com/zowe/launcher/pull/208))
 - Enhancement: regex replaced by internal routine ([#206](https://github.com/zowe/launcher/pull/206))
 - Bugfix: Component names must fit the component list ([#195](https://github.com/zowe/launcher/pull/195))

@@ -9,7 +9,7 @@ Copyright Contributors to the Zowe Project.
 <h1 align="center">Zowe Launcher</h1>
 
 The Zowe launcher is a part of the Zowe server architecture that was added as an optional program for HA/FT usage in v1.
-In v2, the Zowe launcher became the sole way to start the Zowe servers.
+Starting in v2 and later, the Zowe launcher became the sole way to start Zowe servers.
 The launcher's purpose is to start, restart, and stop each Zowe server component which has a `start` command,
 and in doing so it watches over such components for health (restarting them if they crash) and log management.
 

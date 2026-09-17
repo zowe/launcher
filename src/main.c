@@ -2226,6 +2226,12 @@ int main(int argc, char **argv) {
   logConfigureStandardDestinations(logContext);
 
   ConfigManager *configmgr = makeConfigManager(); /* configs,schemas,1,stderr); */
+  if (configmgr == NULL) {
+    /* Stop here rather than dereference NULL, like the neighbouring checks */
+    ERROR(MSG_CFGMGR_INIT_FAILED);
+    printf_wto(MSG_CFGMGR_INIT_FAILED); // Manual sys log print (messages not set here yet)
+    exit(EXIT_FAILURE);
+  }
   CFGConfig *theConfig = addConfig(configmgr,ZOWE_CONFIG_NAME);
   cfgSetTraceStream(configmgr,stderr);
   cfgSetTraceLevel(configmgr, zl_context.config.debug_mode ? 2 : 0);

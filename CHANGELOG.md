@@ -4,6 +4,9 @@ All notable changes to the Zowe Launcher package will be documented in this file
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
 ## 3.6.0
+- Lorem ipsum dolor sit amet, consectetur adipiscing elit. (#230)
+
+## 3.6.0
 
 - [NOTICE.txt](./NOTICE.txt) and the build example name `zowe/quickjs-portable` as the QuickJS source. ([#228](https://github.com/zowe/launcher/pull/228))
 - Enhancement: the launcher is built with the same QuickJS engine as configmgr, from `zowe/quickjs-portable` `staging` (the 2024-01-13 port), instead of the 2021-03-27 engine from `joenemo/quickjs-portable`; `build/build.sh` adds the `libbf` and `debugutil` sources that engine needs. ([#222](https://github.com/zowe/launcher/pull/222))

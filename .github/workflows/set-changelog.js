@@ -33,7 +33,7 @@ if (description.includes('VERSION:') && description.includes('CHANGELOG:')) {
     for (let i = 0; i < changelogLines.length; i++) {
       if (changelogLines[i].includes('This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.')) {
         anchorIndex = i;
-      } else if (changelogLines[i].startsWith('## v'+version)) {
+      } else if (changelogLines[i].startsWith('## v'+version) || changelogLines[i].startsWith('## '+version)) {
         versionIndex = i;
         break;
       }

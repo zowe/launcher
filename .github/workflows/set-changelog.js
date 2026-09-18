@@ -33,15 +33,15 @@ if (description.includes('VERSION:') && description.includes('CHANGELOG:')) {
     for (let i = 0; i < changelogLines.length; i++) {
       if (changelogLines[i].includes('This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.')) {
         anchorIndex = i;
-      } else if (changelogLines[i].startsWith('## v'+version)) {
+      } else if (changelogLines[i].startsWith('## v'+version) || changelogLines[i].startsWith('## '+version)) {
         versionIndex = i;
         break;
       }
     }
     if (versionIndex != -1) {
-      changelogLines.splice(versionIndex+2, 0, `- ${changelogMsg} (#${PR_NUMBER})`);
+      changelogLines.splice(versionIndex+2, 0, `- ${changelogMsg} ([#${PR_NUMBER}](https://github.com/zowe/launcher/pull/${PR_NUMBER}))`);
     } else {
-      changelogLines.splice(anchorIndex+1, 0, `\n## ${version}\n- ${changelogMsg} (#${PR_NUMBER})`);
+      changelogLines.splice(anchorIndex+1, 0, `\n## ${version}\n- ${changelogMsg} ([#${PR_NUMBER}](https://github.com/zowe/launcher/pull/${PR_NUMBER}))`);
     }
     const newChangelog = changelogLines.join('\n');
     fs.writeFileSync('CHANGELOG.md', newChangelog);

@@ -20,9 +20,9 @@ if (description.includes('VERSION:') && description.includes('CHANGELOG:')) {
   let lines = description.split('\n');
   lines.forEach((line)=> {
     if (line.startsWith('CHANGELOG:')) {
-      changelogMsg = line.substring('CHANGELOG:'.length+1).trim();
+      changelogMsg = line.substring('CHANGELOG:'.length).trim();
     } else if (line.startsWith('VERSION:')) {
-      version = line.substring('VERSION:'.length+1).trim();
+      version = line.substring('VERSION:'.length).trim();
     }
   });
   if (changelogMsg && version) {

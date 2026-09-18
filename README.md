@@ -13,6 +13,8 @@ Starting in v2 and later, the Zowe launcher became the sole way to start Zowe se
 The launcher's purpose is to start, restart, and stop each Zowe server component which has a `start` command,
 and in doing so it watches over such components for health (restarting them if they crash) and log management.
 
+## Test
+
 ## Current features
 * Stopping Zowe using the conventional `P` operator command
 * Ability to handle `MODIFY` commands

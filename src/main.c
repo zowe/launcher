@@ -18,7 +18,6 @@
 #include <string.h>
 #include <strings.h>
 #include <errno.h>
-#include <regex.h>
 #include <time.h>
 #include <sys/time.h>
 
@@ -267,6 +266,10 @@ static void set_sys_messages(ConfigManager *configmgr) {
 
 static bool check_match_and_wto_message(const char* sys_message_id, const char* input_string, const bool other_messages) {
 
+  if (!sys_message_id || !input_string) {
+    return false;
+  }
+
   char *sys_message_start = strstr(input_string, sys_message_id);
   int sys_message_pos = (sys_message_start != NULL) ? (sys_message_start - input_string) : -1;
   if (sys_message_pos == -1) {
@@ -276,7 +279,7 @@ static bool check_match_and_wto_message(const char* sys_message_id, const char* 
 
   if (other_messages) {
     // App-server -> Show Environment -> E.g. ^ZWE_zowe_sysMessages_0=ZWEL0021I$
-    if (memcmp(ZWE_ZOWE_SYS_MESSAGES, input_string, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
+    if (strncmp(input_string, ZWE_ZOWE_SYS_MESSAGES, ZWE_ZOWE_SYS_MESSAGES_LEN) == 0) {
       return false;
     }
   }
@@ -295,7 +298,7 @@ static bool check_match_and_wto_message(const char* sys_message_id, const char* 
         print_wto_directly(input_string + sys_message_pos);
       } else {
         // The match is in the last WTO_MESSAGE_LENGTH chars
-        // WTO last WTO_MESSAGE_LENGTH chars - egde case: if the match is last word
+        // WTO last WTO_MESSAGE_LENGTH chars - edge case: if the match is last word
         //   user will see the text before match too
         print_wto_directly(input_string + (input_string_len - WTO_MESSAGE_LENGTH));
       }
@@ -328,28 +331,37 @@ static void launcher_syslog_on_match(const char* fmt, ...) {
 
 }
 
-// matches YYYY-MM-DD starting with 2xxx.
-// this regex was chosen because other patterns didnt seem to work with LE's regex library.
-#define DATE_PREFIX_REGEXP_PATTERN "^[2-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*"
+// Replacement for previous regex ^[2-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*
+// Easy to implement & maintain
+// No NULL check - always called for input strings with length >= DATE_PREFIX_LEN (24)
+static inline int is_date_prefix(const char *s) {
+  unsigned r  = (unsigned char)(s[0] - '2') > 7u;  /* '2'..'9' */
+  r |= (unsigned char)(s[1] - '0') > 9u;
+  r |= (unsigned char)(s[2] - '0') > 9u;
+  r |= (unsigned char)(s[3] - '0') > 9u;
+  r |= s[4] != '-';
+  r |= (unsigned char)(s[5] - '0') > 9u;
+  r |= (unsigned char)(s[6] - '0') > 9u;
+  r |= s[7] != '-';
+  r |= (unsigned char)(s[8] - '0') > 9u;
+  r |= (unsigned char)(s[9] - '0') > 9u;
+  return !r;
+}
 
 // zowe standard "YYYY-MM-DD HH-MM-SS.sss "
 #define DATE_PREFIX_LEN 24
 
-// Needed once
-static regex_t time_regex = { .re_comp = NULL };
-
 // Other messages are completed, check possible date and filter it out
 static void check_for_and_print_sys_message(const char* input_string) {
-  if (!zl_context.sys_messages) {
+  if (!zl_context.sys_messages || !input_string) {
     return;
   }
 
   int count = jsonArrayGetCount(zl_context.sys_messages);
-  if (!time_regex.re_comp) {
-    int regex_rc = regcomp(&time_regex, DATE_PREFIX_REGEXP_PATTERN, 0);
+  int offset = 0;
+  if (strlen(input_string) >= DATE_PREFIX_LEN && is_date_prefix(input_string)) {
+    offset = DATE_PREFIX_LEN;
   }
-  int match = regexec(&time_regex, input_string, 0, NULL, 0);
-  int offset = match == 0 ? DATE_PREFIX_LEN : 0;
 
   for (int i = 0; i < count; i++) {
     const char *sys_message_id = jsonArrayGetString(zl_context.sys_messages, i);
@@ -789,7 +801,6 @@ static void init_component_shareas(zl_comp_t *comp, ConfigManager *configmgr) {
   } else {
     comp->share_as = ZL_COMP_AS_SHARE_YES;
   }
-  safeFree(share_as, strlen(share_as));
 }
 
 static const char *get_shareas_label(const zl_comp_t *comp) {
@@ -903,7 +914,7 @@ static void *handle_comp_comm(void *args) {
     int retries_left = 3;
     while (retries_left > 0) {
 
-      int msg_len = read(comp->output, msg, sizeof(msg));
+      int msg_len = read(comp->output, msg, sizeof(msg) - 1);
       if (msg_len > 0) {
         msg[msg_len] = '\0';
 
@@ -1010,7 +1021,6 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
 
   if ((directory = directoryOpen(log_directory, &returnCode, &reasonCode)) == NULL) {
     ERROR(MSG_LOG_DIR_PERM, returnCode, reasonCode, log_directory);
-    safeFree(log_directory, strlen(log_directory));
     return returnCode;
   } else {
     char search_string[PATH_MAX];
@@ -1123,7 +1133,6 @@ static int get_component_log_name(zl_comp_t *comp, ConfigManager *configmgr, cha
   strftime(log_timestamp, sizeof(log_timestamp), LOGFILE_TIMESTAMP_FORMAT, &lt);
 
   snprintf(log_name, PATH_MAX, "%s/%s_%s_%s_%s.log", log_directory, job_prefix, zl_context.ha_instance_id, comp->name, log_timestamp);
-  safeFree(log_directory, strlen(log_directory));
   return getStatus;
 }
 
@@ -1165,9 +1174,27 @@ static int start_component(zl_comp_t *comp, ConfigManager *configmgr) {
     return -1;
   }
 
-  if (fcntl(c_stdout[0], F_SETFL, O_NONBLOCK)) {
-    DEBUG("fcntl() failed for %s - %s\n", comp->name, strerror(errno));
+  int read_flags = fcntl(c_stdout[0], F_GETFL);
+  if (read_flags < 0) {
+    DEBUG("fcntl(F_GETFL) failed for %s - %s\n", comp->name, strerror(errno));
+    close(c_stdout[0]);
+    close(c_stdout[1]);
     return -1;
+  }
+  if (fcntl(c_stdout[0], F_SETFL, read_flags | O_NONBLOCK) < 0) {
+    DEBUG("fcntl(F_SETFL, O_NONBLOCK) failed for %s - %s\n", comp->name, strerror(errno));
+    close(c_stdout[0]);
+    close(c_stdout[1]);
+    return -1;
+  }
+
+  for (int i = 0; i < 2; i++) {
+    if (fcntl(c_stdout[i], F_SETFD, FD_CLOEXEC) < 0) {
+      DEBUG("fcntl(F_SETFD, FD_CLOEXEC) failed for %s - %s\n", comp->name, strerror(errno));
+      close(c_stdout[0]);
+      close(c_stdout[1]);
+      return -1;
+    }
   }
 
   int fd_count = 3;
@@ -1308,7 +1335,7 @@ static int stop_component(zl_comp_t *comp) {
 
 static int stop_components(void) {
 
-  INFO(MSG_STOPING_COMPS);
+  INFO(MSG_STOPPING_COMPS);
   prevent_restart=true;
 
   int rc = 0;
@@ -1351,10 +1378,12 @@ static int stop_components(void) {
       }
       rc = -1;
     }
-    if (fclose(compkill->log_file)) {
-      ERROR("fclose() failed for %s - %s\n", compkill->name, strerror(errno));
-    } else {
-      compkill->log_file = 0;
+    if (compkill->log_file) {
+      if (fclose(compkill->log_file)) {
+        ERROR("fclose() failed for %s - %s\n", compkill->name, strerror(errno));
+      } else {
+        compkill->log_file = 0;
+      }
     }
   }
 
@@ -1651,99 +1680,82 @@ static int send_event(enum zl_event_t event_type, void *event_data) {
 
 typedef void (*handle_line_callback_t)(void *data, const char *line);
 
-static int run_command(const char *command, handle_line_callback_t handle_line, void *data) {
-  DEBUG("about to run command '%s'\n", command);
-  FILE *fp = popen(command, "r");
-  if (!fp) {
-    ERROR(MSG_CMD_RUN_ERR, command, strerror(errno));
+static int run_command(const char *bin, const char *argv[], const char *envp[], handle_line_callback_t handle_line, void *data) {
+  DEBUG("about to run command '%s'\n", bin);
+
+  if (*envp != NULL) {
+    DEBUG("with the following environment variable keys:\n");
+    for (const char **p = envp; *p != NULL; p++) {
+      const char *eq = strchr(*p, '=');
+      int key_len = eq ? (int)(eq - *p) : (int)strlen(*p);
+      DEBUG("  %.*s\n", key_len, *p);
+    }
+  }
+
+  int c_stdout[2];
+  if (pipe(c_stdout)) {
+    ERROR(MSG_CMD_RUN_ERR, bin, strerror(errno));
     return -1;
   }
+
+  if (fcntl(c_stdout[0], F_SETFD, FD_CLOEXEC) || fcntl(c_stdout[1], F_SETFD, FD_CLOEXEC)) {
+    ERROR(MSG_CMD_RUN_ERR, bin, strerror(errno));
+    close(c_stdout[0]);
+    close(c_stdout[1]);
+    return -1;
+  }
+
+  int fd_count = 3;
+  int fd_map[3] = { STDIN_FILENO, c_stdout[1], c_stdout[1] };
+
+  pid_t pid = spawn(bin, fd_count, fd_map, NULL, argv, envp);
+  if (pid == -1) {
+    ERROR(MSG_CMD_RUN_ERR, bin, strerror(errno));
+    close(c_stdout[0]);
+    close(c_stdout[1]);
+    return -1;
+  }
+  close(c_stdout[1]);
+
+  FILE *fp = fdopen(c_stdout[0], "r");
+  if (!fp) {
+    ERROR(MSG_CMD_RUN_ERR, bin, strerror(errno));
+    close(c_stdout[0]);
+    return -1;
+  }
+
   char *line;
   char buf[1024] = {0};
   while((line = fgets(buf, sizeof(buf) - 1, fp)) != NULL) {
     handle_line(data, line);
     memset(buf, '\0', sizeof(buf));
   }
-  if (ferror(fp)) {
-    pclose(fp);
-    ERROR(MSG_CMD_OUT_ERR, command, strerror(errno));
+  int read_err = ferror(fp);
+  fclose(fp); // also closes c_stdout[0]
+
+  int status = 0;
+  pid_t wait_rc;
+  while ((wait_rc = waitpid(pid, &status, 0)) == -1 && errno == EINTR) {
+    // retry: SIGINT/SIGTERM handlers are already armed at this point
+  }
+  if (wait_rc == -1) {
+    ERROR(MSG_CMD_RUN_ERR, bin, strerror(errno));
     return -1;
   }
-  int rc = pclose(fp);
-  if (rc == -1) {
-    ERROR(MSG_CMD_RUN_ERR, command, strerror(errno));
-  } else if (rc > 0) {
-    WARN(MSG_CMD_RCP_WARN, command, rc);
+
+  if (read_err) {
+    ERROR(MSG_CMD_OUT_ERR, bin, strerror(errno));
     return -1;
   }
-  DEBUG("command '%s' ran successfully\n", command);
+
+  int rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+  if (rc != 0) {
+    WARN(MSG_CMD_RCP_WARN, bin, rc);
+    return -1;
+  }
+
+  DEBUG("command '%s' ran successfully\n", bin);
   return 0;
-}
-
-static void handle_get_component_line(void *data, const char *line) {
-  char *comp_list = data;
-  snprintf(comp_list, COMP_LIST_SIZE, "%s", line);
-  int len = strlen(comp_list);
-  for (int i = len - 1; i >= 0; i--) {
-    if (comp_list[i] != ' ' && comp_list[i] != '\n' && comp_list[i] != ',') {
-      break;
-    }
-    comp_list[i] = '\0';
-  }
-}
-
-static char* get_launch_components_cmd(char* sharedenv) {
-  const char basecmd[] = "%s ZWE_CLI_PARAMETER_CONFIG=\"%s\" %s/bin/utils/configmgr -script %s/bin/commands/internal/get-launch-components/cli.js 2>&1";
-  int size = (strlen(zl_context.root_dir) * 2) + strlen(zl_context.config_path) + strlen(sharedenv) + sizeof(basecmd) + 1;
-  char *command = malloc(size);
-
-  snprintf(command, size, basecmd,
-           sharedenv, zl_context.config_path, zl_context.root_dir, zl_context.root_dir);
-  return command;
-}
-
-/**
- * @brief Get the sharedenv. The function contemplates enclosing in quotes the values of the variables.
- * 
- * @return char* string representation of the shared_uss_env variable, e.g. VAR1="sample" VAR2=12345
- */
-static char* get_sharedenv(void) {
-  char *output = NULL;
-  char *aux = NULL;
-
-  int required = 0;
-  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
-    char *thisEnv = *env;
-    required += (strlen(thisEnv) + 3); // space + quotes
-  }
-
-  required++;
-  output = malloc(required);
-  aux = malloc(required);
-  for (char **env = shared_uss_env + 1; *env != 0; env++) { // First element is NULL, reserved to _BPX_SHAREAS
-    char *thisEnv = *env;
-    strcat(aux, thisEnv);
-    char *envName = strtok(aux, "=");
-    if (envName) {
-      strcat(output, envName);
-      char *envValue = &thisEnv[strlen(envName) + 1];
-      if (*envValue == '"') { // Env value is already enclosed in quotes
-        strcat(output, "=");
-        strcat(output, envValue);
-        trimRight(output, strlen(output));
-        strcat(output, " ");
-      } else {
-        strcat(output, "=\"");
-        strcat(output, envValue);
-        trimRight(output, strlen(output));
-        strcat(output, "\" ");
-      }
-    }
-    aux[0] = 0;
-  }
-  trimRight(output, strlen(output));
-  free(aux);
-  return output;
 }
 
 static int check_if_yaml_exists(const char *yaml, const char *name) {
@@ -1944,9 +1956,13 @@ static int get_component_list(char *buf, size_t buf_size,ConfigManager *configmg
               startScript = true;
           }
           if (startScript) {
-            strncpy(comp_list + len, prop->key, strlen(prop->key));
-            strncpy(comp_list + len + strlen(prop->key), ",", 1);
-            len += (strlen(prop->key)+1);
+            if (len + strlen(prop->key) + 2 <= sizeof(comp_list)) {
+              strncpy(comp_list + len, prop->key, strlen(prop->key));
+              strncpy(comp_list + len + strlen(prop->key), ",", 1);
+              len += (strlen(prop->key)+1);
+            } else {
+              WARN("comp_list buffer is full, component %s will not be started\n", prop->key);
+            }
           }
         }
       }
@@ -2055,24 +2071,26 @@ static void print_line(void *data, const char *line) {
   check_for_and_print_sys_message(line);
 }
 
-static char* get_start_prepare_cmd(char *sharedenv) {
-  const char basecmd[] = "%s ZWE_CLI_PARAMETER_CONFIG=\"%s\" %s/bin/utils/configmgr -script %s/bin/commands/internal/start/prepare/cli.js 2>&1";
-  int size = (strlen(zl_context.root_dir) * 2) + strlen(zl_context.config_path) + strlen(sharedenv) + sizeof(basecmd) + 1;
-  char *command = malloc(size);
-
-  snprintf(command, size, basecmd,
-           sharedenv, zl_context.config_path, zl_context.root_dir, zl_context.root_dir);
-  return command;
-}
-
 static int prepare_instance() {
-  char *sharedenv = get_sharedenv();
-  char *command = get_start_prepare_cmd(sharedenv);
+  char bin[PATH_MAX];
+  char js_path[PATH_MAX];
 
-  free(sharedenv);
+  int len_bin = snprintf(bin, sizeof(bin), "%s/bin/utils/configmgr", zl_context.root_dir);
+  if (len_bin < 0 || (size_t)len_bin >= sizeof(bin)) {
+    ERROR(MSG_INST_PREP_ERR);
+    return -1;
+  }
+  
+  int len_js = snprintf(js_path, sizeof(js_path), "%s/bin/commands/internal/start/prepare/cli.js", zl_context.root_dir);
+  if (len_js < 0 || (size_t)len_js >= sizeof(js_path)) {
+    ERROR(MSG_INST_PREP_ERR);
+    return -1;
+  }
+
+  const char *argv[] = { bin, "-script", js_path, NULL };
 
   DEBUG("about to prepare Zowe instance\n");
-  if (run_command(command, print_line, NULL)) {
+  if (run_command(bin, argv, (const char **)shared_uss_env, print_line, NULL)) {
     ERROR(MSG_INST_PREP_ERR);
     return -1;
   }
@@ -2087,14 +2105,51 @@ static int init() {
   return 0;
 }
 
+// Self-pipe used to get out of signal-handler context safely: the handler
+// only writes a byte (async-signal-safe), and a plain thread on the read
+// end forwards the request through the normal event mechanism.
+static int term_signal_pipe[2] = { -1, -1 };
+
 static void terminate(int sig) {
-  INFO(MSG_LAUNCHER_STOPING);
-  stop_components();
-  exit(EXIT_SUCCESS);
+  // Do not call printf/malloc/exit/stop_components here: none of them are
+  // async-signal-safe, and calling them while another thread holds the
+  // stdio or malloc lock (e.g. component I/O) can deadlock
+  // or corrupt heap state, leaving child processes orphaned. write() is
+  // async-signal-safe, so just record the request and let the main event
+  // loop (monitor_events -> main()) perform the actual shutdown.
+  unsigned char byte = 1;
+  (void)write(term_signal_pipe[1], &byte, 1);
+}
+
+static void *handle_term_signal(void *arg) {
+  unsigned char byte;
+  if (read(term_signal_pipe[0], &byte, 1) > 0) {
+    INFO(MSG_LAUNCHER_STOPPING);
+    send_event(ZL_EVENT_TERM, NULL);
+  }
+  return NULL;
 }
 
 static int setup_signal_handlers() {
   struct sigaction sa;
+
+  if (pipe(term_signal_pipe) == -1) {
+    DEBUG("failed to create termination signal pipe - %s\n", strerror(errno));
+    return -1;
+  }
+  // never let a slow/full pipe make the signal handler block
+  if (fcntl(term_signal_pipe[1], F_SETFL, O_NONBLOCK) == -1) {
+    DEBUG("failed to set termination pipe non-blocking - %s\n", strerror(errno));
+    return -1;
+  }
+
+  pthread_t term_thid;
+  if (pthread_create(&term_thid, NULL, handle_term_signal, NULL) != 0) {
+    DEBUG("failed to start termination signal relay thread - %s\n", strerror(errno));
+    return -1;
+  }
+  pthread_detach(&term_thid);
+
   sa.sa_handler = terminate;
   sigemptyset(&sa.sa_mask);
   sa.sa_flags = SA_RESTART;
@@ -2131,14 +2186,17 @@ static bool validateConfiguration(ConfigManager *cmgr, FILE *out){
   switch (validateStatus){
   case JSON_VALIDATOR_NO_EXCEPTIONS:
     INFO(MSG_CFG_VALID);
+    printf_wto(MSG_CFG_VALID); // Manual sys log print (messages not set here yet)
     ok = true;
     break;
   case JSON_VALIDATOR_HAS_EXCEPTIONS:
     ERROR(MSG_CFG_INVALID);
+    printf_wto(MSG_CFG_INVALID); // Manual sys log print (messages not set here yet)
     displayValidityException(out,0,validator->topValidityException);
     break;
   case JSON_VALIDATOR_INTERNAL_FAILURE:
     ERROR(MSG_CFG_INTERNAL_FAIL);
+    printf_wto(MSG_CFG_INTERNAL_FAIL); // Manual sys log print (messages not set here yet)
     break;
   }
   freeJsonValidator(validator);
@@ -2151,7 +2209,7 @@ int main(int argc, char **argv) {
   }
 
   setenv("_BPXK_AUTOCVT", "ON", 1);
-  sprintf(launcherVersion, "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
+  snprintf(launcherVersion, sizeof(launcherVersion), "%d.%d.%d+%d", LAUNCHER_VERSION_MAJOR, LAUNCHER_VERSION_MINOR, LAUNCHER_VERSION_PATCH, LAUNCHER_VERSION_DATE_STAMP);
   INFO(MSG_LAUNCHER_START, launcherVersion);
   INFO(MSG_LINE_LENGTH);
   printf_wto(MSG_LAUNCHER_START, launcherVersion); // Manual sys log print (messages not set here yet)
@@ -2168,6 +2226,12 @@ int main(int argc, char **argv) {
   logConfigureStandardDestinations(logContext);
 
   ConfigManager *configmgr = makeConfigManager(); /* configs,schemas,1,stderr); */
+  if (configmgr == NULL) {
+    /* Stop here rather than dereference NULL, like the neighbouring checks */
+    ERROR(MSG_CFGMGR_INIT_FAILED);
+    printf_wto(MSG_CFGMGR_INIT_FAILED); // Manual sys log print (messages not set here yet)
+    exit(EXIT_FAILURE);
+  }
   CFGConfig *theConfig = addConfig(configmgr,ZOWE_CONFIG_NAME);
   cfgSetTraceStream(configmgr,stderr);
   cfgSetTraceLevel(configmgr, zl_context.config.debug_mode ? 2 : 0);
@@ -2195,14 +2259,13 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
   
-  set_sys_messages(configmgr);
-
   //got root dir, can now load up the schemas from it
   char schemaList[PATH_MAX*2 + 4] = {0};
-  snprintf(schemaList, PATH_MAX*2 + 1, "%s/schemas/zowe-yaml-schema.json:%s/schemas/server-common.json", zl_context.root_dir, zl_context.root_dir);  
+  snprintf(schemaList, PATH_MAX*2 + 1, "%1$s/schemas/zowe-yaml-schema.json:%1$s/schemas/server-common.json", zl_context.root_dir);
   int schemaLoadStatus = cfgLoadSchemas(configmgr, ZOWE_CONFIG_NAME, schemaList);
   if (schemaLoadStatus){
     ERROR(MSG_CFG_SCHEMA_FAIL, schemaLoadStatus);
+    printf_wto(MSG_CFG_SCHEMA_FAIL, schemaLoadStatus); // Manual sys log print (messages not set here yet)
     exit(EXIT_FAILURE);
   }
 
@@ -2210,7 +2273,10 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  
+  // At this point, if the zowe.sysMessages is defined,
+  // then it is validated => always string with length > 0
+  set_sys_messages(configmgr);
+
   set_shared_uss_env(configmgr);
 
   if (process_workspace_dir(configmgr)) {

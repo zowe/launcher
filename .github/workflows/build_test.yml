@@ -12,7 +12,7 @@ on:
       - v3.x/staging
       - v3.x/rc
   pull_request:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened, synchronize, labeled, unlabeled]
   workflow_dispatch:
     inputs:
       PERFORM_RELEASE:
@@ -31,7 +31,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   update-changelog:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
     runs-on: ubuntu-latest
     outputs:
       was_updated: ${{ steps.check-change.outputs.change_detected }}
@@ -98,7 +98,7 @@ jobs:
             fi
 
   check_changelog:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
     needs: update-changelog
     runs-on: ubuntu-latest
     steps:
@@ -115,7 +115,7 @@ jobs:
           fi
 
   check-messages:
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -149,9 +149,9 @@ jobs:
       - name: '[Dep 2] Quickjs'
         uses: actions/checkout@v3
         with:
-          repository: joenemo/quickjs-portable
+          repository: zowe/quickjs-portable
           path: deps/launcher/quickjs
-          ref: 'main'
+          ref: 'staging'
 
       - name: '[Dep 3] Zowe common'
         uses: actions/checkout@v3
@@ -161,7 +161,7 @@ jobs:
           ref: 'v3.x/staging'
 
       - name: '[Prep 2] Setup jFrog CLI'
-        uses: jfrog/setup-jfrog-cli@v2
+        uses: jfrog/setup-jfrog-cli@v5
         env:
           JF_ENV_1: ${{ secrets.JF_ARTIFACTORY_TOKEN }}
 

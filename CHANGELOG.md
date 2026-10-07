@@ -4,6 +4,16 @@ All notable changes to the Zowe Launcher package will be documented in this file
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
 ## 3.6.0
+
+- Enhancement: minor update of CHANGELOG automation ([#231](https://github.com/zowe/launcher/pull/231))
+- [NOTICE.txt](./NOTICE.txt) and the build example name `zowe/quickjs-portable` as the QuickJS source. ([#228](https://github.com/zowe/launcher/pull/228))
+- Enhancement: the launcher is built with the same QuickJS engine as configmgr, from `zowe/quickjs-portable` `staging` (the 2024-01-13 port), instead of the 2021-03-27 engine from `joenemo/quickjs-portable`; `build/build.sh` adds the `libbf` and `debugutil` sources that engine needs. ([#222](https://github.com/zowe/launcher/pull/222))
+- Bugfix: `zowe.sysMessages` are used after the validation ([#208](https://github.com/zowe/launcher/pull/208))
+- Enhancement: regex replaced by internal routine ([#206](https://github.com/zowe/launcher/pull/206))
+- Bugfix: Component names must fit the component list ([#195](https://github.com/zowe/launcher/pull/195))
+- Enhancement: More restrictive permissions ([#212](https://github.com/zowe/launcher/pull/212))
+
+## 3.5.0
 - Bugfix: Escape backslash, backtick and dollar sign when used in environment variable ([#168](https://github.com/zowe/launcher/pull/168))
 - Bugfix: Check the array size of `zowe.launcher.restartIntervals` ([#187](https://github.com/zowe/launcher/pull/187))
 - Bugfix: Check the HA instance name if followed by any additional parameters ([#181](https://github.com/zowe/launcher/pull/181))

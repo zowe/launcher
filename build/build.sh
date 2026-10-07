@@ -70,7 +70,8 @@ xlclang \
   -D_OPEN_SYS_FILE_EXT=1 \
   -D_XOPEN_SOURCE=600 \
   -D_OPEN_THREADS=1 \
-  -DCONFIG_VERSION=\"2021-03-27\" \
+  -DCONFIG_BIGNUM=1 \
+  -DCONFIG_VERSION=\"2024-01-13\" \
   -I "${DEPS_DESTINATION}/${LIBYAML}/include" \
   -I "${DEPS_DESTINATION}/${QUICKJS}" \
   ${DEPS_DESTINATION}/${LIBYAML}/src/api.c \
@@ -85,7 +86,9 @@ xlclang \
   ${DEPS_DESTINATION}/${QUICKJS}/quickjs.c \
   ${DEPS_DESTINATION}/${QUICKJS}/quickjs-libc.c \
   ${DEPS_DESTINATION}/${QUICKJS}/libunicode.c \
+  ${DEPS_DESTINATION}/${QUICKJS}/libbf.c \
   ${DEPS_DESTINATION}/${QUICKJS}/libregexp.c \
+  ${DEPS_DESTINATION}/${QUICKJS}/porting/debugutil.c \
   ${DEPS_DESTINATION}/${QUICKJS}/porting/polyfill.c
 rc=$?
 if [ $rc -ne 0 ]; then
@@ -143,6 +146,8 @@ xlclang \
   quickjs.o \
   quickjs-libc.o \
   libunicode.o \
+  libbf.o \
+  debugutil.o \
   libregexp.o \
   polyfill.o \
   ${LAUNCHER_DIR}/src/main.c \

@@ -9,7 +9,7 @@ Copyright Contributors to the Zowe Project.
 <h1 align="center">Zowe Launcher</h1>
 
 The Zowe launcher is a part of the Zowe server architecture that was added as an optional program for HA/FT usage in v1.
-In v2, the Zowe launcher became the sole way to start the Zowe servers.
+Starting in v2 and later, the Zowe launcher became the sole way to start Zowe servers.
 The launcher's purpose is to start, restart, and stop each Zowe server component which has a `start` command,
 and in doing so it watches over such components for health (restarting them if they crash) and log management.
 
@@ -21,18 +21,18 @@ and in doing so it watches over such components for health (restarting them if t
 ## Future features
 * Issuing WTOs indicating the start and termination of specific components (this should simplify the integration with z/OS automation)
 * Passing `MODIFY` commands to Zowe components
-* Clean termination of the components in case if the launcher gets cancelled
+* Clean termination of the components in case the launcher gets cancelled
 
 ## Building
 
-The Zowe launcher is build with a version defined in [manifest.yaml](./manifest.yaml). This version is used in `ZWEL0021I` message.
+The Zowe launcher is built with a version defined in [manifest.yaml](./manifest.yaml). This version is used in `ZWEL0021I` message.
 
 ```shell
 cd zowe-launcher/build
 ./build.sh
 ```
 
-For development purposes, it is possible to specify custom defined version, which must be compound from three numeric values and dots: for example `1.2.3`. Invalid version will be used as `0.0.0`.
+For development purposes, it is possible to specify custom defined version, which must be composed of three numeric values separated by dots: for example `1.2.3`. Invalid version will be used as `0.0.0`.
 ```shell
 cd zowe-launcher/build
 export LAUNCHER_VERSION=1.2.3 && ./build.sh

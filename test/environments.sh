@@ -8,8 +8,10 @@
 #
 # Copyright Contributors to the Zowe Project.
 
-# Start with any parameter -> prints Launcher's output
-#   rc of this = number of errors found
+# Start with any parameter -> prints output
+#   rc = 0 - success
+#   rc = 1 - invalid or no executable file
+#   rc = 2 - test case(s) failed
 
 print=
 errors=0
@@ -50,7 +52,7 @@ while read -r line; do
                 printf "OK: %s\n" "${output}"
             else
                 echo "Key '${key}' not found!"
-                errors=`expr $errors + 1`
+                errors=2
             fi
             
         fi
@@ -68,7 +70,7 @@ while read -r line; do
             printf "OK: Key '%s' found: %s\n" "${key}" "${matchKey}"
         else
             echo "Key '${key}' not found!"
-            errors=`expr $errors + 1`
+            errors=2
         fi
     fi
 done < "${ZOWE_YAML}"

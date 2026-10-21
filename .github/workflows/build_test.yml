@@ -138,6 +138,12 @@ jobs:
     steps:
       - name: '[Prep 1] Checkout'
         uses: actions/checkout@v3
+        
+      - name: 'Remove test directory'
+        run: |
+          if [ -d "./test" ]; then
+            rm -rf ./test/
+          fi
 
       - name: '[Dep 1] Libyaml'
         uses: actions/checkout@v3

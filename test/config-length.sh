@@ -14,6 +14,8 @@ if [ ! -x "$LAUNCHER" ]; then
     exit 1
 fi
 
+errors=0
+
 # With PATH_MAX=256, FILE() plus NUL leaves room for 4345 path chars.
 # Only slashes used for config -> ZWEL0072E Launcher Could not load configurations
 for i in 2 256 1024 4345; do
@@ -22,7 +24,7 @@ for i in 2 256 1024 4345; do
     result=$("$LAUNCHER" "test_ha" 2>&1 | grep ZWEL0072E)
     printf '%s chars - %s\n' "$i" "$result"
     if [ -z "${result}" ]; then
-        exit 1
+        errors=1
     fi
 done
 
@@ -33,8 +35,8 @@ for i in 4346 4500 8192 10000; do
     result=$("$LAUNCHER" "test_ha" 2>&1 | grep ZWEL0027E)
     printf '%s chars - %s\n' "$i" "$result"
     if [ -z "${result}" ]; then
-        exit 1
+        errors=1
     fi
 done
 
-exit 0
+exit "$errors"

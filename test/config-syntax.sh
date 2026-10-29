@@ -92,7 +92,7 @@ ${ZOWE} | | INFO ZWEL0023I Zowe YAML config file is '${ZOWE}' | ZWEL0023I
 FILE(${ZOWE}) | | INFO ZWEL0023I Zowe YAML config file is 'FILE(${ZOWE})' | Same as previous test
 ${ABS_ZOWE} | | INFO ZWEL0023I Zowe YAML config file is 'FILE(${ABS_ZOWE})' | ZWEL0023I wrapped by FILE()
 ${ABS_ZOWE2} | | INFO ZWEL0023I Zowe YAML config file is 'FILE(${ABS_ZOWE2})' | Should be able to read the file
-FILE(${ZOWE}) | LPAR123 | ZWEL0024I HA_INSTANCE_ID is 'lpar123' | HaInstance should be sanitazed
+FILE(${ZOWE}) | LPAR123 | ZWEL0024I HA_INSTANCE_ID is 'lpar123' | HaInstance should be sanitized
 PARMLIB(ZOWE.TEST-1.A(A)) | hello | ZWEL0023I Zowe YAML config file is 'PARMLIB(ZOWE.TEST-1.A(A))' | Parmlib does not exist, but it should be in ZWEL00203I
 PARMLIB(ZOWE.TEST-1.A) | world | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
 PARMLIB(ZOWE.TEST-1.A() | | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member

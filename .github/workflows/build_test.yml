@@ -1,10 +1,8 @@
 name: Build and Test Workflow
 
+# Default for jobs without their own block, every job below requests only what it needs
 permissions:
-  id-token: write
-  issues: write
-  pull-requests: write
-  contents: write
+  contents: read
 on:
   push:
     branches:
@@ -23,22 +21,26 @@ on:
 jobs:
   check-permission:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       # this action will fail the whole workflow if permission check fails
       - name: check permission
-        uses: zowe-actions/shared-actions/permission-check@main
+        uses: zowe-actions/shared-actions/permission-check@77d7d9b50e60fedc8132b5e5eb6d611c4e483416 # main (2026-06-15)
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   update-changelog:
     if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # pushes the generated CHANGELOG.md commit to the PR branch
     outputs:
       was_updated: ${{ steps.check-change.outputs.change_detected }}
       check_commit: ${{ steps.check-changelog.outputs.check_commit }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
@@ -101,9 +103,11 @@ jobs:
     if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
     needs: update-changelog
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
 
       - name: Verify Changelog update
         run: |
@@ -117,12 +121,14 @@ jobs:
   check-messages:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: ./build
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
 
       - name: Check defined and documented ZWEL messages
         run: |
@@ -135,33 +141,49 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
     needs: [ check-permission, check-messages ]
+    permissions:
+      contents: read
+      pull-requests: read  # prepare-workflow looks up the open PR for the current branch
     steps:
       - name: '[Prep 1] Checkout'
-        uses: actions/checkout@v3
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+
+      - name: '[Dep 0] Read pinned dependency commits'
+        id: deps
+        run: |
+          . build/launcher.proj.env
+          for dep in LIBYAML QUICKJS COMMON; do
+            eval commit="\$${dep}_COMMIT"
+            if ! echo "${commit}" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "::error::${dep}_COMMIT in build/launcher.proj.env must be a full commit SHA, found '${commit}'"
+              exit 1
+            fi
+            echo "${dep}=${commit}" >> "$GITHUB_OUTPUT"
+          done
 
       - name: '[Dep 1] Libyaml'
-        uses: actions/checkout@v3
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
         with:
           repository: yaml/libyaml
           path: deps/launcher/libyaml
-          ref: '0.2.5'
+          ref: ${{ steps.deps.outputs.LIBYAML }}
 
       - name: '[Dep 2] Quickjs'
-        uses: actions/checkout@v3
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
         with:
           repository: zowe/quickjs-portable
           path: deps/launcher/quickjs
-          ref: 'staging'
+          ref: ${{ steps.deps.outputs.QUICKJS }}
 
       - name: '[Dep 3] Zowe common'
-        uses: actions/checkout@v3
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
         with:
           repository: zowe/zowe-common-c
           path: deps/launcher/common
-          ref: 'v3.x/staging'
+          ref: ${{ steps.deps.outputs.COMMON }}
 
       - name: '[Prep 2] Setup jFrog CLI'
-        uses: jfrog/setup-jfrog-cli@v5
+        uses: jfrog/setup-jfrog-cli@6ed45ef1a24199bd4c94d3fd55a7e8cb7e45985d # v5.3.2
         env:
           JF_ENV_1: ${{ secrets.JF_ARTIFACTORY_TOKEN }}
 
@@ -186,10 +208,10 @@ jobs:
           cat manifest.yaml
 
       - name: '[Prep 3] Prepare workflow'
-        uses: zowe-actions/shared-actions/prepare-workflow@main
+        uses: zowe-actions/shared-actions/prepare-workflow@77d7d9b50e60fedc8132b5e5eb6d611c4e483416 # main (2026-06-15)
 
       - name: '[Packaging] Make pax'
-        uses: zowe-actions/shared-actions/make-pax@main
+        uses: zowe-actions/shared-actions/make-pax@77d7d9b50e60fedc8132b5e5eb6d611c4e483416 # main (2026-06-15)
         with:
           pax-name: 'launcher'
           pax-options: '-x os390'
@@ -197,20 +219,38 @@ jobs:
           pax-ssh-password: ${{ secrets.SSH_MARIST_RACF_PASSWORD }}
 
       - name: '[Publish] Publish'
-        uses: zowe-actions/shared-actions/publish@main
+        uses: zowe-actions/shared-actions/publish@77d7d9b50e60fedc8132b5e5eb6d611c4e483416 # main (2026-06-15)
         if: success()
         with:
           artifacts: |
             .pax/launcher.pax
           perform-release: ${{ github.event.inputs.PERFORM_RELEASE }}
 
+  # The only job with write access, it runs solely for a manual dispatch with PERFORM_RELEASE
+  release:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.PERFORM_RELEASE == 'true'
+    runs-on: ubuntu-latest
+    needs: build-test
+    permissions:
+      contents: write      # release pushes the version tag with the checkout credentials
+      pull-requests: read  # prepare-workflow looks up the open PR for the current branch
+    env:
+      # Same value the publish step exports in build-test, as it is not given a pre-release-string
+      PRE_RELEASE_STRING: ''
+    steps:
+      - name: '[Prep 1] Checkout'
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+
+      - name: '[Prep 2] Prepare workflow'
+        uses: zowe-actions/shared-actions/prepare-workflow@77d7d9b50e60fedc8132b5e5eb6d611c4e483416 # main (2026-06-15)
+
       - name: '[Release 1] Release (if necessary)'
-        if: ${{ success() && github.event.inputs.PERFORM_RELEASE == 'true' && env.IS_RELEASE_BRANCH == 'true' }}
-        uses: zowe-actions/shared-actions/release@main
+        if: env.IS_RELEASE_BRANCH == 'true'
+        uses: zowe-actions/shared-actions/release@77d7d9b50e60fedc8132b5e5eb6d611c4e483416 # main (2026-06-15)
 
       - name: '[Release 2] NPM bump version (if necessary)'
-        if: ${{ success() && github.event.inputs.PERFORM_RELEASE == 'true' && env.IS_RELEASE_BRANCH == 'true' }}
-        uses: zowe-actions/shared-actions/bump-version@main
+        if: env.IS_RELEASE_BRANCH == 'true'
+        uses: zowe-actions/shared-actions/bump-version@77d7d9b50e60fedc8132b5e5eb6d611c4e483416 # main (2026-06-15)
         with:
           version: minor
         env:

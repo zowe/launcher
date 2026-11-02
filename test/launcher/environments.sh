@@ -16,11 +16,15 @@
 print=
 errors=0
 
+# Resolve fixtures relative to this script, regardless of the caller's directory.
+TEST_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd) || exit 1
+cd "$TEST_DIR" || exit 1
+
 if [ ! -z "${1}" ]; then
     print='1'
 fi
 
-LAUNCHER='../bin/zowe_launcher'
+LAUNCHER='../../bin/zowe_launcher'
 if [ ! -f "${LAUNCHER}" ]; then
     echo "Executable \"${LAUNCHER}\" not found."
     exit 1

@@ -851,7 +851,8 @@ static int init_components(char *components, ConfigManager *configmgr) {
     DEBUG("components to launch not set\n");
     return -1;
   }
-  char *name = strtok(components, ",");
+  char *saveptr = NULL;
+  char *name = strtok_r(components, ",", &saveptr);
 
   while(name != NULL) {
     zl_comp_t comp = { 0 };
@@ -862,7 +863,7 @@ static int init_components(char *components, ConfigManager *configmgr) {
       ERROR(MSG_MAX_COMP_REACHED);
       break;
     }
-    name = strtok(NULL, ",");
+    name = strtok_r(NULL, ",", &saveptr);
   }
   return 0;
 }
@@ -918,13 +919,14 @@ static void *handle_comp_comm(void *args) {
       if (msg_len > 0) {
         msg[msg_len] = '\0';
 
-        char *next_line = strtok(msg, "\n");
+        char *saveptr = NULL;
+        char *next_line = strtok_r(msg, "\n", &saveptr);
 
         while (next_line) {
           printf("%s\n", next_line);
           check_for_and_print_sys_message(next_line);
           comp_log(comp, next_line);
-          next_line = strtok(NULL, "\n");
+          next_line = strtok_r(NULL, "\n", &saveptr);
         }
 
         retries_left = 3;

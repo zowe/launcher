@@ -17,6 +17,14 @@ Simple shell script to test basic functionality:
 * Typical start-up messages.
 * To see the output, please run the script with any parameter, for example: `./config-syntax.sh print`.
 
+## Config-length
+
+Test for [check config length](https://github.com/zowe/launcher/pull/233).
+* When the config path starts with slash, it is wrapped into `FILE()`.
+* This tests the buffer overflow check.
+* The first group expects the launcher to report `ZWEL0072E Launcher Could not load configurations`
+* The second group `ZWEL0027E CONFIG env variable too large`
+
 ## Environments
 
 Test script for `zowe.environments`. It performs the following checks:

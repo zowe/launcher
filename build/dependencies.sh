@@ -20,6 +20,7 @@
 # DEP1="nickname"
 # DEP1_SOURCE="a-git-repo-address"
 # DEP1_BRANCH="a-commit-branch-or-tag"
+# DEP1_COMMIT="full-40-character-commit-sha-to-build"
 #
 # For example,
 #
@@ -30,10 +31,12 @@
 # QUICKJS="quickjs"
 # QUICKJS_SOURCE="git@github.com:zowe/quickjs-portable.git"
 # QUICKJS_BRANCH="staging"
+# QUICKJS_COMMIT="53ee9da0cd36a331207a0c3e3aa24b0ffd6c62fe"
 #
 # LIBYAML="libyaml"
 # LIBYAML_SOURCE="git@github.com:yaml/libyaml.git"
 # LIBYAML_BRANCH="0.2.5"
+# LIBYAML_COMMIT="2c891fc7a770e8ba2fec34fc6b545c672beb37e6"
 
 check_dependencies() {
   echo "********************************************************************************"
@@ -76,8 +79,19 @@ check_dependencies() {
     eval directory="\$${dep}"
     echo "Check if dir exist=$destination/$directory"
     if [ ! -d "${destination}/${directory}" ]; then
+      eval commit="\$${dep}_COMMIT"
+      if ! echo "${commit}" | grep -Eq '^[0-9a-f]{40}$'; then
+        echo "${dep}_COMMIT must be a full 40-character commit SHA, found '${commit}'"
+        exit 4
+      fi
       eval echo "Clone: \$${dep}_SOURCE @ \$${dep}_BRANCH to \$${dep}"
       eval git clone --branch "\$${dep}_BRANCH" "\$${dep}_SOURCE" "${destination}/${directory}"
+      echo "Checkout: ${commit}"
+      if ! (cd "${destination}/${directory}" && git checkout -q --detach "${commit}"); then
+        echo "Unable to check out ${dep}_COMMIT=${commit}, removing the clone"
+        rm -rf "${destination}/${directory}"
+        exit 4
+      fi
     else
       echo "The dependency already exists"
     fi

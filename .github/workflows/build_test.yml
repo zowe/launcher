@@ -26,7 +26,7 @@ jobs:
     steps:
       # this action will fail the whole workflow if permission check fails
       - name: check permission
-        uses: zowe-actions/shared-actions/permission-check@main
+        uses: zowe-actions/shared-actions/permission-check@77d7d9b50e60fedc8132b5e5eb6d611c4e483416 # main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -161,7 +161,7 @@ jobs:
           ref: 'v3.x/staging'
 
       - name: '[Prep 2] Setup jFrog CLI'
-        uses: jfrog/setup-jfrog-cli@v5
+        uses: jfrog/setup-jfrog-cli@ae385c7164244e984cd20a58674e5b57f53596d7 # v5
         env:
           JF_ENV_1: ${{ secrets.JF_ARTIFACTORY_TOKEN }}
 
@@ -186,10 +186,10 @@ jobs:
           cat manifest.yaml
 
       - name: '[Prep 3] Prepare workflow'
-        uses: zowe-actions/shared-actions/prepare-workflow@main
+        uses: zowe-actions/shared-actions/prepare-workflow@77d7d9b50e60fedc8132b5e5eb6d611c4e483416 # main
 
       - name: '[Packaging] Make pax'
-        uses: zowe-actions/shared-actions/make-pax@main
+        uses: zowe-actions/shared-actions/make-pax@77d7d9b50e60fedc8132b5e5eb6d611c4e483416 # main
         with:
           pax-name: 'launcher'
           pax-options: '-x os390'
@@ -197,7 +197,7 @@ jobs:
           pax-ssh-password: ${{ secrets.SSH_MARIST_RACF_PASSWORD }}
 
       - name: '[Publish] Publish'
-        uses: zowe-actions/shared-actions/publish@main
+        uses: zowe-actions/shared-actions/publish@77d7d9b50e60fedc8132b5e5eb6d611c4e483416 # main
         if: success()
         with:
           artifacts: |
@@ -206,11 +206,11 @@ jobs:
 
       - name: '[Release 1] Release (if necessary)'
         if: ${{ success() && github.event.inputs.PERFORM_RELEASE == 'true' && env.IS_RELEASE_BRANCH == 'true' }}
-        uses: zowe-actions/shared-actions/release@main
+        uses: zowe-actions/shared-actions/release@77d7d9b50e60fedc8132b5e5eb6d611c4e483416 # main
 
       - name: '[Release 2] NPM bump version (if necessary)'
         if: ${{ success() && github.event.inputs.PERFORM_RELEASE == 'true' && env.IS_RELEASE_BRANCH == 'true' }}
-        uses: zowe-actions/shared-actions/bump-version@main
+        uses: zowe-actions/shared-actions/bump-version@77d7d9b50e60fedc8132b5e5eb6d611c4e483416 # main
         with:
           version: minor
         env:

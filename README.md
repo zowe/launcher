@@ -44,6 +44,14 @@ The launcher binary will be saved into the `bin` directory.
 
 See [details](./test/README.md) in `test` directory.
 
+## Changelog
+
+Add `CHANGELOG: Describe the change.` to the PR description. CI creates and commits
+`.changelog/CHANGELOG.<PR number>` if the fragment is missing; no `VERSION:` field
+is needed. You can also commit the fragment manually. At release time, run
+`node .changelog/merge.js` to merge fragments into `CHANGELOG.md` using the version
+in `manifest.yaml`. See [fragment and release instructions](./.changelog/README.md).
+
 ## Prerequisites
 
 * Zowe 2.4.0

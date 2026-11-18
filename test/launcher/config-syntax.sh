@@ -16,14 +16,18 @@
 print=
 errors=0
 
+# Resolve fixtures relative to this script, regardless of the caller's directory.
+TEST_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd) || exit 1
+cd "$TEST_DIR" || exit 1
+
 # Get the launchers's version from manifest.yaml
-VERSION=$(cat "../manifest.yaml" | grep -e "^version:" | awk -F: '{ print $2 }' | awk '{$1=$1};1')
+VERSION=$(cat "../../manifest.yaml" | grep -e "^version:" | awk -F: '{ print $2 }' | awk '{$1=$1};1')
 
 if [ ! -z "${1}" ]; then
     print='1'
 fi
 
-LAUNCHER='../bin/zowe_launcher'
+LAUNCHER='../../bin/zowe_launcher'
 if [ ! -f "${LAUNCHER}" ]; then
     echo "Executable for Zowe launcher not found at: ${LAUNCHER}"
     exit 1
@@ -53,9 +57,9 @@ run_launcher() {
     export CONFIG="${config}"
     # Filter out the long line when printing
     if [ -n "${print}" ]; then
-        result=$($LAUNCHER "${haInstance}" 2>&1 | grep -v "INFO -- If you cant see '500'")
+        result=$("${LAUNCHER}" "${haInstance}" 2>&1 | grep -v "INFO -- If you cant see '500'")
     else
-        result=$($LAUNCHER "${haInstance}" 2>&1)
+        result=$("${LAUNCHER}" "${haInstance}" 2>&1)
     fi
 
     [ ! -z "${desc}" ] && [ ! -z "${print}" ] && echo "+ >>> ${desc}"

@@ -44,6 +44,12 @@ The launcher binary will be saved into the `bin` directory.
 
 See [details](./test/README.md) in `test` directory.
 
+
+## AI Contributions
+
+The maintainers of this package reserve the right to reject or close AI contributions, 
+especially contributions which have not been tested and/or reproduced on ZOS.
+
 ## Prerequisites
 
 * Zowe 2.4.0

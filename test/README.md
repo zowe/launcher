@@ -10,12 +10,57 @@ Copyright Contributors to the Zowe Project.
 
 # Tests
 
+## Running the tests
+
+On z/OS, build the launcher, then run all tests from the repository root:
+
+```sh
+sh test/index.sh
+```
+
+Pass any argument (for example, `sh test/index.sh print`) to include launcher
+output in the tests.
+The runner discovers every `*.sh` file directly in `testCases/` in filename order,
+executes each in a separate shell, continues after failures, and prints a
+passed/failed summary. Other files and subdirectories are skipped.
+
+Individual tests can still be run with, for example, `sh test/testCases/config-syntax.sh print`.
+Scripts resolve their fixtures from the `test/` directory, so they can be invoked
+from any working directory using the appropriate path to the script.
+
+The default binary is `bin/zowe_launcher`. Override it for the suite or any
+individual test with `LAUNCHER_BINARY`; relative paths are resolved from your current directory:
+
+```sh
+LAUNCHER_BINARY=/path/to/zowe_launcher sh test/index.sh
+```
+
+Exit codes are `0` for success, `1` for setup errors, and `2` for test failures.
+The runner exits with `1` if its initial setup fails or no tests are found,
+or `2` if any test script fails.
+
+Shared setup lives in `lib/common.sh`: launcher validation, working directory,
+fixture paths, verbosity, and error initialization. To add a test, create a
+`*.sh` file in `testCases/` using this setup; no change to `index.sh` is needed:
+
+```sh
+#!/bin/sh
+LAUNCHER_TEST_DIR=$(CDPATH= cd "$(dirname "$0")/.." && pwd) || exit 1
+. "${LAUNCHER_TEST_DIR}/lib/common.sh" || exit 1
+
+# Add test checks here; set LAUNCHER_ERRORS=2 on failure.
+exit "$LAUNCHER_ERRORS"
+```
+
+## Debug the tests
+
+* Any parameter for debug output, for example: `sh test/testCases/config-syntax.sh print`.
+
 ## Config-syntax
 
 Simple shell script to test basic functionality:
 * Treating items in the environment variable `CONFIG` and `haInstance`.
 * Typical start-up messages.
-* To see the output, please run the script with any parameter, for example: `./config-syntax.sh print`.
 
 ## Config-length
 

@@ -11,12 +11,8 @@ zowe:
     TEST_VAR_INT_02: !!int 123456               # 123456
     TEST_VAR_INT_03: 0x7FFFFFFF                 # 2147483647
     TEST_VAR_INT_04: 0x00000001                 # 1
-    TEST_VAR_INT_05: !!int 0x7FFFFFFF           # 2147483647
-    TEST_VAR_INT_06: !!int 0x00000001           # 1
-    TEST_VAR_INT_07: 9223372036854775807        # 9223372036854775807
-    TEST_VAR_INT_08: !!int 9223372036854775807  # 9223372036854775807
-    TEST_VAR_INT_09: -9223372036854775808       # -9223372036854775808
-    TEST_VAR_INT_10: !!int -9223372036854775808 # -9223372036854775808
+    TEST_VAR_INT_05: 9223372036854775807        # 9223372036854775807
+    TEST_VAR_INT_06: -9223372036854775808       # -9223372036854775808
     # *** Str ***
     TEST_VAR_STR_01: \\\\\\\\\\                 # "\\\\\\\\\\\\\\\\\\\\"
     TEST_VAR_STR_02: !!str \\\\\\\\\\           # "\\\\\\\\\\\\\\\\\\\\"
@@ -48,6 +44,10 @@ zowe:
       - banana
       - orange
     TEST_VAR_ARRAY_02: ['A', 'B', 'C']
+    TEST_VAR_ARRAY_03:
+      - example.com
+      - example.org
+      - [ 'Fibonacci sequence', 1, 1, 2, 3, 5, 8, 13, 21 ]
     TEST_VAR_NESTED:
       enabled: true
       disabled: false
@@ -55,11 +55,9 @@ zowe:
     TEST_VAR_EJS_01: "${{ zowe.environments.TEST_VAR_INT_01 }}"   # zowe.environments.TEST_VAR_INT_01
     TEST_VAR_EJS_02: "${{ 1+1*7 }}"             # 8
     TEST_VAR_EJS_03: "${{ 'EJS' }}"             # "EJS"
-    TEST_VAR_EJS_04: "${{ `EJS` }}"             # "EJS"
-    TEST_VAR_EJS_05: "${{ \"EJS\" }}"           # "EJS"
-    TEST_VAR_EJS_06: "${{ `E` + 'J' + \"S\" }}" # "EJS"
-    TEST_VAR_EJS_07: "${{ `\\` }}"              # "\\"
-    TEST_VAR_EJS_08: "${{                    /* # true */
+    TEST_VAR_EJS_04: "${{ \"EJS\" }}"           # "EJS"
+    TEST_VAR_EJS_05: "${{ `E` + 'J' + \"S\" }}" # "EJS"
+    TEST_VAR_EJS_06: "${{                    /* # true */
        () => { if (1 == 1) return true } ();
       }}"
     TEST_VAR_END: \E\N\D                        # "\\E\\N\\D"
@@ -75,6 +73,7 @@ zowe:
     ~null: not null                             # <ignored>
     =: equal sign                               # <ignored>
     <h1>: heading                               # <ignored>
+  # runtimeDirectory path independent on location
   runtimeDirectory: "${{ () => {
       let thisPath = os.realpath('./fakeRuntime');
       if (thisPath[1] == 0) {

@@ -16,6 +16,7 @@ VERSION=$(awk -F: '/^version:/ { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); pr
 
 ZOWE="${LAUNCHER_TEST_FILES}/zowe.runtime.dev.null.yaml"
 ZOWE_EMPTY="${LAUNCHER_TEST_FILES}/zowe.empty.yaml"
+ZOWE_DUPL="${LAUNCHER_TEST_FILES}/zowe.duplicate.key.yaml"
 ABS_ZOWE="${LAUNCHER_TEST_DIR}/${ZOWE}"
 ABS_ZOWE2="${LAUNCHER_TEST_DIR}/././././////./////${ZOWE}"
 
@@ -79,7 +80,7 @@ PARMLIB(ZOWE.TEST-1.A) | world | ZWEL0068E PARMLIB() entries must have a member 
 PARMLIB(ZOWE.TEST-1.A() | | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
 PARMLIB(ZOWE.TEST-1.A()) | | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
 ${ABS_ZOWE} | valid,IGNORED | ZWEL0024I HA_INSTANCE_ID is 'valid' | Should ignore the second parameter
-
+FILE(${ZOWE_DUPL}) | ha | duplicate key 'environments' in YAML mapping | Should detect duplicated key
 EOF
 
 exit $LAUNCHER_ERRORS

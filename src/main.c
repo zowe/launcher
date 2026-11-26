@@ -879,6 +879,10 @@ static void *handle_comp_comm(void *args) {
 
   zl_comp_t *comp = args;
 
+  // Keep a local copy: comp->output is overwritten by start_component()
+  // when the component is restarted, possibly while this thread is still finishing.
+  const int output_fd = comp->output;
+
   while (true) {
 
     int comp_status = 0;
@@ -918,7 +922,7 @@ static void *handle_comp_comm(void *args) {
     int retries_left = 3;
     while (retries_left > 0) {
 
-      int msg_len = read(comp->output, msg, sizeof(msg) - 1);
+      int msg_len = read(output_fd, msg, sizeof(msg) - 1);
       if (msg_len > 0) {
         msg[msg_len] = '\0';
 
@@ -933,17 +937,26 @@ static void *handle_comp_comm(void *args) {
         }
 
         retries_left = 3;
-      } else if (msg_len == -1 && errno == EAGAIN) {
+      } else if (msg_len == 0) {
+        DEBUG("end of output from %s(%d)\n", comp->name, comp->pid);
+        sleep(1);
+        break;
+      } else if (errno == EAGAIN) {
         sleep(1);
         retries_left--;
         DEBUG("waiting for next message from %s(%d)\n", comp->name, comp->pid);
       } else {
         ERROR(MSG_COMP_OUTPUT_ERR, comp->name, comp->pid, strerror(errno));
+        sleep(1);
+        retries_left--;
       }
 
     }
 
   }
+
+  // The component has been reaped (or waitpid() failed), nothing more to read.
+  close(output_fd);
 
   return NULL;
 }

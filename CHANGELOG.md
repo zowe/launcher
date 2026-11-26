@@ -5,8 +5,8 @@ This repo is part of the app-server Zowe Component, and the change logs here may
 
 ## 3.7.0
 - Bugfix: Reject absolute `CONFIG` path that is too long to wrap in `FILE()`. ([#233](https://github.com/zowe/launcher/pull/233))
-- Bugfix: When a component's output pipe reaches `EOF`; it now returns to `waitpid()` so the exited component is reaped and restarted.
-- Bugfix: The read end of a component's output pipe is closed once the component has exited.
+- Bugfix: When a component's output pipe reaches `EOF`; it now returns to `waitpid()` so the exited component is reaped and restarted. ([244](https://github.com/zowe/launcher/pull/244))
+- Bugfix: The read end of a component's output pipe is closed once the component has exited. ([244](https://github.com/zowe/launcher/pull/244))
 
 ## 3.6.0
 

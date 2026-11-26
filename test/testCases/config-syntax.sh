@@ -8,34 +8,17 @@
 #
 # Copyright Contributors to the Zowe Project.
 
-# Start with any parameter -> prints output (diff style)
-#   rc = 0 - success
-#   rc = 1 - invalid or no executable file
-#   rc = 2 - test case(s) failed
-
-print=
-errors=0
+LAUNCHER_TEST_DIR=$(CDPATH= cd "$(dirname "$0")/.." && pwd) || exit 1
+. "${LAUNCHER_TEST_DIR}/lib/common.sh" || exit 1
 
 # Get the launchers's version from manifest.yaml
-VERSION=$(cat "../manifest.yaml" | grep -e "^version:" | awk -F: '{ print $2 }' | awk '{$1=$1};1')
+VERSION=$(awk -F: '/^version:/ { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit }' ../manifest.yaml)
 
-if [ ! -z "${1}" ]; then
-    print='1'
-fi
-
-LAUNCHER='../bin/zowe_launcher'
-if [ ! -f "${LAUNCHER}" ]; then
-    echo "Executable for Zowe launcher not found at: ${LAUNCHER}"
-    exit 1
-fi
-
-ABS_PATH=$(cd .; pwd)
-
-TEST_FILES='./files'
-ZOWE="${TEST_FILES}/zowe.runtime.dev.null.yaml"
-ZOWE_EMPTY="${TEST_FILES}/zowe.empty.yaml"
-ABS_ZOWE="${ABS_PATH}/${ZOWE}"
-ABS_ZOWE2="${ABS_PATH}/././././////./////${ZOWE}"
+ZOWE="${LAUNCHER_TEST_FILES}/zowe.runtime.dev.null.yaml"
+ZOWE_EMPTY="${LAUNCHER_TEST_FILES}/zowe.empty.yaml"
+ZOWE_DUPL="${LAUNCHER_TEST_FILES}/zowe.duplicate.key.yaml"
+ABS_ZOWE="${LAUNCHER_TEST_DIR}/${ZOWE}"
+ABS_ZOWE2="${LAUNCHER_TEST_DIR}/././././////./////${ZOWE}"
 
 run_launcher() {
     # trim via awk
@@ -52,36 +35,35 @@ run_launcher() {
 
     export CONFIG="${config}"
     # Filter out the long line when printing
-    if [ -n "${print}" ]; then
-        result=$($LAUNCHER "${haInstance}" 2>&1 | grep -v "INFO -- If you cant see '500'")
+    if [ -n "${LAUNCHER_DEBUG}" ]; then
+        result=$("$LAUNCHER_BINARY" "${haInstance}" 2>&1 | grep -v "INFO -- If you cant see '500'")
     else
-        result=$($LAUNCHER "${haInstance}" 2>&1)
+        result=$("$LAUNCHER_BINARY" "${haInstance}" 2>&1)
     fi
 
-    [ ! -z "${desc}" ] && [ ! -z "${print}" ] && echo "+ >>> ${desc}"
-    [ ! -z "${print}" ] && echo "+ >  CONFIG=${config}"
-    [ ! -z "${haInstance}" ] && [ ! -z "${print}" ] && echo "+ >  haInstance=${haInstance}"
+    [ -n "${desc}" ] && printf_debug '%s%s\n' '- ' "${desc}"
+    printf_debug '%s%s\n' '- CONFIG=' "${config}"
+    [ -n "${haInstance}" ] && printf_debug '%s%s\n' '- haInstance=' "${haInstance}"
 
-    [ ! -z "${print}" ] && echo "${result}"
+    printf_debug '%s\n' "${result}"
 
     if [ ! -z "${textMatch}" ]; then
         findText=$(echo "${result}" | grep "${textMatch}" )
         if [ -z "${findText}" ]; then
-            echo "- >  Not found: ${textMatch}"
-            errors=2
+            printf '- not found: %s\n' "${textMatch}"
+            LAUNCHER_ERRORS=2
         else
-            [ ! -z "${print}" ] && echo "+ >  Found: ${textMatch}"
+            printf_debug '- found: %s\n' "${textMatch}"
         fi
     fi
 
-    [ ! -z "${print}" ] && echo ""
+    printf_debug '\n'
 }
 
-IFS='|'
-while read config haInstance textMatch desc debug; do
+while IFS='|' read -r config haInstance textMatch desc debug; do
     # Skip the first line
     if [ "${config}" != "CONFIG " ]; then
-        run_launcher $config $haInstance $textMatch $desc $debug
+        run_launcher "$config" "$haInstance" "$textMatch" "$desc" "$debug"
     fi
 done <<EOF
 CONFIG | HA-INSTANCE | TEXT-TO-FIND | DESCRIPTION | ZLDEBUG
@@ -98,6 +80,7 @@ PARMLIB(ZOWE.TEST-1.A) | world | ZWEL0068E PARMLIB() entries must have a member 
 PARMLIB(ZOWE.TEST-1.A() | | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
 PARMLIB(ZOWE.TEST-1.A()) | | ZWEL0068E PARMLIB() entries must have a member name | Should detect missing member
 ${ABS_ZOWE} | valid,IGNORED | ZWEL0024I HA_INSTANCE_ID is 'valid' | Should ignore the second parameter
+FILE(${ZOWE_DUPL}) | ha | duplicate key 'environments' in YAML mapping | Should detect duplicated key
 EOF
 
-exit $errors
+exit $LAUNCHER_ERRORS

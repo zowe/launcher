@@ -8,25 +8,10 @@
 #
 # Copyright Contributors to the Zowe Project.
 
-# Start with any parameter -> prints output
-#   rc = 0 - success
-#   rc = 1 - invalid or no executable file
-#   rc = 2 - test case(s) failed
+LAUNCHER_TEST_DIR=$(CDPATH= cd "$(dirname "$0")/.." && pwd) || exit 1
+. "${LAUNCHER_TEST_DIR}/lib/common.sh" || exit 1
 
-print=
-errors=0
-
-if [ ! -z "${1}" ]; then
-    print='1'
-fi
-
-LAUNCHER='../bin/zowe_launcher'
-if [ ! -f "${LAUNCHER}" ]; then
-    echo "Executable \"${LAUNCHER}\" not found."
-    exit 1
-fi
-
-ZOWE_YAML="./files/zowe.environments.yaml"
+ZOWE_YAML="${LAUNCHER_TEST_FILES}/zowe.environments.yaml"
 
 LAUNCHER_OUTPUT=
 LAUNCHER_OUTPUT_TEST_VAR=
@@ -34,13 +19,11 @@ LAUNCHER_OUTPUT_KEYS=
 export ZLDEBUG='ON'
 export CONFIG="FILE(${ZOWE_YAML})"
 
-LAUNCHER_OUTPUT=$("${LAUNCHER}" "ha1" 2>&1)
+LAUNCHER_OUTPUT=$("${LAUNCHER_BINARY}" "ha1" 2>&1)
 
-if [ ! -z "${print}" ]; then
-    printf "%s" "${LAUNCHER_OUTPUT}"
-fi
+printf_debug '%s' "${LAUNCHER_OUTPUT}"
 
-printf "\n---zowe.environments.TEST_VAR_* expected to be used or ignored ---\n\n"
+printf_debug "\n- zowe.environments.TEST_VAR_* expected to be used or ignored\n"
 # awk prints between TEST_VAR_START= and TEST_VAR_END=
 LAUNCHER_OUTPUT_TEST_VAR=$(printf "%s" "${LAUNCHER_OUTPUT}" | awk '/TEST_VAR_START=/{flag=1}/TEST_VAR_END=/{print; flag=0}flag')
 while read -r line; do
@@ -49,17 +32,17 @@ while read -r line; do
         if [ -n "$(echo "${line}" | grep '#')" ]; then
             output=$(echo "${LAUNCHER_OUTPUT_TEST_VAR}" | grep "${key}")
             if [ -n "${output}" ]; then
-                printf "OK: %s\n" "${output}"
+                printf_debug "- pass: %s\n" "${output}"
             else
-                echo "Key '${key}' not found!"
-                errors=2
+                printf "- failed: '%s' not found!\n" "${key}"
+                LAUNCHER_ERRORS=2
             fi
-            
+
         fi
     fi
 done < "${ZOWE_YAML}"
 
-printf "\n---zowe.environments.* expected to be ignored ---\n\n"
+printf_debug "\n- zowe.environments.* expected to be ignored - invalid unix variable name\n"
 LAUNCHER_OUTPUT_KEYS=$(printf "%s" "${LAUNCHER_OUTPUT}" | grep -e 'Key in configuration')
 while read -r line; do
     if [ -n "$(echo "${line}" | grep -e '<ignored>')" ]; then
@@ -67,12 +50,12 @@ while read -r line; do
         key="\`zowe.environments.${key}\`"
         matchKey="$(printf "%s" "${LAUNCHER_OUTPUT_KEYS}" | grep -e "${key}")"
         if [ -n "${matchKey}" ]; then
-            printf "OK: Key '%s' found: %s\n" "${key}" "${matchKey}"
+            printf_debug "- pass: '%s' found: %s\n" "${key}" "${matchKey}"
         else
-            echo "Key '${key}' not found!"
-            errors=2
+            printf "- failed '%s' not found!\n" "${key}"
+            LAUNCHER_ERRORS=2
         fi
     fi
 done < "${ZOWE_YAML}"
 
-exit $errors
+exit $LAUNCHER_ERRORS

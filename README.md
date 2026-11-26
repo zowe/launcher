@@ -42,6 +42,8 @@ The launcher binary will be saved into the `bin` directory.
 
 ## Testing
 
+Run all tests on z/OS from the repository root with `sh test/index.sh`.
+
 See [details](./test/README.md) in `test` directory.
 
 

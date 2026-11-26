@@ -4,6 +4,7 @@ All notable changes to the Zowe Launcher package will be documented in this file
 This repo is part of the app-server Zowe Component, and the change logs here may appear on Zowe.org in that section.
 
 ## 3.7.0
+- Enhancement: Minor tests update. ([#242](https://github.com/zowe/launcher/pull/242))
 - Bugfix: Reject absolute `CONFIG` path that is too long to wrap in `FILE()`. ([#233](https://github.com/zowe/launcher/pull/233))
 
 ## 3.6.0
